@@ -10,6 +10,31 @@ services:
       timeout: 5s
       retries: 10
 
+  # Object storage for recordings and avatars (REC-1): S3-compatible, one bucket, data in ./data/minio.
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY}
+    volumes:
+      - ./data/minio:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"  # what phones reach: STORAGE_PUBLIC_ENDPOINT must use this host port
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"  # web console
+
+  # One-shot: waits for MinIO, then creates the bucket if it is missing (safe to run again).
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    env_file: .env
+    depends_on:
+      - minio
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - until mc alias set local "$$STORAGE_ENDPOINT" "$$STORAGE_ACCESS_KEY" "$$STORAGE_SECRET_KEY"; do sleep 1; done;
+        mc mb --ignore-existing "local/$$STORAGE_BUCKET"
+
   backend:
     build: ./backend
     env_file: .env
@@ -18,6 +43,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     ports:
       - "${BACKEND_PORT:-8000}:8000"  # host port; set BACKEND_PORT in .env if 8000 is taken
 

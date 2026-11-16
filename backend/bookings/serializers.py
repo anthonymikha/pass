@@ -2,15 +2,17 @@ from rest_framework import serializers
 
 from django.utils import timezone
 
-from accounts.serializers import CONNECTABLE_USERS, PersonSerializer
+from accounts.models import User
+from accounts.serializers import CONNECTABLE_USERS, PersonSerializer, StorageKeySerializer, UploadFormSerializer
 from config.api import VisibleRelatedField
 from config.money import validate_currency
+from config.storage import get_storage
 from teams.models import Group
 from venues.models import Court, Sport
 from venues.serializers import typed_money
 
 from . import services
-from .models import Session, SessionParticipant, SessionRental
+from .models import Recording, RecordingTag, Session, SessionParticipant, SessionRental
 
 MONEY = {"max_digits": 12, "decimal_places": 3}  # GEN-13
 
@@ -311,3 +313,73 @@ class PlayerSessionSerializer(serializers.ModelSerializer):
 
     def get_training_load(self, row) -> int | None:
         return row.rpe * row.rpe_minutes if row.rpe is not None and row.rpe_minutes is not None else None
+
+
+class RecordingFormSerializer(UploadFormSerializer):
+    """REC-11."""
+
+    EXTENSIONS = services.RECORDING_TYPES
+    MAX_BYTES = services.RECORDING_MAX_BYTES
+
+
+class RecordingConfirmSerializer(StorageKeySerializer):
+    """REC-12."""
+
+    duration_seconds = serializers.IntegerField(min_value=1, required=False)
+
+
+class RecordingSerializer(serializers.ModelSerializer):
+    """REC-21 without the link: what the uploader gets back, who may not watch yet (REC-20)."""
+
+    uploaded_by = PersonSerializer(read_only=True)
+
+    class Meta:
+        model = Recording
+        fields = ["id", "session", "uploaded_by", "duration_seconds", "created_at"]
+
+
+class WatchRecordingSerializer(RecordingSerializer):
+    """REC-21: with the signed playback link (REC-2)."""
+
+    url = serializers.SerializerMethodField()
+
+    class Meta(RecordingSerializer.Meta):
+        fields = [*RecordingSerializer.Meta.fields, "url"]
+
+    def get_url(self, recording) -> str:
+        return get_storage().url(recording.storage_key)
+
+
+class TagSerializer(serializers.ModelSerializer):
+    """REC-25. The view puts `recording` (and so its session and duration) in the context."""
+
+    players = VisibleRelatedField(many=True, required=False, queryset=User.objects.none())
+
+    class Meta:
+        model = RecordingTag
+        fields = ["id", "recording", "created_by", "start_second", "end_second", "label", "note", "players", "created_at"]
+        read_only_fields = ["id", "recording", "created_by", "created_at"]
+
+    def get_fields(self):
+        fields = super().get_fields()
+        if "recording" in self.context:  # absent only while the OpenAPI schema is built
+            # participants of the session that are not declined, shadow players included
+            fields["players"].child_relation.queryset = User.objects.filter(pk__in=SessionParticipant.objects.filter(
+                session=self.context["recording"].session).exclude(status=SessionParticipant.Status.DECLINED).values("user"))
+        return fields
+
+    def validate(self, data):
+        def value(name):  # PATCH sends only some fields
+            return data[name] if name in data else getattr(self.instance, name, None)
+
+        start, end, duration = value("start_second"), value("end_second"), self.context["recording"].duration_seconds
+        errors = {}
+        if end is not None and end <= start:
+            errors["end_second"] = "Must be after start_second."
+        elif duration is not None and end is not None and end > duration:
+            errors["end_second"] = "Cannot be after the end of the recording."
+        if duration is not None and start > duration:
+            errors["start_second"] = "Cannot be after the end of the recording."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return data

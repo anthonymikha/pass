@@ -9,12 +9,13 @@ from accounts.models import Connection, Device, User, UserBlockout
 from billing.models import CommissionRate, Payment
 from chat import services as chat_services
 from chat.models import Chat, Message
+from config.storage import UUID, get_storage
 from teams.models import Group, GroupMember
 from venues.models import (
     Club, ClubCurrency, ClubMember, Court, CourtBlockout, CourtRate, Discount, Equipment, PriceOverride, Sport,
 )
 
-from .models import Session, SessionParticipant, SessionRental
+from .models import Recording, RecordingTag, Session, SessionParticipant, SessionRental
 
 PASSWORD = "court-side-42"
 UTC = dt.timezone.utc
@@ -1623,3 +1624,259 @@ class ReportTests(PaymentBase):
         self.call("get", f"sessions/{t1.id}/attendance/", hal, expect=403)  # a participant sees the session, not the report
         self.call("get", f"sessions/{t1.id}/attendance/", cora, expect=404)
         self.call("get", "sessions/99999/attendance/", coach, expect=404)
+
+
+GIB = 1024 ** 3
+
+
+class RecordingTests(BookingBase):
+    """Training on Monday 10:00-11:00 (Beirut): coach Carl, booker Rana, players Ben and Cara, shadow player Kid,
+    Dan declined. Ben checked in at 10:30."""
+
+    def setUp(self):
+        super().setUp()
+        self.storage = get_storage()
+        self.storage.keys.clear()
+        self.storage.forms.clear()
+        self.coach = self.user("carl", is_coach=True)
+        self.rana, self.ben, self.cara, self.dan, self.sam = (self.user(n) for n in ("rana", "ben", "cara", "dan", "sam"))
+        self.kid = self.shadow("Kid", self.coach)
+        self.play = self.session(self.court1, at(MON, 10), at(MON, 11), self.rana, coach=self.coach)
+        for user, status in ((self.ben, "accepted"), (self.cara, "accepted"), (self.dan, "declined"), (self.kid, "accepted")):
+            SessionParticipant.objects.create(session=self.play, user=user, status=status)
+        self.clock.return_value = at(MON, 10, 30)
+        self.call("post", f"sessions/{self.play.id}/participants/{self.ben.id}/check-in/", self.ben, expect=200)
+
+    def form(self, user, session=None, name="game.mp4", size=1000, expect=200):
+        return self.call("post", f"sessions/{(session or self.play).id}/recordings/form/", user,
+                         {"file_name": name, "size_bytes": size}, expect)
+
+    def confirm(self, user, key, session=None, expect=None, **extra):
+        return self.call("post", f"sessions/{(session or self.play).id}/recordings/", user, {"storage_key": key, **extra}, expect)
+
+    def upload(self, user, session=None, name="game.mp4", **extra):
+        """The whole journey: form, the phone's upload, confirm. Returns the Recording."""
+        key = self.form(user, session, name).data["storage_key"]
+        self.storage.put(key)
+        return Recording.objects.get(pk=self.confirm(user, key, session, expect=201, **extra).data["id"])
+
+    def log_rpe(self, user):
+        SessionParticipant.objects.filter(session=self.play, user=user).update(rpe=6)
+
+    def code(self, response, status, code):
+        self.assertEqual((response.status_code, response.data["code"]), (status, code), response.data)
+
+    def test_upload_journey(self):
+        """REC-1, REC-2, REC-3, REC-11, REC-12, REC-13, GEN-5: Ben (checked in) gets a form for a 500 MB mov, the confirm
+        fails until the phone uploaded, then creates the row; a repeat is 200; the coach uploads too; bad input."""
+        r = self.form(self.ben, name="Match.MOV", size=500_000_000)
+        key = r.data["storage_key"]
+        self.assertEqual(set(r.data), {"url", "fields", "storage_key"})
+        self.assertRegex(key, rf"^recordings/{self.play.id}/{UUID}\.mov$")  # lowercase extension
+        self.assertEqual(r.data["fields"]["key"], key)
+        self.assertEqual(self.storage.forms[key], 500_000_000)  # REC-11: the policy's content-length range
+        self.assertEqual(Recording.objects.count(), 0)  # nothing written yet
+        self.code(self.confirm(self.ben, key, expect=400), 400, "not_uploaded")
+        self.storage.put(key)
+        r = self.confirm(self.ben, key, expect=201, duration_seconds=600)
+        row = Recording.objects.get()
+        self.assertEqual((row.uploaded_by, row.storage_key, row.duration_seconds, row.session), (self.ben, key, 600, self.play))
+        self.assertEqual(r.data["id"], row.id)
+        self.assertNotIn("url", r.data)  # Ben may not watch yet (REC-20)
+        self.assertEqual(self.confirm(self.ben, key, expect=200).data["id"], row.id)  # GEN-5
+        self.assertEqual(self.confirm(self.coach, key, expect=200).data["id"], row.id)
+        self.assertEqual(Recording.objects.count(), 1)
+
+        coach_row = self.upload(self.coach, name="drill.mp4")  # the coach need not be a participant
+        self.assertEqual((coach_row.uploaded_by, coach_row.duration_seconds), (self.coach, None))
+
+        # bad name and size: one error per field, nothing issued (REC-11)
+        for name in ("clip.avi", "clip", "mp4", "clip.mp4.exe"):
+            self.assertIn("file_name", self.form(self.ben, name=name, expect=400).data)
+        self.assertEqual(self.form(self.ben, name="CLIP.Mp4", size=2 * GIB).status_code, 200)  # the limit itself
+        for size in (0, -5, 2 * GIB + 1, "big"):
+            self.assertEqual(list(self.form(self.ben, size=size, expect=400).data), ["size_bytes"])
+        self.assertEqual(sorted(self.call("post", f"sessions/{self.play.id}/recordings/form/", self.ben, {}, 400).data),
+                         ["file_name", "size_bytes"])
+
+        # bad_key: another session's key, a wrong shape, a wrong extension, someone else's prefix
+        other = self.session(self.court2, at(MON, 10), at(MON, 11), self.rana, coach=self.coach)
+        foreign = self.form(self.coach, other).data["storage_key"]
+        self.storage.put(foreign)
+        name = key.split("/")[2]
+        for bad in (foreign, f"recordings/{self.play.id}/x.mp4", f"recordings/{self.play.id}/{name.upper()}",
+                    f"recordings/{self.play.id}/{name[:-4]}.avi", f"avatars/{self.ben.id}/{name}", "recordings/"):
+            self.code(self.confirm(self.ben, bad, expect=400), 400, "bad_key")
+        self.assertEqual(self.confirm(self.ben, "", expect=400).data["storage_key"], ["This field may not be blank."])
+        fresh = self.form(self.ben).data["storage_key"]
+        self.storage.put(fresh)
+        self.assertEqual(list(self.confirm(self.ben, fresh, expect=400, duration_seconds=0).data), ["duration_seconds"])
+        self.assertEqual(Recording.objects.count(), 2)
+
+    def test_upload_refusals(self):
+        """REC-10, REC-13, GEN-3, GEN-4, GEN-5: who may upload and when. Not a checked-in participant 403, a stranger
+        404, permission before input; the window is starts_at to ends_at + 30 days on a confirmed session."""
+        self.assertEqual(self.form(self.cara, expect=403).data["code"], "forbidden")  # accepted, not checked in
+        self.form(self.rana, expect=403)  # the booker is a participant who did not check in
+        self.form(self.dan, expect=403)  # declined
+        self.form(self.sam, expect=404)  # stranger
+        self.form(self.sam, size=0, expect=404)  # GEN-4: permission before input
+        self.form(self.cara, size=0, expect=403)
+        stray = self.session(self.court2, at(MON, 12), at(MON, 13), self.rana, coach=self.sam)
+        self.form(self.coach, stray, expect=404)  # another session's coach is not this session's
+        self.call("post", "sessions/99999/recordings/form/", self.ben, {"file_name": "a.mp4", "size_bytes": 5}, 404)
+        self.confirm(self.sam, "recordings/1/x.mp4", expect=404)
+        self.confirm(self.cara, "recordings/1/x.mp4", expect=403)
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.post(f"/api/sessions/{self.play.id}/recordings/form/").status_code, 401)
+
+        key = self.form(self.ben).data["storage_key"]  # issued while the window is open
+        self.storage.put(key)
+        self.clock.return_value = self.play.starts_at - dt.timedelta(seconds=1)
+        self.code(self.form(self.ben, expect=400), 400, "upload_closed")
+        self.code(self.form(self.coach, expect=400), 400, "upload_closed")
+        self.code(self.confirm(self.ben, key, expect=400), 400, "upload_closed")
+        self.clock.return_value = self.play.starts_at
+        self.form(self.ben, expect=200)
+        last = self.play.ends_at + dt.timedelta(days=30)
+        self.clock.return_value = last
+        self.form(self.ben, expect=200)
+        self.confirm(self.ben, key, expect=201)
+        self.clock.return_value = last + dt.timedelta(seconds=1)
+        self.code(self.form(self.ben, expect=400), 400, "upload_closed")
+        later = f"recordings/{self.play.id}/{'0' * 8}-0000-0000-0000-{'0' * 12}.mp4"
+        self.storage.put(later)
+        self.code(self.confirm(self.ben, later, expect=400), 400, "upload_closed")
+        self.confirm(self.ben, key, expect=200)  # a repeat still answers once the window has closed (GEN-5)
+        self.assertEqual(Recording.objects.count(), 1)
+
+        self.clock.return_value = at(MON, 10, 30)
+        for state in ("cancelled", "requested"):  # REC-10: only a confirmed session
+            Session.objects.filter(pk=self.play.pk).update(status=state)
+            self.code(self.form(self.ben, expect=400), 400, "upload_closed")
+            self.code(self.form(self.coach, expect=400), 400, "upload_closed")
+
+    def test_watch_journey(self):
+        """REC-2, REC-20, REC-21, GEN-3: the coach lists recordings with signed links; Ben, checked in without RPE, gets
+        404 (also as the uploader) until he logs it; a participant who did not check in, a stranger, an unknown id: 404."""
+        mine = self.upload(self.ben, duration_seconds=90)
+        coach_row = self.upload(self.coach, name="drill.MP4")
+        path = f"sessions/{self.play.id}/recordings/"
+        r = self.call("get", path, self.coach, expect=200).data
+        self.assertEqual(r["count"], 2)
+        first, second = r["results"]
+        self.assertEqual(first, {
+            "id": mine.id, "session": self.play.id, "uploaded_by": {"id": self.ben.id, "full_name": "Ben", "is_coach": False},
+            "duration_seconds": 90, "created_at": first["created_at"], "url": f"http://storage.test/pass/{mine.storage_key}?expires=3600"})
+        self.assertEqual((second["id"], second["uploaded_by"]["id"], second["duration_seconds"]), (coach_row.id, self.coach.id, None))
+        self.assertTrue(second["url"].endswith(".mp4?expires=3600"))  # REC-2: one hour
+
+        self.call("get", path, self.ben, expect=404)  # checked in, uploaded, no RPE (REC-20)
+        self.assertEqual(self.call("put", f"sessions/{self.play.id}/rpe/", self.ben, {"rpe": 7}, 200).data["rpe"], 7)
+        r = self.call("get", path, self.ben, expect=200).data
+        self.assertEqual([x["id"] for x in r["results"]], [mine.id, coach_row.id])
+
+        SessionParticipant.objects.filter(session=self.play, user=self.cara).update(rpe=5)  # RPE but never checked in
+        for user in (self.cara, self.rana, self.dan, self.sam, self.owner):  # the club owner is not a watcher either
+            self.call("get", path, user, expect=404)
+        self.call("get", "sessions/99999/recordings/", self.coach, expect=404)
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(f"/api/sessions/{self.play.id}/recordings/").status_code, 401)
+
+    def test_tag_journey(self):
+        """REC-25, REC-26, REC-27, REC-28, GEN-3, GEN-4: the coach tags a recording (whole team, named players, a shadow
+        player included); bounds; players cannot tag; who sees which tag; creator or coach edits and deletes."""
+        rec = self.upload(self.ben, duration_seconds=600)
+        self.log_rpe(self.ben)
+        tags = f"recordings/{rec.id}/tags/"
+        team = self.call("post", tags, self.coach, {"start_second": 10, "label": "Opening"}, 201).data
+        self.assertEqual((team["players"], team["end_second"], team["note"], team["created_by"], team["recording"]),
+                         ([], None, "", self.coach.id, rec.id))
+        named = self.call("post", tags, self.coach, {"start_second": 30, "end_second": 45, "label": "Fast break", "note": "Late pass",
+                                                     "players": [self.ben.id, self.kid.id]}, 201).data
+        self.assertEqual(sorted(named["players"]), sorted([self.ben.id, self.kid.id]))  # a shadow player is allowed
+        self.call("post", tags, self.coach, {"start_second": 590, "end_second": 600, "label": "End", "players": [self.rana.id]}, 201)
+        self.assertEqual(RecordingTag.objects.count(), 3)
+
+        # input: players are non-declined participants, bounds, label (REC-25)
+        bad = [({"players": [self.dan.id]}, "players"), ({"players": [self.sam.id]}, "players"), ({"players": [99999]}, "players"),
+               ({"end_second": 5}, "end_second"), ({"end_second": 10}, "end_second"), ({"end_second": 601}, "end_second"),
+               ({"start_second": 601}, "start_second"), ({"start_second": -1}, "start_second"),
+               ({"label": ""}, "label"), ({"label": "x" * 256}, "label")]
+        for extra, field in bad:
+            self.assertIn(field, self.call("post", tags, self.coach, {"start_second": 10, "label": "Try", **extra}, 400).data, extra)
+        self.assertEqual(self.call("post", tags, self.coach, {"start_second": 1, "label": "Try", "players": [self.sam.id]}, 400)
+                         .data["players"], ["Not found."])  # GEN-18
+        self.assertEqual(self.call("post", tags, self.coach, {"label": "No start"}, 400).data["start_second"], ["This field is required."])
+        self.assertEqual(RecordingTag.objects.count(), 3)
+        unknown = self.upload(self.coach, name="no-duration.mp4")  # duration unknown: no upper bound
+        self.call("post", f"recordings/{unknown.id}/tags/", self.coach, {"start_second": 9000, "end_second": 9500, "label": "Late"}, 201)
+
+        # REC-28: players cannot tag; REC-20 first: who cannot watch does not see the recording at all
+        self.call("post", tags, self.ben, {"start_second": 1, "label": "Mine"}, 403)
+        self.call("post", tags, self.ben, {"start_second": 1, "label": "Mine", "players": [self.ben.id]}, 403)
+        self.call("post", tags, self.cara, {"start_second": 1, "label": "Mine"}, 404)  # did not check in
+        self.call("post", tags, self.sam, {"start_second": 1, "label": "Mine"}, 404)
+        self.call("post", "recordings/99999/tags/", self.coach, {"start_second": 1, "label": "x"}, 404)
+        self.assertEqual(RecordingTag.objects.count(), 4)
+
+        # REC-27: the coach sees all; Ben (named, may watch) sees his and the whole-team tag; Cara sees the team tag only
+        def labels(user, expect=200):
+            r = self.call("get", tags, user, expect=expect)
+            return [t["label"] for t in r.data["results"]] if expect == 200 else None
+
+        self.assertEqual(labels(self.coach), ["Opening", "Fast break", "End"])
+        self.assertEqual(labels(self.ben), ["Opening", "Fast break"])
+        SessionParticipant.objects.filter(session=self.play, user=self.cara).update(checked_in_at=at(MON, 10, 10))
+        labels(self.cara, 404)  # checked in, no RPE: no tags either
+        SessionParticipant.objects.filter(session=self.play, user=self.cara).update(rpe=4)
+        self.assertEqual(labels(self.cara), ["Opening"])
+        for user in (self.rana, self.dan, self.sam, self.owner):
+            labels(user, 404)
+        self.call("get", "recordings/99999/tags/", self.coach, expect=404)
+
+        # REC-26: the coach changes any tag; a visible participant who did not create it gets 403, one who cannot see it 404
+        self.call("patch", f"recording-tags/{team['id']}/", self.ben, {"label": "x"}, 403)
+        self.call("patch", f"recording-tags/{named['id']}/", self.cara, {"label": "x"}, 404)
+        self.call("patch", f"recording-tags/{named['id']}/", self.sam, {"label": "x"}, 404)
+        self.call("delete", f"recording-tags/{team['id']}/", self.ben, expect=403)
+        r = self.call("patch", f"recording-tags/{named['id']}/", self.coach, {"label": "Fast break!", "players": [self.cara.id]}, 200).data
+        self.assertEqual((r["label"], r["players"], r["start_second"], r["end_second"]), ("Fast break!", [self.cara.id], 30, 45))
+        self.assertEqual(labels(self.ben), ["Opening"])  # no longer named
+        self.assertEqual(labels(self.cara), ["Opening", "Fast break!"])
+        # a patch is checked against the stored values
+        self.assertIn("end_second", self.call("patch", f"recording-tags/{named['id']}/", self.coach, {"start_second": 50}, 400).data)
+        self.assertIn("end_second", self.call("patch", f"recording-tags/{named['id']}/", self.coach, {"end_second": 700}, 400).data)
+        self.assertIn("players", self.call("patch", f"recording-tags/{named['id']}/", self.coach, {"players": [self.dan.id]}, 400).data)
+        r = self.call("patch", f"recording-tags/{named['id']}/", self.coach, {"end_second": None, "players": []}, 200).data
+        self.assertEqual((r["end_second"], r["players"]), (None, []))  # now a whole-team tag
+        self.assertEqual(labels(self.ben), ["Opening", "Fast break!"])
+
+        # the creator changes and deletes their own tag
+        own = RecordingTag.objects.create(recording=rec, created_by=self.ben, start_second=5, label="Ben's")
+        self.call("patch", f"recording-tags/{own.id}/", self.ben, {"note": "check this"}, 200)
+        self.call("delete", f"recording-tags/{own.id}/", self.ben, expect=204)
+        self.call("delete", f"recording-tags/{own.id}/", self.ben, expect=404)
+        self.call("delete", f"recording-tags/{team['id']}/", self.coach, expect=204)
+        self.assertEqual(labels(self.coach), ["Fast break!", "End"])
+
+    def test_delete_recording(self):
+        """REC-14, GEN-3: the uploader (even without RPE) or the coach deletes: object, row and tags go; a participant who
+        may watch but did not upload gets 403; strangers 404; the object is gone from storage."""
+        mine, theirs = self.upload(self.ben), self.upload(self.coach, name="drill.mp4")
+        self.call("post", f"recordings/{theirs.id}/tags/", self.coach, {"start_second": 1, "label": "x"}, 201)
+        self.call("delete", f"recordings/{theirs.id}/", self.ben, expect=404)  # Ben has no RPE: he cannot even see it
+        self.log_rpe(self.ben)
+        self.call("delete", f"recordings/{theirs.id}/", self.ben, expect=403)
+        self.call("delete", f"recordings/{theirs.id}/", self.sam, expect=404)
+        self.call("delete", f"recordings/{theirs.id}/", self.cara, expect=404)
+        self.call("delete", "recordings/99999/", self.coach, expect=404)
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.delete(f"/api/recordings/{theirs.id}/").status_code, 401)
+        self.assertEqual(Recording.objects.count(), 2)
+
+        self.call("delete", f"recordings/{mine.id}/", self.ben, expect=204)  # the uploader
+        self.assertEqual((Recording.objects.filter(pk=mine.pk).exists(), mine.storage_key in self.storage.keys), (False, False))
+        self.call("delete", f"recordings/{theirs.id}/", self.coach, expect=204)  # the coach, tags included
+        self.assertEqual((Recording.objects.count(), RecordingTag.objects.count(), self.storage.keys), (0, 0, set()))
+        self.call("delete", f"recordings/{theirs.id}/", self.coach, expect=404)

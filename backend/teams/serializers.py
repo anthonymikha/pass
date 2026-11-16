@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from accounts.models import User
 from accounts.serializers import CONNECTABLE_USERS, PersonSerializer
+from accounts.services import avatar_url
 from config.api import VisibleRelatedField
 from venues.models import Sport
 
@@ -93,7 +94,7 @@ class PublicProfileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.CharField)
     def get_avatar(self, user):
-        return ""  # ponytail: signed avatar links (REC-30) arrive with storage; always empty until then
+        return avatar_url(user)  # REC-30
 
     def to_representation(self, user):
         data = super().to_representation(user)

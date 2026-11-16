@@ -1,6 +1,6 @@
-# API: bookings (free slots, prices, court booking, training, availability, invites, rentals, cancelling, check-in, one-off discount, reports)
+# API: bookings (free slots, prices, court booking, training, availability, invites, rentals, cancelling, check-in, one-off discount, reports, recordings and tags)
 
-**Status: built and tested.** Code: [views](../../../backend/bookings/views.py), [serializers](../../../backend/bookings/serializers.py), [services](../../../backend/bookings/services.py), [tests](../../../backend/bookings/tests.py); the session card is `post_session_card` in [chat/services.py](../../../backend/chat/services.py). Rules: [court-availability](../logic/court-availability.md) (AVL-1 to AVL-12, AVL-20 to AVL-25), [pricing-and-currency](../logic/pricing-and-currency.md) (PRC-1 to PRC-12), [discounts](../logic/discounts.md) (DSC-1 to DSC-14), [booking](../logic/booking.md) (BOOK-1 to BOOK-17, BOOK-20 to BOOK-33, BOOK-40 to BOOK-43, BOOK-50, BOOK-51, BOOK-55, BOOK-60, BOOK-65, BOOK-66), [chat](../logic/chat.md) (CHAT-30, CHAT-31), [check-in-and-payments](../logic/check-in-and-payments.md) (PAY-1 to PAY-7), [owner-reports](../logic/owner-reports.md) (RPT-1, RPT-4 to RPT-6, RPT-8). Same conventions as [accounts](accounts.md). Payments, commission and the money reports (RPT-2, RPT-3, RPT-7) are in [billing](billing.md).
+**Status: built and tested.** Code: [views](../../../backend/bookings/views.py), [serializers](../../../backend/bookings/serializers.py), [services](../../../backend/bookings/services.py), [tests](../../../backend/bookings/tests.py); the session card is `post_session_card` in [chat/services.py](../../../backend/chat/services.py). Rules: [court-availability](../logic/court-availability.md) (AVL-1 to AVL-12, AVL-20 to AVL-25), [pricing-and-currency](../logic/pricing-and-currency.md) (PRC-1 to PRC-12), [discounts](../logic/discounts.md) (DSC-1 to DSC-14), [booking](../logic/booking.md) (BOOK-1 to BOOK-17, BOOK-20 to BOOK-33, BOOK-40 to BOOK-43, BOOK-50, BOOK-51, BOOK-55, BOOK-60, BOOK-65, BOOK-66), [chat](../logic/chat.md) (CHAT-30, CHAT-31), [check-in-and-payments](../logic/check-in-and-payments.md) (PAY-1 to PAY-7), [owner-reports](../logic/owner-reports.md) (RPT-1, RPT-4 to RPT-6, RPT-8), [recordings](../logic/recordings.md) (REC-1 to REC-30). Same conventions as [accounts](accounts.md). Payments, commission and the money reports (RPT-2, RPT-3, RPT-7) are in [billing](billing.md).
 
 ## Who may call
 
@@ -35,6 +35,31 @@
 | GET | `/api/players/<user_id>/sessions/` | a coach, for one of their players (ACC-1) | RPT-8: the player's accepted rows in confirmed sessions the caller coached, newest first, paged: `session, kind, starts_at, ends_at, checked_in_at, rpe, rpe_minutes, training_load` (`rpe x rpe_minutes`, `null` when either is missing). Not a coach `403`; not their player `404` | `200` page |
 | GET | `/api/users/<id>/availability/?from=&to=&min_minutes=` | the user, or a coach about one of their players | free intervals `[{starts_at, ends_at}]` (AVL-20, AVL-22, AVL-23); not paged; anyone else `404` | `200` |
 | GET | `/api/groups/<id>/availability/?from=&to=&min_minutes=` | an active member or a group manager | intervals where every active member is free (AVL-21); anyone else `404` | `200` |
+| POST | `/api/sessions/<id>/recordings/form/` | the session coach, or a participant who checked in | REC-10, REC-11: `file_name` (`.mp4` or `.mov`, any case), `size_bytes` (1 to 2 147 483 648). Returns `{url, fields, storage_key}`: a signed POST form valid 1 hour and limited to 1..`size_bytes` bytes; `storage_key` is `recordings/<session id>/<uuid>.<ext>` (lowercase). Writes nothing. Not visible `404`, visible but not allowed `403`, bad input `400` per field, `400 upload_closed` | `200` |
+| POST | `/api/sessions/<id>/recordings/` | same | REC-12: `storage_key`, optional `duration_seconds` (>= 1). `400 bad_key`, `400 upload_closed`, `400 not_uploaded`. Returns the recording without a link (the uploader may not be allowed to watch yet) | `201`; `200` with the existing row on a repeat (GEN-5) |
+| GET | `/api/sessions/<id>/recordings/` | the session coach, or a participant with `checked_in_at` and `rpe` both set | REC-20, REC-21: `[{id, session, uploaded_by: {id, full_name, is_coach}, duration_seconds, created_at, url}]` oldest first, paged; `url` is signed for 1 hour (REC-2). Anyone else (an uploader without RPE included) `404` | `200` page |
+| DELETE | `/api/recordings/<id>/` | the uploader or the session coach | REC-14: deletes the object, the row and its tags. A participant who may watch but is neither `403`; who may not see it `404` | `204` |
+| GET | `/api/recordings/<id>/tags/` | the session coach, or a participant who may watch | REC-27: the coach sees every tag; a participant sees whole-team tags and tags naming them. Ordered by `start_second`, paged. Anyone else `404` | `200` page |
+| POST | `/api/recordings/<id>/tags/` | the session coach | REC-25: `start_second` (>= 0), optional `end_second` (> `start_second`), both at most `duration_seconds` when it is known; `label` (1 to 255), optional `note`, optional `players` (participants of the session that are not declined, shadow players included; empty or missing = whole team). Players cannot tag (REC-28): `403`; anyone who may not watch `404`. Returns `{id, recording, created_by, start_second, end_second, label, note, players, created_at}` | `201` |
+| PATCH, DELETE | `/api/recording-tags/<id>/` | the tag's creator or the session coach | REC-26: PATCH any tag field, checked against the stored values (so `end_second: null` and `players: []` are valid). A tag the caller may not see `404`; visible but not theirs `403` | `200` / `204` |
+
+## Recordings and tags
+
+Video and avatars live in S3-compatible storage (MinIO in docker-compose, REC-1); Django never receives or serves the bytes. Settings: `STORAGE_ENDPOINT` (how the backend reaches storage for head and delete), `STORAGE_PUBLIC_ENDPOINT` (the address phones use; links and forms are signed for it), `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_REGION`. An empty `STORAGE_ENDPOINT` selects an in-memory fake (REC-3); tests use it and need no MinIO.
+
+Upload with curl (local MinIO; send every returned field as `-F name=value`, the file last):
+
+```sh
+curl -s -X POST localhost:8000/api/sessions/<id>/recordings/form/ -H 'Authorization: Token <token>' \
+  -H 'Content-Type: application/json' -d '{"file_name":"game.mp4","size_bytes":123456}'
+# -> {"url": "http://localhost:9000/pass", "fields": {"key": ..., "policy": ..., "x-amz-...": ...}, "storage_key": ...}
+curl -s -X POST http://localhost:9000/pass -F key=... -F x-amz-algorithm=... -F x-amz-credential=... \
+  -F x-amz-date=... -F policy=... -F x-amz-signature=... -F file=@game.mp4      # 204 when stored
+curl -s -X POST localhost:8000/api/sessions/<id>/recordings/ -H 'Authorization: Token <token>' \
+  -H 'Content-Type: application/json' -d '{"storage_key":"<storage_key>","duration_seconds":600}'
+```
+
+Decided during build: only a `confirmed` session accepts uploads, from `starts_at` to `ends_at + 30 days` (stored status, so a finished session still counts); anything else is `400 upload_closed`. Confirm checks in the order permission, input, `bad_key`, repeat (`200` with the stored row, at any time), `upload_closed`, `not_uploaded`, and locks the session row so two confirms of one key make one recording. The policy's range is `1..size_bytes`. Signed links and forms last 1 hour.
 
 ## Training and availability
 

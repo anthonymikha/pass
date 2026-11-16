@@ -4,22 +4,25 @@ import zoneinfo
 
 from django.contrib.auth import authenticate, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from config.api import VisibleRelatedField
 from config.money import validate_currency, validate_typed_money
 
+from . import services
 from .models import Connection, Device, User, UserBlockout
 
 
 class UserSerializer(serializers.ModelSerializer):
     """The signed-in user's own profile."""
 
+    avatar = serializers.SerializerMethodField()  # REC-30: a signed link, or empty
+
     class Meta:
         model = User
-        # ponytail: avatar is left out until object storage exists (uploads have nowhere to be served from).
         fields = [
-            "id", "email", "full_name", "phone", "timezone",
+            "id", "email", "full_name", "phone", "avatar", "timezone",
             "date_of_birth", "sex", "height_cm", "weight_kg", "nationality", "dominant_hand",
             "is_coach", "coach_bio", "coach_rate", "coach_currency",
         ]
@@ -29,6 +32,10 @@ class UserSerializer(serializers.ModelSerializer):
             "height_cm": {"min_value": 30, "max_value": 300},
             "weight_kg": {"min_value": 2, "max_value": 500},
         }
+
+    @extend_schema_field(serializers.CharField)
+    def get_avatar(self, user):
+        return services.avatar_url(user)
 
     def validate_date_of_birth(self, value):
         if value and value > datetime.date.today():
@@ -83,6 +90,39 @@ class BlockoutSerializer(serializers.ModelSerializer):
         if errors:
             raise serializers.ValidationError(errors)
         return data
+
+
+class UploadFormSerializer(serializers.Serializer):
+    """REC-11, REC-30: the input of an upload form. Subclass with `EXTENSIONS` and `MAX_BYTES`; adds `ext` (lowercase)."""
+
+    EXTENSIONS = ()
+    MAX_BYTES = 0
+    file_name = serializers.CharField(max_length=255)
+    size_bytes = serializers.IntegerField(min_value=1)
+
+    def validate_file_name(self, value):
+        if "." not in value or value.rsplit(".", 1)[-1].lower() not in self.EXTENSIONS:
+            raise serializers.ValidationError(f"Use a file ending in {', '.join('.' + e for e in self.EXTENSIONS)}.")
+        return value
+
+    def validate_size_bytes(self, value):
+        if value > self.MAX_BYTES:
+            raise serializers.ValidationError(f"At most {self.MAX_BYTES} bytes.")
+        return value
+
+    def validate(self, data):
+        return {**data, "ext": data["file_name"].rsplit(".", 1)[-1].lower()}
+
+
+class AvatarFormSerializer(UploadFormSerializer):
+    EXTENSIONS = services.AVATAR_TYPES
+    MAX_BYTES = services.AVATAR_MAX_BYTES
+
+
+class StorageKeySerializer(serializers.Serializer):
+    """REC-12, REC-30: the key the phone uploaded to."""
+
+    storage_key = serializers.CharField(max_length=512)
 
 
 class UserBlockoutSerializer(BlockoutSerializer):

@@ -18,6 +18,8 @@
 | POST | `/api/auth/logout/` | token | none | `204` (also deletes the caller's devices, NOTE-3) |
 | GET | `/api/me/` | token | none | `200` user |
 | PATCH | `/api/me/` | token | any editable field | `200` user |
+| POST | `/api/me/avatar/form/` | token | `file_name` (`.jpg`, `.jpeg`, `.png`, `.webp`, case-insensitive), `size_bytes` (1 to 5 MiB) | `200` `{url, fields, storage_key}`: a signed POST form, valid 1 hour, limited to 1..`size_bytes` bytes (REC-30). `400` per field |
+| POST | `/api/me/avatar/` | token | `storage_key` from the form | `200` the profile: sets `avatar` to a signed link and deletes the old object (REC-30). `400 bad_key` (not `avatars/<your id>/<uuid>.<ext>`), `400 not_uploaded`. Repeating the current key is `200` and changes nothing |
 | POST | `/api/devices/` | token | `token`, `platform` (`ios`, `android`, `web`) | `201` device; `200` if the caller already has it or it moved to the caller (NOTE-2) |
 | DELETE | `/api/devices/<token or id>/` | token | none | `204`; `404` if it is not the caller's own (NOTE-3, GEN-3) |
 | GET | `/api/me/blockouts/` | token | none | `200` page of the caller's block-outs |
@@ -65,7 +67,7 @@ A device is a phone registered for pushes: `{id, token, platform, created_at}`. 
 }
 ```
 
-`id` and `email` are read-only. Everything else can be sent to `PATCH /api/me/`.
+`avatar` is a signed GET link (valid 1 hour) or `""`; it is read-only here and set only through the avatar endpoints. `id` and `email` are read-only. Everything else can be sent to `PATCH /api/me/`.
 
 ### Rules
 
@@ -91,7 +93,7 @@ curl -s -X PATCH localhost:8000/api/me/ -H 'Authorization: Token <token>' \
 
 ### Friends, blocking and coaching links
 
-Lists show other users as `{id, full_name, is_coach}` (the full public profile, ACC-21, is not built yet). The `<user_id>` in friend and block paths is the other user's id, whoever sent the request.
+Lists show other users as `{id, full_name, is_coach}` (the full public profile, ACC-21, is in [teams](teams.md)). The `<user_id>` in friend and block paths is the other user's id, whoever sent the request.
 
 - Targets must be active, non-shadow users; anyone else (a shadow player, an inactive or unknown id) is `400` on that field, "Not found." (GEN-18, ACC-12).
 - Refusals (`400`, `{detail, code}`): `cannot_connect` for a blocked pair (either way), for yourself; `not_a_coach` when the coaching target is not a coach. The blocked user cannot tell who blocked them: their lists never show it, and unblocking is `404` for them.
@@ -108,4 +110,17 @@ Lists show other users as `{id, full_name, is_coach}` (the full public profile, 
 
 ## Not built yet
 
-Avatar upload, email verification, password reset, changing email, viewing other users' public profiles.
+Email verification, password reset, changing email, viewing other users' public profiles.
+
+### Avatar upload (REC-30)
+
+```sh
+curl -s -X POST localhost:8000/api/me/avatar/form/ -H 'Authorization: Token <token>' \
+  -H 'Content-Type: application/json' -d '{"file_name":"me.png","size_bytes":48213}'
+# post the file straight to storage: every returned field as -F name=value, the file last
+curl -s -X POST <url> -F key=<fields.key> -F policy=... (and the other fields) -F file=@me.png
+curl -s -X POST localhost:8000/api/me/avatar/ -H 'Authorization: Token <token>' \
+  -H 'Content-Type: application/json' -d '{"storage_key":"<storage_key>"}'
+```
+
+Storage is described in [bookings](bookings.md#recordings-and-tags).

@@ -9,6 +9,8 @@ urlpatterns = [
     path("devices/", views.DeviceView.as_view()),
     path("devices/<str:key>/", views.DeviceDetailView.as_view()),
     path("me/", views.MeView.as_view()),
+    path("me/avatar/", views.AvatarView.as_view()),
+    path("me/avatar/form/", views.AvatarFormView.as_view()),
     path("me/blockouts/", views.BlockoutListView.as_view()),
     path("me/blockouts/<int:pk>/", views.BlockoutDetailView.as_view()),
     path("friends/", views.FriendsView.as_view(people=services.friends_of)),

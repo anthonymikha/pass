@@ -1,3 +1,4 @@
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
@@ -12,7 +13,8 @@ from .models import SessionRental
 from .serializers import (
     AnswerSerializer, AttendanceSerializer, AvailabilityParamsSerializer, BookingSerializer, CustomersSerializer,
     DiscountSerializer, IntervalSerializer, SessionInviteSerializer, MyParamsSerializer, ParticipantSerializer,
-    PeriodSerializer, PlayerSessionSerializer, QuoteSerializer, RentalDecisionSerializer, RentalSerializer,
+    PeriodSerializer, PlayerSessionSerializer, QuoteSerializer, RecordingConfirmSerializer, RecordingFormSerializer,
+    RecordingSerializer, RentalDecisionSerializer, RentalSerializer, TagSerializer, WatchRecordingSerializer,
     ScheduleParamsSerializer, ScheduleSerializer, SessionSerializer, SlotQuerySerializer, SlotSerializer,
     TrainingBookingSerializer, TrainingConfirmSerializer, TrainingRequestSerializer,
 )
@@ -321,3 +323,80 @@ class PlayerHistoryView(generics.ListAPIView):
             raise PermissionDenied("Only coaches can read player history.")
         player = get_object_or_404(coachs_players(coach), pk=self.kwargs["user_id"])
         return services.player_history(coach, player)
+
+
+class RecordingFormView(generics.GenericAPIView):
+    serializer_class = RecordingFormSerializer
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def post(self, request, pk):
+        """REC-10, REC-11: permission, then input, then the window (GEN-4). Nothing is stored."""
+        session = services.uploadable_session(request.user, pk)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        return Response(services.recording_form(session, data["ext"], data["size_bytes"]))
+
+
+class SessionRecordingsView(generics.ListAPIView):
+    serializer_class = WatchRecordingSerializer
+
+    def get_queryset(self):
+        """REC-20, REC-21: the coach, or a participant who checked in and logged RPE; anyone else `404`."""
+        session = services.watchable_session(self.request.user, self.kwargs["pk"])
+        return session.recordings.select_related("uploaded_by").order_by("created_at", "id")
+
+    @extend_schema(request=RecordingConfirmSerializer, responses=RecordingSerializer)
+    def post(self, request, pk):
+        """REC-12: confirm an upload; `201` for the new row, `200` for a repeat (GEN-5)."""
+        session = services.uploadable_session(request.user, pk)
+        serializer = RecordingConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        recording, created = services.confirm_recording(request.user, session, data["storage_key"], data.get("duration_seconds"))
+        return Response(RecordingSerializer(recording).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+class RecordingView(generics.GenericAPIView):
+    serializer_class = RecordingSerializer
+
+    def delete(self, request, pk):
+        """REC-14: the uploader or the session coach."""
+        services.delete_recording(request.user, services.recording_to_delete(request.user, pk))
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RecordingTagsView(generics.ListAPIView):
+    serializer_class = TagSerializer
+
+    def get_queryset(self):
+        """REC-27."""
+        self.recording = services.watched_recording(self.request.user, self.kwargs["pk"])
+        return services.visible_tags(self.request.user, self.recording)
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), **({"recording": self.recording} if hasattr(self, "recording") else {})}
+
+    def post(self, request, pk):
+        """REC-25, REC-28: the session coach tags a recording."""
+        recording = services.taggable_recording(request.user, pk)
+        serializer = TagSerializer(data=request.data, context={"recording": recording})
+        serializer.is_valid(raise_exception=True)
+        serializer.save(recording=recording, created_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class RecordingTagView(generics.GenericAPIView):
+    serializer_class = TagSerializer
+
+    def patch(self, request, pk):
+        """REC-26: the creator or the session coach."""
+        tag = services.tag_for_change(request.user, pk)
+        serializer = self.get_serializer(tag, data=request.data, partial=True, context={"recording": tag.recording})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        services.tag_for_change(request.user, pk).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
