@@ -85,6 +85,8 @@
 
 The club side, affiliated coaches and the member themselves may list the club's members; others `404`.
 
+**CLUB-33.** **My clubs.** A signed-in user lists the clubs they own plus the clubs where they have an active, unexpired `staff` or `coach` membership (ACC-1, ACC-2), each with the caller's roles there (`owner`, `staff`, `coach`), sorted by name, paginated. *Decided during build (2026-11-16): a new club has no active court, so search (CLUB-30) cannot show it, and the club side needs a way to reach its clubs.*
+
 ## Public search and detail
 
 **CLUB-30.** **Search** (no sign-in needed). Clubs that have at least one active court. Optional filters: `sport` (a club with an active court offering it), `q` (club name contains, case-insensitive), `lat` + `lng` + `radius_km` (1–200, default 25). With a location: keep clubs whose `latitude`/`longitude` are set and within the radius (great-circle distance, Earth radius 6371 km), sorted by distance, and include `distance_km` rounded to 1 decimal. Without a location: sorted by name. Paginated.

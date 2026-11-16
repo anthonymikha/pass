@@ -1,6 +1,6 @@
 # Access and roles (ACC)
 
-**Status: planned.** Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
+**Status: partly built.** Built: ACC-10 to ACC-13 (shadow players). The names and default rules are applied by every built endpoint. Planned: ACC-20 to ACC-23. Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
 
 ## Names used on every page
 
@@ -9,7 +9,7 @@
 | Name | Means |
 |---|---|
 | **user** | Any signed-in account |
-| **shadow player** | A `users` row with no email and `managed_by` set. Cannot sign in, so never makes a request |
+| **shadow player** | A `users` row with no email (`managed_by` is set when created; it is emptied only if the coach's account is deleted, and the row stays a shadow player). Cannot sign in, so never makes a request. *No-email test decided during build (2026-11-16)* |
 | **coach** | A user with `is_coach = true` |
 | **club owner** of club K | `K.owner` |
 | **active membership** | A `club_members` row with `status = active` and `expires_on` empty or ≥ today (club timezone) |
@@ -43,7 +43,7 @@
 
 **ACC-10.** Who may: a coach. Creates a user with `full_name` (required, 1–255 characters) and optionally `date_of_birth`, `sex`, `dominant_hand`, `height_cm`, `weight_kg`, `nationality` (same validation as the profile). The row gets no email, an unusable password, `managed_by` = the coach, `is_coach = false`, `timezone` = the coach's timezone.
 
-**ACC-11.** The managing coach may read and edit those fields, and may deactivate the shadow player (`is_active = false`). Nobody else can see or edit a shadow player except where a page lists them (team member lists, session participant lists, tags).
+**ACC-11.** The managing coach may read and edit those fields, and may deactivate the shadow player (`is_active = false`) and reactivate it (*decided during build, 2026-11-16*). Nobody else can see or edit a shadow player except where a page lists them (team member lists, session participant lists, tags).
 
 **ACC-12.** A shadow player is never: a friend, a coaching-connection target, a chat member, a payer chosen in `coach_fee_payer` by anyone but their managing coach, or found by user search. They can be: an active team member (TEAM-27), a session participant (BOOK-10, BOOK-30, BOOK-31), a payer in a coach-fee split (PAY-12; the coach collects from the parent), and named in a recording tag.
 
