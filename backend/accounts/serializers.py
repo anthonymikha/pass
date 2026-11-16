@@ -6,9 +6,10 @@ from django.contrib.auth import authenticate, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from config.api import VisibleRelatedField
 from config.money import validate_currency, validate_typed_money
 
-from .models import Device, User
+from .models import Connection, Device, User, UserBlockout
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -82,6 +83,51 @@ class BlockoutSerializer(serializers.ModelSerializer):
         if errors:
             raise serializers.ValidationError(errors)
         return data
+
+
+class UserBlockoutSerializer(BlockoutSerializer):
+    class Meta(BlockoutSerializer.Meta):
+        model = UserBlockout
+        fields = ["id", *BlockoutSerializer.Meta.fields]
+
+
+class ShadowPlayerSerializer(UserSerializer):
+    """ACC-10, ACC-11: a coach's shadow player. Same validation as the profile."""
+
+    class Meta(UserSerializer.Meta):
+        fields = ["id", "full_name", "date_of_birth", "sex", "dominant_hand", "height_cm", "weight_kg", "nationality", "is_active"]
+        read_only_fields = ["id"]
+        extra_kwargs = {**UserSerializer.Meta.extra_kwargs, "full_name": {"required": True, "allow_blank": False}}
+
+
+class PersonSerializer(serializers.ModelSerializer):
+    """Who the friend, block and coaching lists show. ponytail: the full public profile (ACC-21) is not built yet."""
+
+    class Meta:
+        model = User
+        fields = ["id", "full_name", "is_coach"]
+
+
+# Targets of friend requests, blocks and coaching requests: active, non-shadow users only (TEAM-1, ACC-12).
+# Anyone else is "Not found." (GEN-18).
+CONNECTABLE_USERS = User.objects.filter(is_active=True, email__isnull=False)
+
+
+class UserTargetSerializer(serializers.Serializer):
+    user = VisibleRelatedField(queryset=CONNECTABLE_USERS)
+
+
+class CoachingRequestSerializer(serializers.Serializer):
+    coach = VisibleRelatedField(queryset=CONNECTABLE_USERS)
+
+
+class CoachingSerializer(serializers.ModelSerializer):
+    coach = PersonSerializer(source="user", read_only=True)
+    player = PersonSerializer(source="other_user", read_only=True)
+
+    class Meta:
+        model = Connection
+        fields = ["id", "coach", "player", "status", "created_at"]
 
 
 class DeviceSerializer(serializers.ModelSerializer):

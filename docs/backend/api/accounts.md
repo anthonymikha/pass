@@ -1,6 +1,6 @@
 # API: accounts
 
-**Status: built and tested.** Code: [views](../../../backend/accounts/views.py), [serializers](../../../backend/accounts/serializers.py), [tests](../../../backend/accounts/tests.py).
+**Status: built and tested.** Includes friends, blocking, coaching links, block-outs and shadow players. Code: [views](../../../backend/accounts/views.py), [serializers](../../../backend/accounts/serializers.py), [tests](../../../backend/accounts/tests.py).
 
 ## Conventions for the whole API
 
@@ -20,6 +20,23 @@
 | PATCH | `/api/me/` | token | any editable field | `200` user |
 | POST | `/api/devices/` | token | `token`, `platform` (`ios`, `android`, `web`) | `201` device; `200` if the caller already has it or it moved to the caller (NOTE-2) |
 | DELETE | `/api/devices/<token or id>/` | token | none | `204`; `404` if it is not the caller's own (NOTE-3, GEN-3) |
+| GET | `/api/me/blockouts/` | token | none | `200` page of the caller's block-outs |
+| POST | `/api/me/blockouts/` | token | block-out fields (below) | `201` block-out |
+| GET, PATCH, DELETE | `/api/me/blockouts/<id>/` | token | PATCH: any block-out field | `200` / `200` / `204`; `404` if not the caller's (GEN-3) |
+| GET | `/api/friends/` | token | none | `200` page of the caller's friends (TEAM-6) |
+| POST | `/api/friends/` | token | `user` (id) | `201` a new request; `200` if friends already, already requested, or the other user had asked first (then it becomes accepted). Body: `{id, full_name, is_coach, status}` (TEAM-1) |
+| GET | `/api/friends/incoming/`, `/api/friends/outgoing/` | token | none | `200` page of users with a pending request to / from the caller (TEAM-6) |
+| POST | `/api/friends/<user_id>/accept/` | token | none | `200` accept the pending request that user sent the caller; `200` again if already friends; `404` otherwise (TEAM-2) |
+| DELETE | `/api/friends/<user_id>/` | token | none | `204` decline, cancel or unfriend; `404` if there is nothing between the two (TEAM-3) |
+| GET | `/api/blocks/` | token | none | `200` page of users the caller blocked; never who blocked the caller (TEAM-6) |
+| POST | `/api/blocks/` | token | `user` (id) | `201`; `200` if already blocked. Removes friend and coaching links between the two (TEAM-4) |
+| DELETE | `/api/blocks/<user_id>/` | token | none | `204` unblock; `404` unless the caller is the blocker (TEAM-5) |
+| GET | `/api/coaching/` | token | none | `200` page of the caller's coaching links, as coach or player: `{id, coach, player, status, created_at}` |
+| POST | `/api/coaching/` | token, not a coach | `coach` (id) | `201` request; `200` if already pending or accepted (TEAM-10, TEAM-13) |
+| POST | `/api/coaching/<id>/accept/` | the coach of the link | none | `200`; `200` again if already accepted (TEAM-11) |
+| DELETE | `/api/coaching/<id>/` | either side | none | `204`: the coach declines a pending link; either side ends an accepted one (TEAM-11, TEAM-12) |
+| GET, POST | `/api/shadow-players/` | token; POST: coach only | POST: shadow player fields | `200` page of the caller's shadow players; `201` created (ACC-10) |
+| GET, PATCH | `/api/shadow-players/<id>/` | the managing coach | PATCH: any field | `200`; another coach's, or a normal user's, is `404` (ACC-11) |
 | GET | `/api/schema/` | none | none | `200` OpenAPI schema (the Flutter client is generated from it) |
 
 ### Devices
@@ -71,6 +88,23 @@ curl -s -X POST localhost:8000/api/auth/register/ -H 'Content-Type: application/
 curl -s -X PATCH localhost:8000/api/me/ -H 'Authorization: Token <token>' \
   -H 'Content-Type: application/json' -d '{"is_coach":true,"timezone":"Asia/Beirut"}'
 ```
+
+### Friends, blocking and coaching links
+
+Lists show other users as `{id, full_name, is_coach}` (the full public profile, ACC-21, is not built yet). The `<user_id>` in friend and block paths is the other user's id, whoever sent the request.
+
+- Targets must be active, non-shadow users; anyone else (a shadow player, an inactive or unknown id) is `400` on that field, "Not found." (GEN-18, ACC-12).
+- Refusals (`400`, `{detail, code}`): `cannot_connect` for a blocked pair (either way), for yourself; `not_a_coach` when the coaching target is not a coach. The blocked user cannot tell who blocked them: their lists never show it, and unblocking is `404` for them.
+- A coach asking for a coaching link is `403 forbidden` (TEAM-13). A player cannot decline or accept for the coach (`403`); a link the caller is not part of is `404`.
+- Pushes: `friend_request` to the other user, `coaching_request` to the coach; `data.id` is the connection id.
+
+### Block-outs
+
+`{id, starts_on, start_time, end_time, repeat, repeat_until, reason}`. `repeat` is `none` (default), `daily`, `weekly` or `monthly`; times are the user's local clock times (GEN-8). `end_time` must be after `start_time`, or `00:00` for the end of the day (GEN-11); `repeat_until` cannot be before `starts_on`; `reason` up to 255 characters (CLUB-15). PATCH is checked against the stored row.
+
+### Shadow players
+
+`{id, full_name, date_of_birth, sex, dominant_hand, height_cm, weight_kg, nationality, is_active}`; only `full_name` is required, with the profile's validation for the rest. A new shadow player has no email and no usable password, `managed_by` is the calling coach, and its `timezone` is the coach's. Deactivate with `PATCH {"is_active": false}`. A non-coach creating one gets `403`.
 
 ## Not built yet
 
