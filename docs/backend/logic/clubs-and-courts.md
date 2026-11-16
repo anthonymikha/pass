@@ -1,6 +1,6 @@
 # Clubs and courts (CLUB)
 
-**Status: planned.** What an owner configures, and what the public can see. Every write on this page is by the **club owner** only (ACC-5) unless it says otherwise. Another user gets `404` for clubs they cannot see in that role, `403` on public clubs they can see but do not own.
+**Status: built** (`backend/venues/`, API page [venues](../api/venues.md)). PRC-1 to PRC-3 are built here; the price lookup is built with booking. What an owner configures, and what the public can see. Every write on this page is by the **club owner** only (ACC-5) unless it says otherwise. Another user gets `404` for clubs they cannot see in that role, `403` on public clubs they can see but do not own.
 
 ## Club
 

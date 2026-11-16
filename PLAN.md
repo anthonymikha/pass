@@ -24,7 +24,7 @@ Run in this order; tasks on one line run in parallel in separate worktrees.
 | # | Task | Apps | Rules | Status |
 |---|---|---|---|---|
 | T1 | Foundation: error shape with `code`, pagination, strict timestamps, `round_money`, `devices` + `notify()` with fake sender, OpenAPI schema | config, accounts | GEN-1 to GEN-18, NOTE-1 to NOTE-3, NOTE-11 to NOTE-14 | done |
-| T2 / T3 / T4 | Seed (step 2) / owner setup (step 3) / friends, coaching links, block-outs, shadow players (step 5 part 1) | wellness command / venues / accounts | SEED / CLUB, PRC-1 to PRC-3 / TEAM-1 to TEAM-15, ACC-10 to ACC-13 | T2 done |
+| T2 / T3 / T4 | Seed (step 2) / owner setup (step 3) / friends, coaching links, block-outs, shadow players (step 5 part 1) | wellness command / venues / accounts | SEED / CLUB, PRC-1 to PRC-3 / TEAM-1 to TEAM-15, ACC-10 to ACC-13 | done |
 | T5 | Groups and teams, group chat sync, user and coach search (step 5 part 2) | teams, chat services | TEAM-20 to TEAM-40, ACC-20 to ACC-23 | |
 | T6 | Slots, prices, offers, court booking, invites, rentals, cancel (step 4 part 1) | bookings | AVL-1 to AVL-12, PRC-4 to PRC-12, DSC-1 to DSC-8, BOOK-1 to BOOK-17, BOOK-40 to BOOK-66, CHAT-30, CHAT-31 | |
 | T7 | Training requests, coach-booked training, personal and group availability (step 5 part 3) | bookings | BOOK-20 to BOOK-33, AVL-20 to AVL-25 | |
@@ -198,7 +198,7 @@ Open questions to ask first:
 2. Default commission percent for clubs and for coaches (10% was only an example)?
 3. Exercise catalogue: write a placeholder set now for the sports expert to review, or wait for their list?
 
-### Step 3: owner setup
+### Step 3: owner setup (done 2026-11-16: `backend/venues/`, CLUB-1 to CLUB-33)
 
 - Add default pagination and the first permission classes (club owner, club staff).
 - Endpoints for owners: clubs, accepted currencies, courts (with sports), rates, closures (`court_blockouts`, one-off and repeating), equipment, price overrides, discounts, club members (coaches, staff, players with `expires_on`). Everything scoped to clubs the user owns.

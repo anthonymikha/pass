@@ -1,6 +1,6 @@
 # Flow: owner sets up a club
 
-**Status: planned.** Schema exists; endpoints and logic are not built. Rules: [clubs-and-courts](../logic/clubs-and-courts.md).
+**Status: built** (endpoints and tests in `backend/venues/`, API page [venues](../api/venues.md)). Rules: [clubs-and-courts](../logic/clubs-and-courts.md).
 
 Models: [User](../models/accounts.md), [Club, ClubCurrency, Court, CourtRate, CourtBlockout, Equipment, PriceOverride, Discount, ClubMember](../models/venues.md), [Session](../models/bookings.md), [Payment](../models/billing.md).
 
