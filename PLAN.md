@@ -27,7 +27,7 @@ Run in this order; tasks on one line run in parallel in separate worktrees.
 | T2 / T3 / T4 | Seed (step 2) / owner setup (step 3) / friends, coaching links, block-outs, shadow players (step 5 part 1) | wellness command / venues / accounts | SEED / CLUB, PRC-1 to PRC-3 / TEAM-1 to TEAM-15, ACC-10 to ACC-13 | done |
 | T5 | Groups and teams, group chat sync, user and coach search (step 5 part 2) | teams, chat services | TEAM-20 to TEAM-40, ACC-20 to ACC-23 | done |
 | T6 | Slots, prices, offers, court booking, invites, rentals, cancel (step 4 part 1) | bookings | AVL-1 to AVL-12, PRC-4 to PRC-12, DSC-1 to DSC-8, BOOK-1 to BOOK-17, BOOK-40 to BOOK-66, CHAT-30, CHAT-31 | done |
-| T7 | Training requests, coach-booked training, personal and group availability (step 5 part 3) | bookings | BOOK-20 to BOOK-33, AVL-20 to AVL-25 | |
+| T7 | Training requests, coach-booked training, personal and group availability (step 5 part 3) | bookings | BOOK-20 to BOOK-33, AVL-20 to AVL-25 | done |
 | T8 | Check-in, payments, commission, mark paid, one-off discount, reports (step 4 part 2) | bookings, billing | PAY, COM, DSC-10 to DSC-14, RPT | |
 | T9 / T10 / T11 | Wellness (step 6) / recordings, storage, avatars (step 7) / chat (step 8) | wellness / bookings, accounts / chat | WEL / REC / CHAT | T9, T11 done |
 | T12 | Scheduler, RPE reminder, FCM sender, trigger audit (step 9) | accounts, bookings, compose | NOTE-9, NOTE-10, NOTE-20, NOTE-30, NOTE-31 | |

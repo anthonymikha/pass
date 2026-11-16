@@ -1,6 +1,6 @@
 # Booking (BOOK)
 
-**Status: partly built.** Built: BOOK-1 to BOOK-17, BOOK-40 to BOOK-66 (`backend/bookings/`, [API](../api/bookings.md)). Planned: BOOK-20 to BOOK-33 (training). Booking a court, training requests, coach-booked training, invites, rentals, cancelling, session cards.
+**Status: built** (`backend/bookings/`, [API](../api/bookings.md)). Booking a court, training requests, coach-booked training, invites, rentals, cancelling, session cards.
 
 ## Sessions in general
 
@@ -100,6 +100,8 @@ Errors: not the session's coach `404`; not `requested` `400 invalid_status`; plu
 **BOOK-32.** `coach_fee_payer`, when given, must be an active member of the team (BOOK-30) or the player (BOOK-31), and not the coach. Empty means the fee is split (PAY-12). Error: `400` on `coach_fee_payer`.
 
 **BOOK-33.** In coach-booked training the coach is the booker, so the coach owes the court fee to the club (PAY-11) and the coach's check-in creates all payments.
+
+**BOOK-34.** *Decided during build (2026-11-16):* coach-booked training (BOOK-30, BOOK-31) takes the BOOK-7 court, sport, time and currency input but no `rentals` and no extra `invitees`: its participants are exactly those BOOK-30 and BOOK-31 list. Codes the training rules leave open: asking oneself or someone in a blocked pair is `400 cannot_request`; a target who is not a coach is `400 not_a_coach`; booking for a group that is not a team is `400 not_a_team`; a `player` who is not one of the coach's players is `400 not_your_player`; a non-coach booking training, or a coach who is not a manager of the team, is `403`. Decline by anyone but the session coach, or withdraw by anyone but the requester, is `404` (as BOOK-21); a request whose time has passed is `400 session_closed`; a repeat on a cancelled request is `200`. Without a court, a past start or an end not after the start is `400` on that field.
 
 ## Rentals
 
