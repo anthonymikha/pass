@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     "teams",
     "bookings",
     "billing",
+    "wellness",
 ]
 
 MIDDLEWARE = [
