@@ -34,3 +34,5 @@ build/
 *.iml
 *.swp
 .DS_Store
+
+PLAN.md
