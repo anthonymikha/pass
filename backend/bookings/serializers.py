@@ -1,9 +1,13 @@
 from rest_framework import serializers
 
-from accounts.serializers import PersonSerializer
+from django.utils import timezone
+
+from accounts.serializers import CONNECTABLE_USERS, PersonSerializer
 from config.api import VisibleRelatedField
 from config.money import validate_currency
+from teams.models import Group
 from venues.models import Court, Sport
+from venues.serializers import typed_money
 
 from . import services
 from .models import Session, SessionParticipant, SessionRental
@@ -42,6 +46,71 @@ class BookingSerializer(serializers.Serializer):
     rentals = RentalInputSerializer(many=True, required=False)
     group = serializers.IntegerField(required=False)
     invitees = serializers.ListField(child=serializers.IntegerField(), required=False)
+
+
+ACTIVE_COURTS = Court.objects.filter(is_active=True).select_related("club")
+
+
+class TrainingRequestSerializer(serializers.Serializer):
+    """BOOK-20 input: the proposed time is in the future and at most 8 hours long."""
+
+    coach = VisibleRelatedField(queryset=CONNECTABLE_USERS)  # not a coach: `not_a_coach` in the service
+    sport = VisibleRelatedField(queryset=Sport.objects.all())
+    starts_at = serializers.DateTimeField()
+    ends_at = serializers.DateTimeField()
+
+    def validate(self, data):
+        if data["starts_at"] <= timezone.now():
+            raise serializers.ValidationError({"starts_at": "Must be in the future."})
+        if data["ends_at"] <= data["starts_at"]:
+            raise serializers.ValidationError({"ends_at": "Must be after the start."})
+        if data["ends_at"] - data["starts_at"] > services.MAX_REQUEST:
+            raise serializers.ValidationError({"ends_at": "At most 8 hours long."})
+        return data
+
+
+class TrainingConfirmSerializer(serializers.Serializer):
+    """BOOK-21 input."""
+
+    starts_at = serializers.DateTimeField()
+    ends_at = serializers.DateTimeField()
+    currency = serializers.CharField(validators=[validate_currency])
+    coach_fee = serializers.DecimalField(**MONEY)
+    court = VisibleRelatedField(queryset=ACTIVE_COURTS, required=False)
+
+    def validate(self, data):
+        typed_money(data["coach_fee"], data["currency"], "coach_fee")  # GEN-17
+        return data
+
+
+class TrainingBookingSerializer(TrainingConfirmSerializer):
+    """BOOK-30, BOOK-31 input: a team (`group`) or one of the coach's players (`player`)."""
+
+    sport = VisibleRelatedField(queryset=Sport.objects.all())
+    group = VisibleRelatedField(queryset=Group.objects.all(), required=False)
+    player = serializers.IntegerField(required=False)  # checked against the coach's players in the service (BOOK-31)
+    coach_fee_payer = serializers.IntegerField(required=False, allow_null=True)  # BOOK-32, checked in the service
+
+    def validate(self, data):
+        if ("group" in data) == ("player" in data):
+            raise serializers.ValidationError({"player": "Give either a team (group) or a player."})
+        return super().validate(data)
+
+
+class AvailabilityParamsSerializer(serializers.Serializer):
+    """AVL-23 (`from` is a keyword, so that field is added in __init__)."""
+
+    to = serializers.DateTimeField()
+    min_minutes = serializers.IntegerField(min_value=5, max_value=1440, default=30)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["from"] = serializers.DateTimeField()
+
+
+class IntervalSerializer(serializers.Serializer):
+    starts_at = serializers.DateTimeField()
+    ends_at = serializers.DateTimeField()
 
 
 class SessionInviteSerializer(serializers.Serializer):
