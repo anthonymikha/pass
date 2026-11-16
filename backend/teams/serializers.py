@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from accounts.models import User
@@ -38,7 +39,7 @@ class GroupRenameSerializer(GroupCreateSerializer):
         fields = ["name", "sport"]
 
 
-class MemberSerializer(serializers.ModelSerializer):
+class GroupMemberSerializer(serializers.ModelSerializer):
     user = PersonSerializer(read_only=True)
 
     class Meta:
@@ -77,6 +78,7 @@ class PublicProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "full_name", "avatar", "is_coach", "coach_bio", "coach_rate", "coach_currency"]
 
+    @extend_schema_field(serializers.CharField)
     def get_avatar(self, user):
         return ""  # ponytail: signed avatar links (REC-30) arrive with storage; always empty until then
 

@@ -12,7 +12,7 @@ from . import services
 from .models import Group, GroupMember
 from .serializers import (
     CoachSearchSerializer, CoachSerializer, GroupCreateSerializer, GroupRenameSerializer, GroupSerializer,
-    InviteSerializer, MemberSerializer, PublicProfileSerializer, ShadowPlayerAddSerializer, UserSearchSerializer,
+    InviteSerializer, GroupMemberSerializer, PublicProfileSerializer, ShadowPlayerAddSerializer, UserSearchSerializer,
 )
 
 
@@ -22,7 +22,7 @@ def groups():
 
 
 def member_response(row, created):
-    return Response(MemberSerializer(row).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+    return Response(GroupMemberSerializer(row).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 class GroupBaseView(generics.GenericAPIView):
@@ -75,7 +75,7 @@ class GroupDetailView(GroupBaseView):
 
 
 class GroupMembersView(GroupBaseView):
-    serializer_class = MemberSerializer
+    serializer_class = GroupMemberSerializer
 
     def get(self, request, pk):
         """TEAM-21: only active members and group managers; anyone else gets a 404 (GEN-3)."""
@@ -97,7 +97,7 @@ class GroupMembersView(GroupBaseView):
 
 
 class GroupMemberDetailView(GroupBaseView):
-    serializer_class = MemberSerializer
+    serializer_class = GroupMemberSerializer
 
     def delete(self, request, pk, user_id):
         """TEAM-26, TEAM-23 decline: leave, decline, remove or reject. `user_id` is the member's user id."""
@@ -106,26 +106,26 @@ class GroupMemberDetailView(GroupBaseView):
 
 
 class GroupMemberAcceptView(GroupBaseView):
-    serializer_class = MemberSerializer
+    serializer_class = GroupMemberSerializer
     manager_only = True
 
     @extend_schema(request=None)
     def post(self, request, pk, user_id):
         """TEAM-25: a group manager accepts a join request."""
-        return Response(MemberSerializer(services.accept_request(self.get_group(pk), user_id)).data)
+        return Response(GroupMemberSerializer(services.accept_request(self.get_group(pk), user_id)).data)
 
 
 class GroupAcceptView(GroupBaseView):
-    serializer_class = MemberSerializer
+    serializer_class = GroupMemberSerializer
 
     @extend_schema(request=None)
     def post(self, request, pk):
         """TEAM-23: the invitee accepts."""
-        return Response(MemberSerializer(services.accept_invite(self.get_group(pk), request.user)).data)
+        return Response(GroupMemberSerializer(services.accept_invite(self.get_group(pk), request.user)).data)
 
 
 class GroupJoinView(GroupBaseView):
-    serializer_class = MemberSerializer
+    serializer_class = GroupMemberSerializer
 
     @extend_schema(request=None)
     def post(self, request, pk):
@@ -137,7 +137,7 @@ class GroupShadowPlayersView(GroupBaseView):
     serializer_class = ShadowPlayerAddSerializer
     manager_only = True
 
-    @extend_schema(responses=MemberSerializer)
+    @extend_schema(responses=GroupMemberSerializer)
     def post(self, request, pk):
         """TEAM-27: 201 new, 200 if already a member."""
         group = self.get_group(pk)
