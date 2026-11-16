@@ -15,7 +15,7 @@ Models: [User, Connection, UserBlockout](../models/accounts.md), [ClubMember](..
 ## Availability
 
 A user is free in a time window when:
-- no `UserBlockout` covers it (weekly ones matched by weekday, one-off ones by date, both in the user's timezone), and
+- no `UserBlockout` covers it on that date (`blockout.occurs_on(date)`, in the user's timezone), and
 - they are not an accepted participant in a non-cancelled `Session` overlapping it.
 
 A group is free when every active member is free. Coaches use the same check for a single player or a whole team before booking.
@@ -33,17 +33,18 @@ A group is free when every active member is free. Coaches use the same check for
 
 ## Teams
 
-1. **Create:** the coach creates a `Group` (`type=team`) and its `Chat`.
+1. **Create:** the coach creates a `Group` (`type=team`, `owner` = `coach` = themselves) and its `Chat`.
 2. **Fill it:**
    - Coach invites a player: `GroupMember` `invited` → player accepts → `active`.
    - Player asks to join: `GroupMember` `requested` → coach accepts → `active`.
    - Shadow players: the coach creates the `User` (no email, `managed_by` = coach) and adds them as `active`.
 3. **Book training:** the coach creates a `Session` with `booked_by` = `coach` = themselves, `group` = the team, and a participant row per active member.
 4. **Choose who pays the coach fee:** leave `coach_fee_payer` empty to split it across accepted members, or set it to bill one account.
-5. **At the session:** players check in; the coach checks in shadow players. The coach is the booker, so the coach's own check-in records the payments.
+5. **Change coach:** set `Group.coach` to the new coach. From then on the new coach books and runs the team's sessions; past sessions keep their coach.
+6. **At the session:** players check in; the coach checks in shadow players. The coach is the booker, so the coach's own check-in records the payments.
 
 ```
-coach ─owner─> Group(team) ─> GroupMember(active) ─┐
+coach ─coach─> Group(team) ─> GroupMember(active) ─┐
    │                                               ├─> Session(training, group) ─> SessionParticipant × n
    └─booked_by, coach──────────────────────────────┘            │
                                                     coach checks in ─> Payment × n (split) or × 1

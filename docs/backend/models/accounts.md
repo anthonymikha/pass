@@ -10,6 +10,10 @@ One row per person, whatever their role. Login is by email and password; there i
 |---|---|
 | `email` | Unique login. **Empty means a shadow player** (see below). Always stored lowercase |
 | `phone`, `full_name`, `avatar`, `timezone` | Profile. `timezone` is an IANA name such as `Asia/Beirut` |
+| `date_of_birth`, `sex` | Optional. `sex` is `male` or `female` |
+| `height_cm`, `weight_kg` | Optional, **latest value only** (no history). The phone can fill them from Apple Health / Health Connect |
+| `nationality` | Optional, 2-letter ISO country code such as `LB` |
+| `dominant_hand` | Optional: `left`, `right` or `both` |
 | `is_coach` | The user offers coaching. Self-declared, no approval |
 | `coach_bio`, `coach_rate`, `coach_currency` | Shown on the coach's profile. `coach_rate` is informational; the real fee is set per session |
 | `managed_by` | For shadow players: the coach who manages them |
@@ -68,22 +72,29 @@ my_players = User.objects.filter(
 
 Before creating a friend request, check the reverse row does not already exist; the unique rule only covers one direction.
 
-## UserBlockout (`user_blockouts`)
+## Blockout (shared shape) and UserBlockout (`user_blockouts`)
 
-Times a user is not available to play (work, school).
+`Blockout` is an abstract model: a time window that is unavailable, one-off or repeating. Two tables use it: `user_blockouts` (times a user cannot play: work, school) and [`court_blockouts`](venues.md#courtblockout-court_blockouts) (court closures).
 
 | Field | Meaning |
 |---|---|
-| `weekday` | 0–6, repeats every week |
-| `on_date` | A single date |
-| `start_time`, `end_time` | In the user's own `timezone` |
+| `starts_on` | The date of a one-off, or the first occurrence of a repeating one |
+| `start_time`, `end_time` | In the user's own `timezone` (the club's, for courts) |
+| `repeat` | `none`, `daily`, `weekly` or `monthly` |
+| `repeat_until` | Last date it can occur. Empty = repeats forever. Cannot be before `starts_on` |
+| `reason` | Optional note |
 
-Exactly one of `weekday` and `on_date` must be set; the database rejects both or neither.
+The pattern is taken from `starts_on`: `weekly` repeats on its weekday, `monthly` on its day of the month. A monthly block-out on the 31st is skipped in months without a 31st.
 
 ```python
-UserBlockout.objects.create(user=me, weekday=0, start_time=time(9), end_time=time(17))   # every Monday
-UserBlockout.objects.create(user=me, on_date=date(2027, 1, 6), start_time=time(9), end_time=time(12))
+UserBlockout.objects.create(user=me, starts_on=date(2027, 1, 4), start_time=time(9), end_time=time(17), repeat="weekly")   # every Monday
+UserBlockout.objects.create(user=me, starts_on=date(2027, 1, 6), start_time=time(9), end_time=time(12))                    # once
+UserBlockout.objects.create(user=me, starts_on=date(2027, 1, 15), start_time=time(18), end_time=time(20), repeat="monthly", repeat_until=date(2027, 6, 30))
+
+blockout.occurs_on(date(2027, 2, 15))   # True
 ```
+
+Patterns such as "every two weeks" or "first Monday of the month" are not supported.
 
 A user is free at a given time when no block-out covers it and they are in no session then. Availability for a group is the same check across all active members. See [coaching-and-teams](../flows/coaching-and-teams.md).
 

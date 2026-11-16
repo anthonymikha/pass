@@ -1,0 +1,72 @@
+// PASS schema v5 - wellness
+
+soreness_logs [icon: heart, color: yellow] {
+  id bigint pk
+  user_id bigint
+  logged_on date
+  period varchar
+  session_id bigint null
+  body_area varchar
+  level smallint
+  created_at timestamp
+}
+
+sleep_logs [icon: heart, color: yellow] {
+  id bigint pk
+  user_id bigint
+  sleep_start timestamp
+  sleep_end timestamp
+  source varchar
+  external_id varchar
+  created_at timestamp
+}
+
+exercises [icon: heart, color: yellow] {
+  id bigint pk
+  name varchar
+  description text
+  kind varchar
+  min_soreness smallint
+  max_soreness smallint
+  video_url varchar
+  created_at timestamp
+}
+
+exercise_body_areas [icon: heart, color: yellow] {
+  id bigint pk
+  exercise_id bigint
+  body_area varchar
+  created_at timestamp
+}
+
+exercise_assignments [icon: heart, color: yellow] {
+  id bigint pk
+  exercise_id bigint
+  user_id bigint
+  assigned_by_id bigint null
+  group_id bigint null
+  sets smallint null
+  reps smallint null
+  hold_seconds smallint null
+  due_on date null
+  completed_at timestamp null
+  created_at timestamp
+}
+
+user_achievements [icon: heart, color: yellow] {
+  id bigint pk
+  user_id bigint
+  achievement_code varchar
+  earned_at timestamp
+  created_at timestamp
+}
+
+soreness_logs.user_id > users.id
+soreness_logs.session_id > sessions.id
+sleep_logs.user_id > users.id
+exercise_body_areas.exercise_id > exercises.id
+exercise_assignments.exercise_id > exercises.id
+exercise_assignments.user_id > users.id
+exercise_assignments.assigned_by_id > users.id
+exercise_assignments.group_id > groups.id
+user_achievements.user_id > users.id

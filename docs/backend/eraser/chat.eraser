@@ -1,0 +1,34 @@
+// PASS schema v5 - chat
+
+chats [icon: message-circle, color: pink] {
+  id bigint pk
+  type varchar
+  group_id bigint unique null
+  club_id bigint null
+  created_at timestamp
+}
+
+chat_members [icon: message-circle, color: pink] {
+  id bigint pk
+  chat_id bigint
+  user_id bigint
+  last_read_at timestamp null
+  created_at timestamp
+}
+
+messages [icon: message-circle, color: pink] {
+  id bigint pk
+  chat_id bigint
+  sender_id bigint null
+  body text
+  session_id bigint null
+  created_at timestamp
+}
+
+chats.group_id > groups.id
+chats.club_id > clubs.id
+chat_members.chat_id > chats.id
+chat_members.user_id > users.id
+messages.chat_id > chats.id
+messages.sender_id > users.id
+messages.session_id > sessions.id

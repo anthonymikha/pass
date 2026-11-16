@@ -1,0 +1,50 @@
+// PASS schema v5 - accounts
+
+users [icon: user, color: blue] {
+  id bigint pk
+  email varchar unique null
+  phone varchar
+  full_name varchar
+  avatar varchar
+  timezone varchar
+  date_of_birth date null
+  sex varchar
+  height_cm decimal(4,1) null
+  weight_kg decimal(5,2) null
+  nationality varchar
+  dominant_hand varchar
+  is_coach boolean
+  coach_bio text
+  coach_rate decimal(12,3) null
+  coach_currency varchar
+  managed_by_id bigint null
+  is_staff boolean
+  is_active boolean
+  created_at timestamp
+}
+
+connections [icon: user, color: blue] {
+  id bigint pk
+  user_id bigint
+  other_user_id bigint
+  type varchar
+  status varchar
+  created_at timestamp
+}
+
+user_blockouts [icon: user, color: blue] {
+  id bigint pk
+  starts_on date
+  start_time time
+  end_time time
+  repeat varchar
+  repeat_until date null
+  reason varchar
+  created_at timestamp
+  user_id bigint
+}
+
+users.managed_by_id > users.id
+connections.user_id > users.id
+connections.other_user_id > users.id
+user_blockouts.user_id > users.id

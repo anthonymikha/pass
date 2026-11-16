@@ -2,7 +2,7 @@
 
 **Status: planned.** Schema exists; endpoints and logic are not built.
 
-Models: [User](../models/accounts.md), [Club, ClubCurrency, Court, CourtRate, Equipment, PriceOverride, Discount, ClubMember](../models/venues.md), [Session](../models/bookings.md), [Payment](../models/billing.md).
+Models: [User](../models/accounts.md), [Club, ClubCurrency, Court, CourtRate, CourtBlockout, Equipment, PriceOverride, Discount, ClubMember](../models/venues.md), [Session](../models/bookings.md), [Payment](../models/billing.md).
 
 ## 1. Create the club
 
@@ -35,7 +35,9 @@ One `CourtRate` per court, weekday and price window. Example for a weekday: 09:0
 | Owner wants to | Reads or writes |
 |---|---|
 | See the schedule | `Session` rows for their courts in a date range, excluding `cancelled` |
-| Close a court for a day | A `Session` with `status=blocked` over that time |
+| Close a court (once, or daily / weekly / monthly) | A `CourtBlockout` |
+| See who still owes money | `Payment` where `club` is theirs and `paid_at` is empty |
+| Mark a payment received | Set `Payment.method` and `paid_at` |
 | Approve a rental | `SessionRental.status` → `approved` |
 | See revenue | `Payment` where `club` is theirs, summed per `currency`; net = `amount − platform_fee` |
 | See what they owe the platform | `Payment.platform_fee` where `settled_at` is empty |
@@ -46,6 +48,7 @@ One `CourtRate` per court, weekday and price window. Example for a weekday: 09:0
 | Reward frequent players | A `Discount` with `min_bookings` |
 | Discount one time slot | A `Discount` with `court` and a narrow `starts_at`–`ends_at` |
 | Take on a coach | `ClubMember` with `role=coach`, `pending` → `active` |
+| Register a player or subscriber | `ClubMember` with `role=player`, optional `expires_on` |
 
 ## Access rules
 

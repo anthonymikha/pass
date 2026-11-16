@@ -14,10 +14,17 @@ A named set of users. Two kinds share one table because they behave the same.
 | Field | Meaning |
 |---|---|
 | `name` | |
-| `owner` | The creator and administrator. For a team, the coach |
+| `owner` | The creator and administrator. Cannot be empty |
+| `coach` | Who runs training. Empty for play groups. For a team it starts as the owner |
 | `sport` | Optional |
 
 The owner is not automatically a member row. Create one for them (status `active`) when the group is created, so "members" always means the people who play.
+
+**Changing a team's coach:** set `coach` to the new coach. Members, chat and history stay with the team. Sessions already held keep the coach who ran them (`sessions.coach`). `owner` does not change unless the team is also handed over; whether the new coach also becomes owner is a product decision, not a schema one.
+
+```python
+Group.objects.filter(pk=team.pk).update(coach=new_coach)
+```
 
 ## GroupMember (`group_members`)
 
@@ -30,7 +37,7 @@ The owner is not automatically a member row. Create one for them (status `active
 Unique per (group, user). Declining or leaving deletes the row.
 
 ```python
-team = Group.objects.create(type="team", name="U12 Tigers", owner=coach, sport=basketball)
+team = Group.objects.create(type="team", name="U12 Tigers", owner=coach, coach=coach, sport=basketball)
 GroupMember.objects.create(group=team, user=player, status="invited")      # coach invites
 GroupMember.objects.create(group=team, user=other, status="requested")     # player asks to join
 GroupMember.objects.filter(group=team, user=player).update(status="active")  # accepted

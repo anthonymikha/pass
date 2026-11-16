@@ -19,7 +19,8 @@ For a court and a date:
 
 1. Convert the date to the club's timezone and take that weekday's `CourtRate` rows.
 2. Cut each window into slots of `court.slot_minutes`. An `end_time` of 00:00 is the end of the day.
-3. Remove every slot that overlaps a `Session` on that court whose status is not `cancelled`. This also removes owner blocks.
+3. Remove every slot that overlaps a `CourtBlockout` occurring on that date (`blockout.occurs_on(date)`).
+4. Remove every slot that overlaps a `Session` on that court whose status is not `cancelled`.
 
 Two time ranges overlap when `a.starts_at < b.ends_at and a.ends_at > b.starts_at`.
 
@@ -63,7 +64,9 @@ When the participant checking in is the **booker**, in the same transaction call
 1. **Court fee** (if the session has a court): payer = booker, payee = the club, amount = `price − discount_amount` + approved rentals.
 2. **Coach fee** (if `coach_fee` > 0): to the coach, from `coach_fee_payer`, or split equally across accepted team members when that is empty.
 
-Each payment gets `platform_fee = amount × rate / 100`, where the rate comes from the commission lookup in [billing](../models/billing.md#lookup) for that payee, `method=offline`, `paid_at=now`.
+Each payment gets `platform_fee = amount × rate / 100`, where the rate comes from the commission lookup in [billing](../models/billing.md#lookup) for that payee. `method` and `paid_at` stay empty: the row records money that is due.
+
+When the money is handed over, the payee marks the row paid: `method=offline`, `paid_at=now`.
 
 ## 7. Afterwards
 
@@ -79,5 +82,6 @@ Set `Session.status = cancelled`. The slot becomes free. Cancellation fees and r
 
 - Whether court bookings confirm instantly (assumed here) or need owner approval.
 - How early check-in opens.
+- Who may mark a payment paid (assumed: the payee) and whether a payer can dispute it.
 - Whether discounts stack.
 - Rental stock checking.

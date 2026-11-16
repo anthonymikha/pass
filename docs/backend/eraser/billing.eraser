@@ -1,0 +1,34 @@
+// PASS schema v5 - billing
+
+payments [icon: dollar-sign, color: red] {
+  id bigint pk
+  session_id bigint
+  payer_id bigint
+  club_id bigint null
+  coach_id bigint null
+  amount decimal(12,3)
+  currency varchar
+  platform_fee decimal(12,3)
+  method varchar
+  paid_at timestamp null
+  settled_at timestamp null
+  created_at timestamp
+}
+
+commission_rates [icon: dollar-sign, color: red] {
+  id bigint pk
+  applies_to varchar
+  club_id bigint null
+  coach_id bigint null
+  min_count int
+  percent decimal(5,2)
+  effective_from date
+  created_at timestamp
+}
+
+payments.session_id > sessions.id
+payments.payer_id > users.id
+payments.club_id > clubs.id
+payments.coach_id > users.id
+commission_rates.club_id > clubs.id
+commission_rates.coach_id > users.id

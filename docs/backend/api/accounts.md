@@ -28,6 +28,12 @@
   "full_name": "Pat",
   "phone": "",
   "timezone": "Asia/Beirut",
+  "date_of_birth": "1998-04-12",
+  "sex": "female",
+  "height_cm": "172.0",
+  "weight_kg": "64.50",
+  "nationality": "LB",
+  "dominant_hand": "right",
   "is_coach": true,
   "coach_bio": "",
   "coach_rate": "25.500",
@@ -42,6 +48,7 @@
 - **Email** is case-insensitive and stored lowercase. Registering an email that exists returns `400` on `email`.
 - **Password** must pass Django's strength checks (length, not common, not all digits, not similar to the email or name). Failures return `400` on `password`.
 - **`timezone`** must be a valid IANA name.
+- **`date_of_birth`** cannot be in the future. **`sex`** is `male` or `female`; **`dominant_hand`** is `left`, `right` or `both`. **`nationality`** is two uppercase letters. **`height_cm`** 30–300, **`weight_kg`** 2–500. All optional (`null` or `""`).
 - **`coach_currency`** must be three uppercase letters. **`coach_rate`** cannot be negative.
 - **Login** fails with the same `400` for a wrong password, an unknown email and a deactivated account.
 - **Shadow players** cannot log in: they have no email and no usable password.

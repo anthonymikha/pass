@@ -20,7 +20,7 @@ Only a participant who checked in can submit. Shadow players do not log RPE.
 ## Daily check-ins
 
 - **Morning and evening soreness:** one `SorenessLog` per sore area, `period=morning` or `evening`.
-- **Sleep:** a `SleepLog`, typed in or sent by the phone after reading Apple Health / Google Health Connect (`source=health_app`).
+- **Sleep:** a `SleepLog`, typed in or sent by the phone after reading Apple Health / Google Health Connect (`source=apple_health` or `health_connect`, with the record's `external_id` so a repeated sync does not duplicate nights).
 
 ## Exercise suggestions
 

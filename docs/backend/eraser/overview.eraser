@@ -1,0 +1,415 @@
+// PASS schema v5 - all apps. Colour by Django app: accounts = blue, venues = green, teams = orange, bookings = purple, billing = red, wellness = yellow, chat = pink
+
+users [icon: user, color: blue] {
+  id bigint pk
+  email varchar unique null
+  phone varchar
+  full_name varchar
+  avatar varchar
+  timezone varchar
+  date_of_birth date null
+  sex varchar
+  height_cm decimal(4,1) null
+  weight_kg decimal(5,2) null
+  nationality varchar
+  dominant_hand varchar
+  is_coach boolean
+  coach_bio text
+  coach_rate decimal(12,3) null
+  coach_currency varchar
+  managed_by_id bigint null
+  is_staff boolean
+  is_active boolean
+  created_at timestamp
+}
+
+connections [icon: user, color: blue] {
+  id bigint pk
+  user_id bigint
+  other_user_id bigint
+  type varchar
+  status varchar
+  created_at timestamp
+}
+
+user_blockouts [icon: user, color: blue] {
+  id bigint pk
+  starts_on date
+  start_time time
+  end_time time
+  repeat varchar
+  repeat_until date null
+  reason varchar
+  created_at timestamp
+  user_id bigint
+}
+
+sports [icon: map-pin, color: green] {
+  id bigint pk
+  name varchar unique
+  created_at timestamp
+}
+
+clubs [icon: map-pin, color: green] {
+  id bigint pk
+  owner_id bigint
+  name varchar
+  address text
+  latitude decimal(9,6) null
+  longitude decimal(9,6) null
+  timezone varchar
+  currency varchar
+  created_at timestamp
+}
+
+club_members [icon: map-pin, color: green] {
+  id bigint pk
+  club_id bigint
+  user_id bigint
+  role varchar
+  status varchar
+  expires_on date null
+  created_at timestamp
+}
+
+club_currencies [icon: map-pin, color: green] {
+  id bigint pk
+  club_id bigint
+  currency varchar
+  exchange_rate decimal(18,6)
+  created_at timestamp
+}
+
+courts [icon: map-pin, color: green] {
+  id bigint pk
+  club_id bigint
+  name varchar
+  description text
+  slot_minutes smallint
+  is_active boolean
+  created_at timestamp
+}
+
+court_sports [icon: map-pin, color: green] {
+  id bigint pk
+  court_id bigint
+  sport_id bigint
+}
+
+court_rates [icon: map-pin, color: green] {
+  id bigint pk
+  court_id bigint
+  weekday smallint
+  start_time time
+  end_time time
+  price decimal(12,3)
+  created_at timestamp
+}
+
+court_blockouts [icon: map-pin, color: green] {
+  id bigint pk
+  starts_on date
+  start_time time
+  end_time time
+  repeat varchar
+  repeat_until date null
+  reason varchar
+  created_at timestamp
+  court_id bigint
+}
+
+equipment [icon: map-pin, color: green] {
+  id bigint pk
+  club_id bigint
+  court_id bigint null
+  name varchar
+  quantity int
+  rental_price decimal(12,3) null
+  created_at timestamp
+}
+
+price_overrides [icon: map-pin, color: green] {
+  id bigint pk
+  court_rate_id bigint null
+  equipment_id bigint null
+  currency varchar
+  price decimal(12,3)
+  created_at timestamp
+}
+
+discounts [icon: map-pin, color: green] {
+  id bigint pk
+  club_id bigint
+  court_id bigint null
+  user_id bigint null
+  min_bookings int null
+  percent_off decimal(5,2) null
+  amount_off decimal(12,3) null
+  starts_at timestamp
+  ends_at timestamp
+  message text
+  created_at timestamp
+}
+
+groups [icon: users, color: orange] {
+  id bigint pk
+  type varchar
+  name varchar
+  owner_id bigint
+  coach_id bigint null
+  sport_id bigint null
+  created_at timestamp
+}
+
+group_members [icon: users, color: orange] {
+  id bigint pk
+  group_id bigint
+  user_id bigint
+  status varchar
+  created_at timestamp
+}
+
+sessions [icon: calendar, color: purple] {
+  id bigint pk
+  court_id bigint null
+  sport_id bigint
+  booked_by_id bigint
+  coach_id bigint null
+  group_id bigint null
+  kind varchar
+  status varchar
+  starts_at timestamp
+  ends_at timestamp
+  currency varchar
+  price decimal(12,3)
+  coach_fee decimal(12,3)
+  coach_fee_payer_id bigint null
+  discount_id bigint null
+  discount_amount decimal(12,3)
+  created_at timestamp
+}
+
+session_participants [icon: calendar, color: purple] {
+  id bigint pk
+  session_id bigint
+  user_id bigint
+  status varchar
+  checked_in_at timestamp null
+  rpe smallint null
+  rpe_minutes int null
+  rpe_logged_at timestamp null
+  created_at timestamp
+}
+
+session_rentals [icon: calendar, color: purple] {
+  id bigint pk
+  session_id bigint
+  equipment_id bigint
+  quantity int
+  price decimal(12,3)
+  status varchar
+  created_at timestamp
+}
+
+recordings [icon: calendar, color: purple] {
+  id bigint pk
+  session_id bigint
+  uploaded_by_id bigint
+  storage_key varchar
+  duration_seconds int null
+  created_at timestamp
+}
+
+recording_tags [icon: calendar, color: purple] {
+  id bigint pk
+  recording_id bigint
+  created_by_id bigint
+  start_second int
+  end_second int null
+  label varchar
+  note text
+  created_at timestamp
+}
+
+recording_tag_players [icon: calendar, color: purple] {
+  id bigint pk
+  recordingtag_id bigint
+  user_id bigint
+}
+
+payments [icon: dollar-sign, color: red] {
+  id bigint pk
+  session_id bigint
+  payer_id bigint
+  club_id bigint null
+  coach_id bigint null
+  amount decimal(12,3)
+  currency varchar
+  platform_fee decimal(12,3)
+  method varchar
+  paid_at timestamp null
+  settled_at timestamp null
+  created_at timestamp
+}
+
+commission_rates [icon: dollar-sign, color: red] {
+  id bigint pk
+  applies_to varchar
+  club_id bigint null
+  coach_id bigint null
+  min_count int
+  percent decimal(5,2)
+  effective_from date
+  created_at timestamp
+}
+
+soreness_logs [icon: heart, color: yellow] {
+  id bigint pk
+  user_id bigint
+  logged_on date
+  period varchar
+  session_id bigint null
+  body_area varchar
+  level smallint
+  created_at timestamp
+}
+
+sleep_logs [icon: heart, color: yellow] {
+  id bigint pk
+  user_id bigint
+  sleep_start timestamp
+  sleep_end timestamp
+  source varchar
+  external_id varchar
+  created_at timestamp
+}
+
+exercises [icon: heart, color: yellow] {
+  id bigint pk
+  name varchar
+  description text
+  kind varchar
+  min_soreness smallint
+  max_soreness smallint
+  video_url varchar
+  created_at timestamp
+}
+
+exercise_body_areas [icon: heart, color: yellow] {
+  id bigint pk
+  exercise_id bigint
+  body_area varchar
+  created_at timestamp
+}
+
+exercise_assignments [icon: heart, color: yellow] {
+  id bigint pk
+  exercise_id bigint
+  user_id bigint
+  assigned_by_id bigint null
+  group_id bigint null
+  sets smallint null
+  reps smallint null
+  hold_seconds smallint null
+  due_on date null
+  completed_at timestamp null
+  created_at timestamp
+}
+
+user_achievements [icon: heart, color: yellow] {
+  id bigint pk
+  user_id bigint
+  achievement_code varchar
+  earned_at timestamp
+  created_at timestamp
+}
+
+chats [icon: message-circle, color: pink] {
+  id bigint pk
+  type varchar
+  group_id bigint unique null
+  club_id bigint null
+  created_at timestamp
+}
+
+chat_members [icon: message-circle, color: pink] {
+  id bigint pk
+  chat_id bigint
+  user_id bigint
+  last_read_at timestamp null
+  created_at timestamp
+}
+
+messages [icon: message-circle, color: pink] {
+  id bigint pk
+  chat_id bigint
+  sender_id bigint null
+  body text
+  session_id bigint null
+  created_at timestamp
+}
+
+users.managed_by_id > users.id
+connections.user_id > users.id
+connections.other_user_id > users.id
+user_blockouts.user_id > users.id
+clubs.owner_id > users.id
+club_members.club_id > clubs.id
+club_members.user_id > users.id
+club_currencies.club_id > clubs.id
+courts.club_id > clubs.id
+court_sports.court_id > courts.id
+court_sports.sport_id > sports.id
+court_rates.court_id > courts.id
+court_blockouts.court_id > courts.id
+equipment.club_id > clubs.id
+equipment.court_id > courts.id
+price_overrides.court_rate_id > court_rates.id
+price_overrides.equipment_id > equipment.id
+discounts.club_id > clubs.id
+discounts.court_id > courts.id
+discounts.user_id > users.id
+groups.owner_id > users.id
+groups.coach_id > users.id
+groups.sport_id > sports.id
+group_members.group_id > groups.id
+group_members.user_id > users.id
+sessions.court_id > courts.id
+sessions.sport_id > sports.id
+sessions.booked_by_id > users.id
+sessions.coach_id > users.id
+sessions.group_id > groups.id
+sessions.coach_fee_payer_id > users.id
+sessions.discount_id > discounts.id
+session_participants.session_id > sessions.id
+session_participants.user_id > users.id
+session_rentals.session_id > sessions.id
+session_rentals.equipment_id > equipment.id
+recordings.session_id > sessions.id
+recordings.uploaded_by_id > users.id
+recording_tags.recording_id > recordings.id
+recording_tags.created_by_id > users.id
+recording_tag_players.recordingtag_id > recording_tags.id
+recording_tag_players.user_id > users.id
+payments.session_id > sessions.id
+payments.payer_id > users.id
+payments.club_id > clubs.id
+payments.coach_id > users.id
+commission_rates.club_id > clubs.id
+commission_rates.coach_id > users.id
+soreness_logs.user_id > users.id
+soreness_logs.session_id > sessions.id
+sleep_logs.user_id > users.id
+exercise_body_areas.exercise_id > exercises.id
+exercise_assignments.exercise_id > exercises.id
+exercise_assignments.user_id > users.id
+exercise_assignments.assigned_by_id > users.id
+exercise_assignments.group_id > groups.id
+user_achievements.user_id > users.id
+chats.group_id > groups.id
+chats.club_id > clubs.id
+chat_members.chat_id > chats.id
+chat_members.user_id > users.id
+messages.chat_id > chats.id
+messages.sender_id > users.id
+messages.session_id > sessions.id

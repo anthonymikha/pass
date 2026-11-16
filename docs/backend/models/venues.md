@@ -1,6 +1,6 @@
 # venues models
 
-Source: [backend/venues/models.py](../../../backend/venues/models.py). Tables: `sports`, `clubs`, `club_members`, `club_currencies`, `courts`, `court_sports`, `court_rates`, `equipment`, `price_overrides`, `discounts`.
+Source: [backend/venues/models.py](../../../backend/venues/models.py). Tables: `sports`, `clubs`, `club_members`, `club_currencies`, `courts`, `court_sports`, `court_rates`, `court_blockouts`, `equipment`, `price_overrides`, `discounts`.
 
 Everything a court or club owner configures.
 
@@ -23,11 +23,18 @@ A club with payments or an owner cannot be removed casually: deleting the owner 
 
 ## ClubMember (`club_members`)
 
-Links a user to a club as `coach` or `staff`, with status `pending` or `active`. Unique per (club, user).
+Links a user to a club, with status `pending` or `active`. Unique per (club, user, role), so one person can be both a coach and a subscribed player at the same club.
 
-- A coach can belong to many clubs, or none (freelancer).
-- Staff can answer the club's inquiry chats.
+| `role` | Meaning |
+|---|---|
+| `coach` | Affiliated coach. A coach can belong to many clubs, or none (freelancer) |
+| `staff` | Can answer the club's inquiry chats |
+| `player` | Registered at the club or holding a subscription |
+
+`expires_on` is the end of a subscription; empty means no expiry. A membership counts when `status=active` and `expires_on` is empty or not yet passed.
+
 - The owner is not a member row; ownership is `clubs.owner`.
+- Booking a court does **not** need a membership. The `player` role records registration only; what a subscription costs or includes is not modelled.
 
 ## ClubCurrency (`club_currencies`)
 
@@ -73,7 +80,18 @@ CourtRate.objects.create(court=court, weekday=0, start_time=time(17), end_time=t
 
 - Open hours are the union of a court's rows. No row for a weekday means closed that day.
 - Windows for the same court and weekday must not overlap. This is checked in code, not by the database.
-- One-off closures (holidays, maintenance) are not rates; they are sessions with status `blocked`. See [bookings](bookings.md).
+- Rates repeat weekly only. Closures, including monthly ones, are `CourtBlockout` rows.
+
+## CourtBlockout (`court_blockouts`)
+
+Times a court cannot be booked: holidays, maintenance, private events. Same fields as [`UserBlockout`](accounts.md#blockout-shared-shape-and-userblockout-user_blockouts), with `court` instead of `user`; times are in the club's timezone.
+
+```python
+CourtBlockout.objects.create(court=court, starts_on=date(2027, 1, 1), start_time=time(0), end_time=time(0), reason="New Year")
+CourtBlockout.objects.create(court=court, starts_on=date(2027, 1, 5), start_time=time(8), end_time=time(10), repeat="monthly", reason="Floor maintenance")
+```
+
+Bookable time = `court_rates` windows − `court_blockouts` − sessions that are not cancelled.
 
 ## Equipment (`equipment`)
 

@@ -38,9 +38,20 @@ Morning and evening logs over several days show how fast a player recovers.
 | Field | Meaning |
 |---|---|
 | `sleep_start`, `sleep_end` | UTC |
-| `source` | `manual`, or `health_app` when the phone imported it from Apple Health or Google Health Connect |
+| `source` | `manual`, `apple_health` (iPhone) or `health_connect` (Android) |
+| `external_id` | The health app's own id for the record (HealthKit sample UUID, Health Connect record id). Empty for manual rows |
 
-The phone reads the health data and posts it; the backend never talks to those services. Imports can repeat, so match on (`user`, `sleep_start`) before inserting.
+The phone reads the health data and posts it; the backend never talks to those services. Imports can repeat safely: (`user`, `source`, `external_id`) is unique when `external_id` is set, so sync with `update_or_create` on those three. `sleep_end` must be after `sleep_start`.
+
+### What the health apps can and cannot fill
+
+| Data | From Apple Health / Health Connect? | Lands in |
+|---|---|---|
+| Sleep sessions | Yes | `sleep_logs` |
+| Height, weight, date of birth, sex | Yes (date of birth and sex on iPhone only) | `users`, latest value |
+| Soreness, RPE | No. These are the player's own ratings; no health app records them | typed in |
+| Exercises done | No. Workouts in health apps are not our catalogue | ticked off in the app |
+| Heart rate, HRV, steps, sleep stages | Yes, but **not stored yet**: waiting for the recovery formula to say which are needed | — |
 
 ## Exercise (`exercises`)
 
@@ -75,6 +86,8 @@ An exercise given to one user.
 | `exercise`, `user` | What and for whom |
 | `assigned_by` | Empty = suggested by the system. Set = the coach who sent it |
 | `group` | Set when the coach sent it to a whole team |
+| `sets`, `reps` | Optional prescription: `sets` × `reps` per set |
+| `hold_seconds` | Optional: how long to hold each rep, for stretches |
 | `due_on` | Optional |
 | `completed_at` | Set when the player ticks it off |
 

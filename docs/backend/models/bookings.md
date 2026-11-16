@@ -32,9 +32,8 @@ The centre of the system: one booked block of time.
 | `confirmed` | Going ahead |
 | `cancelled` | Called off; frees the slot |
 | `completed` | Took place |
-| `blocked` | Not a real session: the owner closed the court for this time |
 
-A slot is taken by any session on that court that overlaps it and is not `cancelled`.
+A slot is taken by any session on that court that overlaps it and is not `cancelled`, or by a [`CourtBlockout`](venues.md#courtblockout-court_blockouts).
 
 ### What one table covers
 
@@ -44,7 +43,6 @@ A slot is taken by any session on that court that overlaps it and is not `cancel
 | Play group game | same, plus `group` |
 | Player requests a coach | `kind=training`, `coach` set, `status=requested`, `court` may be empty |
 | Coach books for a team | `kind=training`, `booked_by` = `coach`, `group` set |
-| Owner closes a court | `status=blocked`, `booked_by` = owner, `price` 0 |
 
 ## SessionParticipant (`session_participants`)
 

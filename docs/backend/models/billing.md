@@ -6,22 +6,22 @@ There is no payment gateway yet. Money changes hands at the court; these tables 
 
 ## Payment (`payments`)
 
-One row per amount paid by one person to one payee for one session.
+One row per amount **owed** by one person to one payee for one session. A row says the money is due; `paid_at` says it was received.
 
 | Field | Meaning |
 |---|---|
-| `session` | What was paid for |
-| `payer` | Who paid |
+| `session` | What it is for |
+| `payer` | Who owes it |
 | `club` **or** `coach` | The payee. Exactly one is set |
-| `amount`, `currency` | What was paid |
+| `amount`, `currency` | What is owed |
 | `platform_fee` | The platform's cut of this payment, in the same currency, fixed at creation |
-| `method` | `offline` today; `online` once a gateway exists |
-| `paid_at` | When it counts as paid |
+| `method` | Empty until paid. `offline` today; `online` once a gateway exists |
+| `paid_at` | When the payee received it. **Empty = still due** |
 | `settled_at` | When the platform's cut was settled with the payee. Empty = still owed |
 
 ### When rows are created
 
-A confirmed session counts as paid when its **booker checks in**. That check-in creates, in one transaction:
+A confirmed session becomes payable when its **booker checks in**. That check-in creates, with `paid_at` empty, in one transaction:
 
 | Payment | Payer | Payee | Amount |
 |---|---|---|---|
@@ -31,15 +31,20 @@ A confirmed session counts as paid when its **booker checks in**. That check-in 
 
 No check-in by the booker means no payment rows. Creation must be safe to repeat: if rows already exist for the session, do nothing.
 
+The payee (club owner or staff, or the coach) then marks each row paid, which sets `method` and `paid_at`.
+
 ### Reading the money
 
 ```python
 from django.db.models import Sum, F
 
-# a club's revenue and what it keeps, per currency
+# a club's collected revenue and what it keeps, per currency (unpaid rows have no paid_at, so they drop out)
 Payment.objects.filter(club=club, paid_at__range=(a, b)).values("currency").annotate(
     gross=Sum("amount"), fees=Sum("platform_fee"), net=Sum(F("amount") - F("platform_fee")),
 )
+
+# what players still owe a club
+Payment.objects.filter(club=club, paid_at__isnull=True).values("currency").annotate(due=Sum("amount"))
 
 # what a club still owes the platform
 Payment.objects.filter(club=club, settled_at__isnull=True).values("currency").annotate(owed=Sum("platform_fee"))

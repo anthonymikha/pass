@@ -27,6 +27,7 @@ docs/
       chat.md
     api/                 REST endpoints, one page per app as they are built
       accounts.md
+    eraser/              diagram code for eraser.io: one file per app plus overview.eraser
   frontend/
     README.md            Flutter app: status and what it needs from the backend
 ```

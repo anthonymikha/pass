@@ -1,0 +1,87 @@
+// PASS schema v5 - bookings
+
+sessions [icon: calendar, color: purple] {
+  id bigint pk
+  court_id bigint null
+  sport_id bigint
+  booked_by_id bigint
+  coach_id bigint null
+  group_id bigint null
+  kind varchar
+  status varchar
+  starts_at timestamp
+  ends_at timestamp
+  currency varchar
+  price decimal(12,3)
+  coach_fee decimal(12,3)
+  coach_fee_payer_id bigint null
+  discount_id bigint null
+  discount_amount decimal(12,3)
+  created_at timestamp
+}
+
+session_participants [icon: calendar, color: purple] {
+  id bigint pk
+  session_id bigint
+  user_id bigint
+  status varchar
+  checked_in_at timestamp null
+  rpe smallint null
+  rpe_minutes int null
+  rpe_logged_at timestamp null
+  created_at timestamp
+}
+
+session_rentals [icon: calendar, color: purple] {
+  id bigint pk
+  session_id bigint
+  equipment_id bigint
+  quantity int
+  price decimal(12,3)
+  status varchar
+  created_at timestamp
+}
+
+recordings [icon: calendar, color: purple] {
+  id bigint pk
+  session_id bigint
+  uploaded_by_id bigint
+  storage_key varchar
+  duration_seconds int null
+  created_at timestamp
+}
+
+recording_tags [icon: calendar, color: purple] {
+  id bigint pk
+  recording_id bigint
+  created_by_id bigint
+  start_second int
+  end_second int null
+  label varchar
+  note text
+  created_at timestamp
+}
+
+recording_tag_players [icon: calendar, color: purple] {
+  id bigint pk
+  recordingtag_id bigint
+  user_id bigint
+}
+
+sessions.court_id > courts.id
+sessions.sport_id > sports.id
+sessions.booked_by_id > users.id
+sessions.coach_id > users.id
+sessions.group_id > groups.id
+sessions.coach_fee_payer_id > users.id
+sessions.discount_id > discounts.id
+session_participants.session_id > sessions.id
+session_participants.user_id > users.id
+session_rentals.session_id > sessions.id
+session_rentals.equipment_id > equipment.id
+recordings.session_id > sessions.id
+recordings.uploaded_by_id > users.id
+recording_tags.recording_id > recordings.id
+recording_tags.created_by_id > users.id
+recording_tag_players.recordingtag_id > recording_tags.id
+recording_tag_players.user_id > users.id

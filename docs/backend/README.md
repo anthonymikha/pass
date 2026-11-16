@@ -6,8 +6,8 @@ Django 6.1 with Django REST Framework, Postgres in Docker, SQLite as a local fal
 
 | # | App | Owns | Model docs |
 |---|---|---|---|
-| 1 | `accounts` | Login, profiles, shadow players, friends, 1:1 coaching links, personal availability | [accounts](models/accounts.md) |
-| 2 | `venues` | Everything an owner configures: clubs, courts, hours, prices, equipment, offers, coach affiliations | [venues](models/venues.md) |
+| 1 | `accounts` | Login, profiles and body metrics, shadow players, friends, 1:1 coaching links, personal availability, the shared block-out shape | [accounts](models/accounts.md) |
+| 2 | `venues` | Everything an owner configures: clubs, courts, hours, closures, prices, equipment, offers, club memberships (coaches, staff, players) | [venues](models/venues.md) |
 | 3 | `teams` | Play groups and teams, invites, join requests | [teams](models/teams.md) |
 | 4 | `bookings` | Sessions, attendance, RPE, rentals, recordings and tags | [bookings](models/bookings.md) |
 | 5 | `billing` | Payment records, commission, settlement | [billing](models/billing.md) |
@@ -49,7 +49,7 @@ No Django signals. If this list grows past a handful, switch to signals.
 - Every model has `id` and `created_at`.
 - Every model sets `Meta.db_table` to a plain name (`sessions`, not `bookings_session`).
 - Value sets are `TextChoices`, stored as text. No database enums.
-- "Exactly one of A or B" is enforced by a check constraint (see `user_blockouts`, `price_overrides`, `payments`).
+- "Exactly one of A or B" is enforced by a check constraint (see `price_overrides`, `payments`).
 - An empty foreign key often carries meaning (shared equipment, default commission, system message). Each case is listed in the model pages.
 
 | Kind of value | Type |

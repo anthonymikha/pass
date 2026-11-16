@@ -20,7 +20,7 @@ JSON only. Send `Authorization: Token <token>` on every call except register and
 | POST | `/api/auth/login/` | `email`, `password` | 200 `{token, user}` |
 | POST | `/api/auth/logout/` | none | 204; the token stops working on every device |
 | GET | `/api/me/` | none | own profile |
-| PATCH | `/api/me/` | any of `full_name`, `phone`, `timezone`, `is_coach`, `coach_bio`, `coach_rate`, `coach_currency` | updated profile |
+| PATCH | `/api/me/` | any of `full_name`, `phone`, `timezone`, `date_of_birth`, `sex`, `height_cm`, `weight_kg`, `nationality`, `dominant_hand`, `is_coach`, `coach_bio`, `coach_rate`, `coach_currency` | updated profile |
 
 ## Run with Docker
 
