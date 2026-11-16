@@ -6,22 +6,23 @@ so training bookings (BOOK-21, BOOK-30, BOOK-31) can reuse them.
 import datetime
 import zoneinfo
 from collections import namedtuple
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.generics import get_object_or_404
 
 from accounts.models import User
 from accounts.services import friends_of, is_blocked_pair, is_shadow_player, notify
 from chat import services as chat
 from config.api import BusinessError
-from config.money import round_money
+from config.money import round_money, validate_typed_money
 from teams.models import Group, GroupMember
 from teams.services import coachs_players, is_active_member, is_group_manager
 from venues.models import ClubMember, Equipment
-from venues.services import club_today, current_members, lock_court
+from venues.services import club_today, current_members, lock_court, visible_clubs
 
 from .models import Session, SessionParticipant, SessionRental
 
@@ -33,6 +34,9 @@ CANCELLED, CONFIRMED, REQUESTED = Session.Status.CANCELLED, Session.Status.CONFI
 INVITED, ACCEPTED, DECLINED = (SessionParticipant.Status.INVITED, SessionParticipant.Status.ACCEPTED,
                                SessionParticipant.Status.DECLINED)
 APPROVED = SessionRental.Status.APPROVED
+CHECK_IN_OPENS = datetime.timedelta(minutes=30)  # PAY-1: before starts_at
+LATE_CHECK_IN = datetime.timedelta(hours=24)  # PAY-7: after ends_at, club side only
+MAX_PERIOD_DAYS = 366  # owner-reports intro
 
 Slot = namedtuple("Slot", "starts_at ends_at rate")  # `rate` is the CourtRate that produced it (AVL-4)
 
@@ -652,3 +656,117 @@ def free_intervals(users, start, end, min_minutes):
     if cursor < end:
         free.append((cursor, end))
     return [{"starts_at": a, "ends_at": b} for a, b in free if b - a >= datetime.timedelta(minutes=min_minutes)]
+
+
+# ---- check-in (PAY-1 to PAY-7) ----
+
+def check_in(user, session, row):
+    """PAY-4. The caller can see `session` and `row` is one of its participant rows. Returns the row.
+    The session row lock (step 1) is what makes two simultaneous booker check-ins create the payments once (PAY-10)."""
+    booker_row = row.user_id == session.booked_by_id
+    club_side = bool(booker_row and session.court_id and is_club_side(user, session.court.club))  # PAY-3
+    if not (row.user_id == user.pk  # PAY-2
+            or (is_shadow_player(row.user) and user.pk in (session.coach_id, row.user.managed_by_id))
+            or club_side):
+        raise PermissionDenied("You cannot check this person in.")
+    with transaction.atomic():
+        session = Session.objects.select_for_update().get(pk=session.pk)  # step 1: no select_related (nullable court)
+        row = SessionParticipant.objects.get(pk=row.pk)
+        if row.checked_in_at:  # step 2, GEN-5
+            return row
+        if session.status != CONFIRMED:  # PAY-5
+            raise BusinessError("invalid_status", "Only a confirmed session can be checked in to.")
+        if row.status != ACCEPTED:
+            raise BusinessError("not_accepted", "This participant has not accepted the session.")
+        now = timezone.now()
+        closes = session.ends_at + (LATE_CHECK_IN if club_side else datetime.timedelta(0))  # PAY-7
+        if not session.starts_at - CHECK_IN_OPENS <= now <= closes:  # PAY-1
+            raise BusinessError("checkin_closed", "Check-in is not open now.")
+        row.checked_in_at = now  # step 3
+        row.save(update_fields=["checked_in_at"])
+        if booker_row:  # step 4: the downward call allowed by docs/backend/README.md
+            from billing.services import record_payments  # here, not at the top: billing.services imports this module
+            record_payments(session)
+    return row
+
+
+# ---- one-off discount (DSC-10 to DSC-14) ----
+
+def set_session_discount(session, amount):
+    """DSC-13. The view has checked the caller is the club owner of the session's court (DSC-10). Returns the session."""
+    try:  # DSC-11, GEN-17
+        validate_typed_money(amount, session.currency)
+    except ValidationError as exc:
+        raise ValidationError({"amount": exc.detail})
+    if amount > session.price:
+        raise _field_error("amount", "Must not be more than the session price.")
+    with transaction.atomic():
+        session = Session.objects.select_for_update().get(pk=session.pk)
+        if session.payments.exists():  # DSC-12, DSC-14
+            raise BusinessError("already_payable", "The session has payments; its price can no longer change.")
+        if session.status not in (REQUESTED, CONFIRMED):
+            raise BusinessError("session_cancelled", "This session was cancelled.")
+        session.discount, session.discount_amount = None, amount  # replaces any offer, never re-applied
+        session.save(update_fields=["discount", "discount_amount"])
+    return session
+
+
+# ---- reports (RPT-1, RPT-4, RPT-5, RPT-6, RPT-8) ----
+
+def report_period(tz, first, last):
+    """Owner-reports intro: local dates `first` to `last`, both included, as the UTC range [start, end).
+    Over 366 days, or `last` before `first`: `bad_range`."""
+    if last < first or (last - first).days + 1 > MAX_PERIOD_DAYS:
+        raise BusinessError("bad_range", "`to` must not be before `from`, and the period is at most 366 days.")
+    midnight = lambda day: datetime.datetime.combine(day, datetime.time(0), tzinfo=tz).astimezone(UTC)
+    return midnight(first), midnight(last + datetime.timedelta(days=1))
+
+
+def club_report_access(user, club_id, owner_only=False):
+    """RPT-1 to RPT-5: the club (404 if the caller cannot see it, GEN-3), who must be its club side, or its owner (ACC-6)."""
+    club = get_object_or_404(visible_clubs(user), pk=club_id)
+    if club.owner_id != user.pk and (owner_only or not is_club_side(user, club)):
+        raise PermissionDenied("Not allowed for you.")
+    return club
+
+
+def schedule(club, first, last, court=None):
+    """RPT-1: (sessions, closures) of the club, or of `court`, in the local dates `first` to `last`."""
+    tz = _tz(club)
+    start, end = report_period(tz, first, last)
+    courts = [court] if court else list(club.courts.all())
+    sessions = Session.objects.filter(court__in=courts, starts_at__lt=end, ends_at__gt=start).exclude(
+        status=CANCELLED).select_related("court", "sport", "booked_by", "coach", "group").prefetch_related(
+        "rentals__equipment").annotate(accepted=Count("participants", filter=Q(participants__status=ACCEPTED))
+                                       ).order_by("starts_at", "id")
+    days = [first + datetime.timedelta(days=n) for n in range((last - first).days + 1)]
+    closures = [{"court": c.pk, "starts_at": a, "ends_at": b, "reason": blockout.reason}
+                for c in courts for blockout in c.blockouts.all() for a, b in _occurrences([blockout], tz, days)]
+    return sessions, sorted(closures, key=lambda x: (x["starts_at"], x["court"]))
+
+
+def customers(club, first, last):
+    """RPT-4, RPT-5: (list of {id, full_name, sessions}, repeat rate or None)."""
+    start, end = report_period(_tz(club), first, last)
+    rows = Session.objects.filter(court__club=club, starts_at__gte=start, starts_at__lt=end).exclude(
+        status=CANCELLED).order_by().values("booked_by", "booked_by__full_name").annotate(n=Count("id"))
+    people = sorted(({"id": r["booked_by"], "full_name": r["booked_by__full_name"], "sessions": r["n"]} for r in rows),
+                    key=lambda p: (-p["sessions"], p["full_name"], p["id"]))
+    if not people:
+        return people, None
+    repeat = sum(1 for p in people if p["sessions"] >= 2)
+    return people, (Decimal(repeat) * 100 / len(people)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def attendance(session, now=None):
+    """RPT-6: the accepted rows, and the no-shows (accepted, not checked in, session over). PAY-6."""
+    rows = list(session.participants.filter(status=ACCEPTED).select_related("user").order_by("id"))
+    over = (now or timezone.now()) > session.ends_at
+    return rows, [r.user for r in rows if over and r.checked_in_at is None]
+
+
+def player_history(coach, player):
+    """RPT-8: the player's accepted rows in confirmed sessions the coach coached, newest first."""
+    return SessionParticipant.objects.filter(
+        user=player, status=ACCEPTED, session__coach=coach, session__status=CONFIRMED).select_related("session").order_by(
+        "-session__starts_at", "-id")

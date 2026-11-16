@@ -212,3 +212,102 @@ class SessionSerializer(serializers.ModelSerializer):
 
     def get_sport(self, session) -> dict:
         return {"id": session.sport_id, "name": session.sport.name}
+
+
+class DiscountSerializer(serializers.Serializer):
+    """DSC-11 input. The range and decimals depend on the session, so the service checks them."""
+
+    amount = serializers.DecimalField(**MONEY)
+
+
+class PeriodSerializer(serializers.Serializer):
+    """Owner-reports intro: local dates, both included (`from` is a keyword, so that field is added in __init__)."""
+
+    to = serializers.DateField()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["from"] = serializers.DateField()
+
+
+class ScheduleParamsSerializer(PeriodSerializer):
+    court = serializers.IntegerField(required=False)
+
+
+class ScheduleSessionSerializer(serializers.ModelSerializer):
+    """RPT-1 row (`accepted` is annotated by the service)."""
+
+    court = serializers.SerializerMethodField()
+    sport = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    booker = PersonSerializer(source="booked_by", read_only=True)
+    coach = PersonSerializer(read_only=True)
+    group = serializers.CharField(source="group.name", default=None, read_only=True)
+    accepted_count = serializers.IntegerField(source="accepted", read_only=True)
+    rentals = RentalSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Session
+        fields = ["id", "court", "sport", "kind", "status", "starts_at", "ends_at", "booker", "coach", "group",
+                  "accepted_count", "rentals"]
+
+    def get_court(self, session) -> dict:
+        return {"id": session.court_id, "name": session.court.name}
+
+    def get_sport(self, session) -> dict:
+        return {"id": session.sport_id, "name": session.sport.name}
+
+    def get_status(self, session) -> str:
+        return services.shown_status(session)  # BOOK-55
+
+
+class ClosureSerializer(serializers.Serializer):
+    court = serializers.IntegerField()
+    starts_at = serializers.DateTimeField()
+    ends_at = serializers.DateTimeField()
+    reason = serializers.CharField()
+
+
+class ScheduleSerializer(serializers.Serializer):
+    sessions = ScheduleSessionSerializer(many=True)
+    closures = ClosureSerializer(many=True)
+
+
+class CustomerSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    full_name = serializers.CharField()
+    sessions = serializers.IntegerField()
+
+
+class CustomersSerializer(serializers.Serializer):
+    """RPT-4, RPT-5."""
+
+    customers = serializers.IntegerField()
+    repeat_rate = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True)
+    people = CustomerSerializer(many=True)
+
+
+class AttendanceSerializer(serializers.Serializer):
+    """RPT-6."""
+
+    session = serializers.IntegerField()
+    accepted = ParticipantSerializer(many=True)
+    checked_in = serializers.IntegerField()
+    no_shows = PersonSerializer(many=True)
+
+
+class PlayerSessionSerializer(serializers.ModelSerializer):
+    """RPT-8 row."""
+
+    session = serializers.IntegerField(source="session_id")
+    kind = serializers.CharField(source="session.kind")
+    starts_at = serializers.DateTimeField(source="session.starts_at")
+    ends_at = serializers.DateTimeField(source="session.ends_at")
+    training_load = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SessionParticipant
+        fields = ["session", "kind", "starts_at", "ends_at", "checked_in_at", "rpe", "rpe_minutes", "training_load"]
+
+    def get_training_load(self, row) -> int | None:
+        return row.rpe * row.rpe_minutes if row.rpe is not None and row.rpe_minutes is not None else None
