@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 
 from accounts import services as accounts
 from accounts.models import Connection, Device, User, UserBlockout
-from billing.models import Payment
+from billing.models import CommissionRate, Payment
 from chat import services as chat_services
 from chat.models import Chat, Message
 from teams.models import Group, GroupMember
@@ -80,6 +80,16 @@ class BookingBase(APITestCase):
             ends_at=end, currency="USD", price=Decimal("50"), **fields)
         SessionParticipant.objects.create(session=session, user=booker, status="accepted")
         return session
+
+    def make_team(self, coach, members=(), name="Wolves"):
+        team = Group.objects.create(type="team", name=name, owner=coach, coach=coach)
+        chat_services.create_group_chat(team, coach)
+        for member in (coach, *members):
+            GroupMember.objects.create(group=team, user=member, status="active")
+        return team
+
+    def shadow(self, name, coach):
+        return User.objects.create_user(email=None, full_name=name, managed_by=coach)
 
     def past_bookings(self, user, n, court=None):
         """n confirmed December 2026 sessions of `user` (before NOW)."""
@@ -730,16 +740,6 @@ class BookingJourneyTests(BookingBase):
 
 
 class TrainingTests(BookingBase):
-    def make_team(self, coach, members=()):
-        team = Group.objects.create(type="team", name="Wolves", owner=coach, coach=coach)
-        chat_services.create_group_chat(team, coach)
-        for member in (coach, *members):
-            GroupMember.objects.create(group=team, user=member, status="active")
-        return team
-
-    def shadow(self, name, coach):
-        return User.objects.create_user(email=None, full_name=name, managed_by=coach)
-
     def request(self, user, coach, start, end, expect=201, push=False, **extra):
         body = {"coach": coach.id, "sport": self.basketball.id, "starts_at": z(start), "ends_at": z(end), **extra}
         return self.call("post", "training-requests/", user, body, expect, push)
@@ -1118,3 +1118,507 @@ class TrainingTests(BookingBase):
         empty = Group.objects.create(type="play_group", name="Empty", owner=cora)
         self.assertEqual(self.free(cora, "groups", empty.id, *window), [(z(window[0]), z(window[1]))])
         self.free(ian, "groups", empty.id, *window, expect=404)
+
+
+class PaymentBase(BookingBase):
+    """BookingBase plus the seeded default commission (SEED-2: 10% for clubs and for coaches)."""
+
+    def setUp(self):
+        super().setUp()
+        for kind in ("club", "coach"):
+            CommissionRate.objects.create(applies_to=kind, percent=Decimal("10"), effective_from=dt.date(2026, 1, 1))
+
+    def check_in(self, user, session, target=None, expect=200):
+        return self.call("post", f"sessions/{session.id}/participants/{(target or user).id}/check-in/", user, expect=expect)
+
+    def owed(self, session):
+        """[(payer, payee kind, amount, platform fee)] in creation order."""
+        return [(p.payer.full_name, "club" if p.club_id else "coach", p.amount, p.platform_fee)
+                for p in session.payments.order_by("id").select_related("payer")]
+
+    def code(self, response, status, code):
+        self.assertEqual((response.status_code, response.data["code"]), (status, code), response.data)
+
+    def accept(self, user, session):
+        self.call("patch", f"sessions/{session.id}/participants/{user.id}/", user, {"status": "accepted"}, 200)
+
+    def train(self, coach, start, end, currency="USD", fee="40", expect=201, **extra):
+        body = {"sport": self.basketball.id, "starts_at": z(start), "ends_at": z(end), "currency": currency,
+                "coach_fee": fee, **extra}
+        return Session.objects.get(pk=self.call("post", "sessions/training/", coach, body, expect).data["id"])
+
+
+class CheckInTests(PaymentBase):
+    def test_core_journey(self):
+        """PAY-1, PAY-2, PAY-3, PAY-4, PAY-10, PAY-11, PAY-14, PAY-20, PAY-23, COM-1, DSC-1, BOOK-16, BOOK-40, GEN-5,
+        GEN-13, RPT-1, RPT-2, RPT-3, RPT-6: owner setup, Rana books in EUR with a rental, the club approves it, Ben accepts,
+        Rana checks in, one court payment of 113.90 EUR with fee 11.39, a repeat changes nothing, the owner marks it paid."""
+        rana, ben, sam = self.user("rana"), self.user("ben"), self.user("sam")
+        self.staff(sam)
+        self.befriend(rana, ben)
+        self.past_bookings(rana, 4)
+        offer = {"percent_off": "10", "starts_at": "2027-01-01T00:00:00Z", "ends_at": "2027-02-01T00:00:00Z", "message": "January promo"}
+        self.call("post", f"clubs/{self.club.id}/offers/", self.owner, offer, 201)
+        body = self.body(at(MON, 16), at(MON, 18), currency="EUR", rentals=[{"equipment": self.shooting.id, "quantity": 1}],
+                         invitees=[ben.id])
+        session = Session.objects.get(pk=self.call("post", "sessions/", rana, body, 201).data["id"])
+        self.assertEqual((session.price, session.discount_amount), (Decimal("111.17"), Decimal("11.12")))
+        self.call("patch", f"rentals/{session.rentals.get().id}/", sam, {"status": "approved"}, 200)  # BOOK-40
+        self.accept(ben, session)  # BOOK-16
+
+        # PAY-1: 30 minutes before the start is the first moment, a second earlier is too early
+        self.clock.return_value = at(MON, 15, 30) - dt.timedelta(seconds=1)
+        self.code(self.check_in(rana, session, expect=400), 400, "checkin_closed")
+        self.clock.return_value = at(MON, 15, 30)
+        self.check_in(ben, session)  # PAY-2: their own row; only the booker's check-in creates payments
+        self.assertEqual(session.payments.count(), 0)
+
+        # PAY-4, PAY-10, PAY-11, PAY-14: the worked example, 111.17 - 11.12 + 13.85 = 113.90, fee 10% = 11.39
+        self.clock.return_value = at(MON, 15, 45)
+        r = self.check_in(rana, session)
+        self.assertEqual(r.data["checked_in_at"], z(at(MON, 15, 45)))
+        payment = session.payments.get()
+        self.assertEqual((payment.payer, payment.club, payment.coach, payment.amount, payment.platform_fee, payment.currency),
+                         (rana, self.club, None, Decimal("113.90"), Decimal("11.39"), "EUR"))
+        self.assertEqual((payment.method, payment.paid_at, payment.settled_at), ("", None, None))
+
+        # GEN-5: a repeat, and the club side checking the booker in again, change nothing
+        self.clock.return_value = at(MON, 16, 5)
+        self.assertEqual(self.check_in(rana, session).data["checked_in_at"], z(at(MON, 15, 45)))
+        self.assertEqual(self.check_in(sam, session, rana).data["checked_in_at"], z(at(MON, 15, 45)))
+        self.assertEqual(session.payments.count(), 1)
+
+        # PAY-23, RPT-2: due, so it is in the payer's list, the payee side's lists and the due list, not in revenue
+        rows = self.call("get", "payments/", rana, expect=200).data["results"]
+        self.assertEqual([(r["amount"], r["platform_fee"], r["currency"], r["club"]["name"], r["payer"]["id"], r["paid_at"])
+                          for r in rows], [("113.900", "11.390", "EUR", "Hoops", rana.id, None)])
+        self.assertEqual(len(self.call("get", "payments/", sam, expect=200).data["results"]), 1)
+        self.assertEqual(self.call("get", "payments/", ben, expect=200).data["results"], [])
+        dues = self.call("get", f"clubs/{self.club.id}/dues/", sam, expect=200).data
+        self.assertEqual(dues["totals"], [{"currency": "EUR", "total": "113.900"}])
+        self.assertEqual([(d["session"], d["payer"]["full_name"], d["amount"]) for d in dues["payments"]],
+                         [(session.id, "Rana", "113.900")])
+        period = "from=2027-01-01&to=2027-01-31"
+        self.assertEqual(self.call("get", f"clubs/{self.club.id}/revenue/?{period}", self.owner, expect=200).data, {"currencies": []})
+
+        # PAY-20: the club owner marks it paid; a repeat is a 200 that changes nothing (GEN-5)
+        self.clock.return_value = at(MON, 18, 10)
+        r = self.call("post", f"payments/{payment.id}/mark-paid/", self.owner, expect=200)
+        self.assertEqual((r.data["method"], r.data["paid_at"]), ("offline", z(at(MON, 18, 10))))
+        self.clock.return_value = at(MON, 19)
+        self.assertEqual(self.call("post", f"payments/{payment.id}/mark-paid/", sam, expect=200).data["paid_at"], z(at(MON, 18, 10)))
+
+        # RPT-3: now revenue (gross, fees, net per currency, owed to the platform); RPT-2: not due any more
+        revenue = self.call("get", f"clubs/{self.club.id}/revenue/?{period}", self.owner, expect=200).data
+        self.assertEqual(revenue, {"currencies": [{"currency": "EUR", "gross": "113.900", "fees": "11.390", "net": "102.510",
+                                                   "owed_to_platform": "11.390"}]})
+        self.assertEqual(self.call("get", f"clubs/{self.club.id}/dues/", sam, expect=200).data, {"payments": [], "totals": []})
+
+        # RPT-1: it shows in the schedule (shown status completed, two accepted, rental approved); RPT-6: attendance
+        r = self.call("get", f"clubs/{self.club.id}/schedule/?from=2027-01-11&to=2027-01-11", sam, expect=200).data
+        row = r["sessions"][0]
+        self.assertEqual((len(r["sessions"]), row["id"], row["status"], row["accepted_count"], row["booker"]["id"], row["court"]["name"]),
+                         (1, session.id, "completed", 2, rana.id, "Court 1"))
+        self.assertEqual([(x["quantity"], x["status"]) for x in row["rentals"]], [(1, "approved")])
+        r = self.call("get", f"sessions/{session.id}/attendance/", sam, expect=200).data
+        self.assertEqual((len(r["accepted"]), r["checked_in"], r["no_shows"]), (2, 2, []))
+
+    def test_team_training_split_journey(self):
+        """PAY-11, PAY-12, PAY-13, PAY-14, PAY-15, PAY-16, PAY-10, PAY-23, GEN-15, COM-1, BOOK-30: the split worked
+        example in LBP (83 334 / 83 333 / 83 333), the USD variant, one payer, a free fee, and a member who left."""
+        sami = self.user("sami", is_coach=True)
+        kid, maya, omar = self.shadow("Kid A", sami), self.user("maya"), self.user("omar")
+        team = self.make_team(sami, [kid, maya, omar], name="U12")
+        court = self.court1.id
+        sessions = {
+            "lbp": self.train(sami, at(MON, 10), at(MON, 11), "LBP", "250000", group=team.id, court=court),
+            "usd": self.train(sami, at(MON, 12), at(MON, 13), "USD", "100.00", group=team.id),
+            "one": self.train(sami, at(MON, 13), at(MON, 14), "LBP", "250000", group=team.id, coach_fee_payer=maya.id),
+            "free": self.train(sami, at(MON, 14), at(MON, 15), "USD", "0", group=team.id),
+            "left": self.train(sami, at(MON, 15), at(MON, 16), "USD", "100.00", group=team.id),
+        }
+        for session in sessions.values():
+            for user in (maya, omar):
+                self.accept(user, session)
+            self.assertEqual(session.participants.count(), 4)
+        kid_row = sessions["lbp"].participants.get(user=kid)
+        self.assertLess(kid_row.id, sessions["lbp"].participants.get(user=maya).id)  # PAY-12: ordered by row id
+
+        # PAY-11, PAY-12, PAY-14, PAY-16: Sami's check-in; the court fee, then the coach fee split with the remainder first
+        self.clock.return_value = at(MON, 9, 45)
+        self.check_in(sami, sessions["lbp"])
+        self.assertEqual(self.owed(sessions["lbp"]), [
+            ("Sami", "club", Decimal("4475000"), Decimal("447500")),
+            ("Kid A", "coach", Decimal("83334"), Decimal("8333")),  # a shadow player is a payer (ACC-12)
+            ("Maya", "coach", Decimal("83333"), Decimal("8333")),  # Maya and Omar never checked in: still owe (PAY-16)
+            ("Omar", "coach", Decimal("83333"), Decimal("8333"))])  # and Sami never pays their own fee
+        self.assertEqual(sum(p.amount for p in sessions["lbp"].payments.filter(coach=sami)), Decimal("250000"))
+        self.assertEqual(Payment.objects.get(session=sessions["lbp"], payer=maya).currency, "LBP")
+        # PAY-23: the coach sees all four, Maya only hers, the club owner only the court fee
+        self.assertEqual(len(self.call("get", "payments/", sami, expect=200).data["results"]), 4)
+        self.assertEqual([r["amount"] for r in self.call("get", "payments/", maya, expect=200).data["results"]], ["83333.000"])
+        self.assertEqual([r["amount"] for r in self.call("get", "payments/", self.owner, expect=200).data["results"]], ["4475000.000"])
+
+        # the USD variant (no court, so only the coach fee): 33.34, 33.33, 33.33 with fees 3.33 each
+        self.clock.return_value = at(MON, 11, 45)
+        self.check_in(sami, sessions["usd"])
+        self.assertEqual(self.owed(sessions["usd"]), [
+            ("Kid A", "coach", Decimal("33.34"), Decimal("3.33")),
+            ("Maya", "coach", Decimal("33.33"), Decimal("3.33")),
+            ("Omar", "coach", Decimal("33.33"), Decimal("3.33"))])
+
+        # PAY-13: one payer pays the whole fee; the other members owe nothing
+        self.clock.return_value = at(MON, 12, 45)
+        self.check_in(sami, sessions["one"])
+        self.assertEqual(self.owed(sessions["one"]), [("Maya", "coach", Decimal("250000"), Decimal("25000"))])
+
+        # PAY-15: a zero coach fee and a free court create no row at all
+        self.clock.return_value = at(MON, 13, 45)
+        self.check_in(sami, sessions["free"])
+        self.assertEqual(sessions["free"].payments.count(), 0)
+
+        # PAY-12: Omar accepted, then left the team before check-in: not a payer; 100.00 / 2 = 50.00 each
+        self.call("delete", f"groups/{team.id}/members/{omar.id}/", omar, expect=204)
+        self.clock.return_value = at(MON, 14, 45)
+        self.check_in(sami, sessions["left"])
+        self.assertEqual(self.owed(sessions["left"]), [
+            ("Kid A", "coach", Decimal("50.00"), Decimal("5.00")), ("Maya", "coach", Decimal("50.00"), Decimal("5.00"))])
+        # PAY-10: nothing creates the rows twice
+        from billing.services import record_payments
+        self.assertEqual(record_payments(sessions["lbp"]), [])
+        self.assertEqual(Payment.objects.count(), 4 + 3 + 1 + 2)
+
+    def test_check_in_who_journey(self):
+        """PAY-2, PAY-3, PAY-5, GEN-3, GEN-5, ACC-2, ACC-6: whose row who may check in, and the refusals (404, 403,
+        not_accepted, invalid_status) in the order permission, then rules."""
+        rana, ben, cy, dee = (self.user(n) for n in ("rana", "ben", "cy", "dee"))
+        sam, rival, expired, coach, cora, hal = (self.user(n) for n in ("sam", "rival", "expired", "coach", "cora", "hal"))
+        for user in (coach, cora):
+            user.is_coach = True
+            user.save()
+        self.staff(sam)
+        self.staff(expired, expires_on=dt.date(2026, 12, 31))
+        Club.objects.create(owner=rival, name="Elsewhere", timezone="Asia/Beirut", currency="USD")
+        for friend in (ben, cy, dee):
+            self.befriend(rana, friend)
+        session = Session.objects.get(pk=self.book(rana, at(MON, 10), at(MON, 11), invitees=[ben.id, cy.id, dee.id]).data["id"])
+        self.accept(ben, session)
+        self.call("patch", f"sessions/{session.id}/participants/{dee.id}/", dee, {"status": "declined"}, 200)
+        self.clock.return_value = at(MON, 9, 45)
+
+        # PAY-2: only their own row; PAY-3: the club side only the booker's
+        self.check_in(ben, session, rana, 403)
+        self.check_in(rana, session, ben, 403)
+        self.check_in(sam, session, ben, 403)
+        self.check_in(self.owner, session, ben, 403)
+        self.assertEqual(session.participants.filter(checked_in_at__isnull=False).count(), 0)
+        # GEN-3 before PAY-2: not visible is 404, also another club's owner, expired staff, an unknown row
+        for stranger in (rival, expired, coach, hal):
+            self.check_in(stranger, session, rana, 404)
+        self.call("post", f"sessions/{session.id}/participants/{hal.id}/check-in/", rana, expect=404)  # no such row
+        self.call("post", "sessions/99999/participants/1/check-in/", rana, expect=404)
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.post(f"/api/sessions/{session.id}/participants/{rana.id}/check-in/").status_code, 401)
+        # PAY-5 not_accepted: invited and declined rows
+        self.code(self.check_in(cy, session, expect=400), 400, "not_accepted")
+        self.code(self.check_in(dee, session, expect=400), 400, "not_accepted")
+        self.assertEqual(session.payments.count(), 0)
+        # PAY-3: the club side checks the booker in (staff, then owner repeats); it creates the payment
+        self.check_in(sam, session, rana)
+        self.check_in(self.owner, session, rana)
+        self.assertEqual(session.payments.count(), 1)
+
+        # PAY-5 invalid_status: a cancelled session, and a training request that is not confirmed
+        other = Session.objects.get(pk=self.book(rana, at(MON, 12), at(MON, 13), court=self.court2).data["id"])
+        self.call("post", f"sessions/{other.id}/cancel/", rana, expect=200)
+        self.clock.return_value = at(MON, 11, 45)
+        self.code(self.check_in(rana, other, expect=400), 400, "invalid_status")
+        request = Session.objects.get(pk=self.call("post", "training-requests/", rana, {
+            "coach": coach.id, "sport": self.basketball.id, "starts_at": z(at(MON, 13)), "ends_at": z(at(MON, 14))}, 201).data["id"])
+        self.clock.return_value = at(MON, 12, 45)
+        self.code(self.check_in(rana, request, expect=400), 400, "invalid_status")
+
+        # PAY-2: a shadow player's row by the session coach; not by another participant, not by a coach with no session
+        kid, zed = self.shadow("Kid", coach), self.shadow("Zed", cora)
+        team = self.make_team(coach, [kid, zed, hal])
+        training = self.train(coach, at(MON, 15), at(MON, 16), group=team.id)
+        self.assertEqual(training.participants.get(user=zed).status, "accepted")
+        self.clock.return_value = at(MON, 14, 45)
+        self.check_in(hal, training, kid, 403)  # a participant is not the shadow player's coach
+        self.code(self.check_in(hal, training, expect=400), 400, "not_accepted")  # hal has not answered yet
+        self.check_in(cora, training, zed, 404)  # BOOK-65: not a participant or the session coach, so no session (see report)
+        self.check_in(coach, training, kid)
+        self.check_in(coach, training, zed)  # the session coach
+        self.assertEqual(training.participants.filter(checked_in_at__isnull=False).count(), 2)
+
+    def test_check_in_window_journey(self):
+        """PAY-1, PAY-4, PAY-5, PAY-6, PAY-7, PAY-10, GEN-5, RPT-6: 30 minutes before the start to the end, both
+        included; late check-in of the booker's row by the club side until ends_at + 24 h; no payments without it."""
+        rana, ben, cy, sam = (self.user(n) for n in ("rana", "ben", "cy", "sam"))
+        self.staff(sam)
+        for friend in (ben, cy):
+            self.befriend(rana, friend)
+        made = {}
+        for name, hour in (("a", 9), ("b", 10), ("c", 11), ("d", 12)):
+            made[name] = Session.objects.get(pk=self.book(rana, at(MON, hour), at(MON, hour + 1), invitees=[ben.id, cy.id]).data["id"])
+            for friend in (ben, cy):
+                self.accept(friend, made[name])
+        second = dt.timedelta(seconds=1)
+
+        # PAY-1: a second before 30 minutes is too early; the last instant is ends_at
+        a = made["a"]
+        self.clock.return_value = a.starts_at - dt.timedelta(minutes=30) - second
+        self.code(self.check_in(ben, a, expect=400), 400, "checkin_closed")
+        self.clock.return_value = a.ends_at
+        self.check_in(ben, a)  # PAY-1: ends_at included
+        self.clock.return_value = a.ends_at + second
+        self.code(self.check_in(cy, a, expect=400), 400, "checkin_closed")  # PAY-7: nobody else after ends_at
+        self.code(self.check_in(rana, a, expect=400), 400, "checkin_closed")  # not even the booker themself
+        self.check_in(sam, a, ben, 403)  # PAY-3: the club side only checks in the booker
+        self.assertEqual(self.check_in(ben, a).status_code, 200)  # GEN-5: checked in already, still 200 after the window
+        self.assertEqual(a.payments.count(), 0)
+
+        # PAY-7: the club side checks the booker in late; the payments are created as usual (PAY-4)
+        self.clock.return_value = a.ends_at + dt.timedelta(hours=3)
+        self.check_in(sam, a, rana)
+        self.assertEqual([(p.payer, p.amount, p.platform_fee) for p in a.payments.all()], [(rana, Decimal("50"), Decimal("5"))])
+        # PAY-6, RPT-6: Cy accepted and never came: a no-show, computed after the end
+        r = self.call("get", f"sessions/{a.id}/attendance/", sam, expect=200).data
+        self.assertEqual((len(r["accepted"]), r["checked_in"], [n["full_name"] for n in r["no_shows"]]), (3, 2, ["Cy"]))
+
+        # PAY-7: ends_at + 24 h is included, a second later is not; then no payment rows ever exist (PAY-6)
+        b, c = made["b"], made["c"]
+        self.clock.return_value = b.ends_at + dt.timedelta(hours=24)
+        self.check_in(self.owner, b, rana)
+        self.assertEqual(b.payments.count(), 1)
+        self.clock.return_value = c.ends_at + dt.timedelta(hours=24) + second
+        self.code(self.check_in(sam, c, rana, 400), 400, "checkin_closed")
+        self.code(self.check_in(rana, c, expect=400), 400, "checkin_closed")
+        self.assertEqual(c.payments.count(), 0)
+        # RPT-6: before ends_at nobody is a no-show; after it everybody not checked in is (the booker too)
+        d = made["d"]
+        self.clock.return_value = d.ends_at
+        r = self.call("get", f"sessions/{d.id}/attendance/", self.owner, expect=200).data
+        self.assertEqual((len(r["accepted"]), r["checked_in"], r["no_shows"]), (3, 0, []))
+        self.clock.return_value = d.ends_at + second
+        r = self.call("get", f"sessions/{d.id}/attendance/", self.owner, expect=200).data
+        self.assertEqual(sorted(n["full_name"] for n in r["no_shows"]), ["Ben", "Cy", "Rana"])
+        # PAY-10: two check-ins of the booker in a row (and the club side's) made one set of rows
+        self.assertEqual(Payment.objects.filter(session=a).count(), 1)
+
+    def test_one_off_discount_journey(self):
+        """DSC-10, DSC-11, DSC-12, DSC-13, DSC-14, DSC-4, PAY-11, PAY-15, GEN-3, GEN-4, GEN-17: the owner replaces the
+        offer with a one-off amount, 0 removes it, it is not re-applied, and it freezes once there are payments."""
+        rana, sam, bob = self.user("rana"), self.user("sam"), self.user("bob")
+        self.staff(sam)
+        self.past_bookings(rana, 4)
+        offer = {"percent_off": "10", "starts_at": "2027-01-01T00:00:00Z", "ends_at": "2027-02-01T00:00:00Z", "message": "Promo"}
+        offer_id = self.call("post", f"clubs/{self.club.id}/offers/", self.owner, offer, 201).data["id"]
+        r = self.book(rana, at(MON, 16), at(MON, 18), currency="EUR")
+        session = Session.objects.get(pk=r.data["id"])
+        self.assertEqual((session.discount_id, session.discount_amount), (offer_id, Decimal("11.12")))
+        path = f"sessions/{session.id}/discount/"
+
+        # DSC-10: the owner only; staff and the booker see the session and get 403; strangers 404 (GEN-3, GEN-4)
+        self.call("put", path, sam, {"amount": "20"}, 403)
+        self.call("put", path, rana, {"amount": "20"}, 403)
+        self.call("put", path, sam, {"amount": "bogus"}, 403)  # permission before input
+        Club.objects.create(owner=bob, name="Elsewhere", timezone="Asia/Beirut", currency="USD")
+        self.call("put", path, bob, {"amount": "20"}, 404)
+        self.call("put", "sessions/99999/discount/", self.owner, {"amount": "20"}, 404)
+        # DSC-11, DSC-14: amount per field: missing, below 0, above the price, too many decimals (EUR has 2)
+        for bad in ({}, {"amount": "-0.01"}, {"amount": "111.18"}, {"amount": "1.234"}, {"amount": "abc"}):
+            self.assertIn("amount", self.call("put", path, self.owner, bad, 400).data, bad)
+        session.refresh_from_db()
+        self.assertEqual((session.discount_id, session.discount_amount), (offer_id, Decimal("11.12")))
+
+        # DSC-13: replaces the offer ("Rana gets 20.00 off"); the response is the session
+        r = self.call("put", path, self.owner, {"amount": "20.00"}, 200)
+        self.assertEqual((r.data["discount"], r.data["discount_amount"], r.data["id"]), (None, "20.000", session.id))
+        self.call("put", path, self.owner, {"amount": "20.00"}, 200)  # a repeat
+        # DSC-13: 0 removes it, and the removed one-off does not bring the offer back
+        r = self.call("put", path, self.owner, {"amount": "0"}, 200)
+        self.assertEqual((r.data["discount"], r.data["discount_amount"]), (None, "0.000"))
+        self.assertEqual(self.call("put", path, self.owner, {"amount": "111.17"}, 200).data["discount_amount"], "111.170")  # the price itself
+        self.call("put", path, self.owner, {"amount": "20.00"}, 200)
+
+        # DSC-12, DSC-14: once the booker has checked in, it is frozen (the amount is still checked first, GEN-4)
+        self.clock.return_value = at(MON, 15, 45)
+        self.check_in(rana, session)
+        self.assertEqual(session.payments.get().amount, Decimal("91.17"))  # PAY-11: 111.17 - 20.00
+        self.code(self.call("put", path, self.owner, {"amount": "5"}), 400, "already_payable")
+        self.assertIn("amount", self.call("put", path, self.owner, {"amount": "-1"}, 400).data)
+        # DSC-14: a cancelled session; DSC-10: a training request has no court, so it is not the owner's
+        self.clock.return_value = NOW
+        other = Session.objects.get(pk=self.book(rana, at(MON, 12), at(MON, 13), court=self.court2).data["id"])
+        self.call("post", f"sessions/{other.id}/cancel/", rana, expect=200)
+        self.code(self.call("put", f"sessions/{other.id}/discount/", self.owner, {"amount": "5"}), 400, "session_cancelled")
+        coach = self.user("coach", is_coach=True)
+        request = self.call("post", "training-requests/", rana, {
+            "coach": coach.id, "sport": self.basketball.id, "starts_at": z(at(MON, 14)), "ends_at": z(at(MON, 15))}, 201)
+        self.call("put", f"sessions/{request.data['id']}/discount/", self.owner, {"amount": "0"}, 404)  # not visible to the owner
+
+        # PAY-15, DSC-11: a session discounted by its whole price owes no court fee; LBP takes whole pounds only
+        free = Session.objects.get(pk=self.book(rana, at(MON, 9), at(MON, 10), currency="LBP").data["id"])
+        self.assertEqual(free.price, Decimal("4475000"))
+        self.assertIn("amount", self.call("put", f"sessions/{free.id}/discount/", self.owner, {"amount": "100.5"}, 400).data)
+        self.call("put", f"sessions/{free.id}/discount/", self.owner, {"amount": "4475000"}, 200)
+        self.clock.return_value = at(MON, 8, 45)
+        self.check_in(rana, free)
+        self.assertEqual(free.payments.count(), 0)
+        self.call("put", f"sessions/{free.id}/discount/", self.owner, {"amount": "0"}, 200)  # no payments: still changeable
+
+
+class ReportTests(PaymentBase):
+    def test_schedule_journey(self):
+        """RPT-1, ACC-6, GEN-3, GEN-18, AVL-8, BOOK-55: the club side reads the schedule of the period with closures;
+        sessions that overlap the period count, cancelled ones and other clubs' do not; bad ranges are refused."""
+        rana, pat, sam, bob, expired, coach = (self.user(n) for n in ("rana", "pat", "sam", "bob", "expired", "coach"))
+        self.staff(sam)
+        self.staff(expired, expires_on=dt.date(2026, 12, 31))
+        coach.is_coach = True
+        coach.save()
+        team = self.make_team(coach, [pat])
+        sunday = dt.date(2027, 1, 10)
+        s1 = self.session(self.court1, at(sunday, 23), at(MON, 0, 30), rana)  # overlaps the start of Monday
+        s2 = self.session(self.court1, at(MON, 10), at(MON, 11), rana)
+        s3 = self.session(self.court2, at(MON, 10), at(MON, 11), pat, coach=coach, group=team)
+        Session.objects.filter(pk=s3.pk).update(kind="training")
+        self.session(self.court1, at(MON, 12), at(MON, 13), rana, status="cancelled")  # not listed
+        self.session(self.court1, at(sunday, 22), at(MON, 0), rana)  # ends exactly when Monday starts: not listed
+        self.session(self.court1, at(TUE, 0), at(TUE, 1), rana)  # starts exactly when Monday ends: not listed
+        other = Club.objects.create(owner=bob, name="Elsewhere", timezone="Asia/Beirut", currency="USD")
+        self.session(self.court("Far court", club=other), at(MON, 10), at(MON, 11), rana)
+        SessionRental.objects.create(session=s2, equipment=self.shooting, quantity=1, price=15, status="requested")
+        SessionParticipant.objects.create(session=s2, user=pat, status="invited")  # not accepted: not counted
+        CourtBlockout.objects.create(court=self.court1, starts_on=MON, start_time=dt.time(12), end_time=dt.time(13, 30), reason="Floor repair")
+        CourtBlockout.objects.create(court=self.court2, starts_on=dt.date(2027, 1, 4), start_time=dt.time(18), end_time=dt.time(0),
+                                     repeat="weekly", reason="League night")
+        path = f"clubs/{self.club.id}/schedule/"
+        day = "?from=2027-01-11&to=2027-01-11"
+
+        # RPT-1: the club side (staff too, ACC-6); ordered by start; closures in the period
+        for reader in (sam, self.owner):
+            r = self.call("get", path + day, reader, expect=200).data
+            self.assertEqual([s["id"] for s in r["sessions"]], [s1.id, s2.id, s3.id])
+        first, second, third = r["sessions"]
+        self.assertEqual((first["status"], first["court"], first["sport"]["name"], first["kind"], first["accepted_count"]),
+                         ("confirmed", {"id": self.court1.id, "name": "Court 1"}, "Basketball", "play", 1))
+        self.assertEqual((second["accepted_count"], second["group"], second["coach"]), (1, None, None))
+        self.assertEqual([(x["status"], x["quantity"]) for x in second["rentals"]], [("requested", 1)])
+        self.assertEqual((third["kind"], third["group"], third["coach"]["full_name"], third["booker"]["full_name"]),
+                         ("training", "Wolves", "Coach", "Pat"))
+        self.assertEqual(r["closures"], [
+            {"court": self.court1.id, "starts_at": z(at(MON, 12)), "ends_at": z(at(MON, 13, 30)), "reason": "Floor repair"},
+            {"court": self.court2.id, "starts_at": z(at(MON, 18)), "ends_at": z(at(TUE, 0)), "reason": "League night"}])
+        # one court only; a court of another club is "Not found." on the field (GEN-18)
+        r = self.call("get", path + day + f"&court={self.court2.id}", sam, expect=200).data
+        self.assertEqual(([s["id"] for s in r["sessions"]], [c["reason"] for c in r["closures"]]), ([s3.id], ["League night"]))
+        far = Court.objects.get(club=other)
+        self.assertIn("court", self.call("get", path + day + f"&court={far.id}", sam, expect=400).data)
+        # a period is local dates: the whole week has the closure again next Monday, and a day with nothing is empty
+        r = self.call("get", path + "?from=2027-01-11&to=2027-01-18", sam, expect=200).data
+        self.assertEqual([c["starts_at"] for c in r["closures"]], [z(at(MON, 12)), z(at(MON, 18)), z(at(dt.date(2027, 1, 18), 18))])
+        self.assertEqual(self.call("get", path + "?from=2027-03-02&to=2027-03-02", sam, expect=200).data, {"sessions": [], "closures": []})
+
+        # ACC-6, GEN-3: players and other clubs' owners may not (403, the club is public), an expired staff member neither
+        for reader in (rana, bob, expired):
+            self.call("get", path + day, reader, expect=403)
+        ghost = Club.objects.create(owner=bob, name="Ghost", timezone="Asia/Beirut", currency="USD")  # no active court: not public
+        self.call("get", f"clubs/{ghost.id}/schedule/{day}", rana, expect=404)
+        self.call("get", "clubs/99999/schedule/" + day, rana, expect=404)
+        # the period: both dates required; at most 366 days; `to` not before `from`
+        self.assertIn("from", self.call("get", path + "?to=2027-01-11", sam, expect=400).data)
+        self.assertIn("to", self.call("get", path + "?from=2027-01-11&to=11-01-2027", sam, expect=400).data)
+        self.call("get", path + "?from=2027-01-01&to=2028-01-01", sam, expect=200)  # 366 days
+        for bad in ("from=2027-01-01&to=2028-01-02", "from=2027-01-11&to=2027-01-10"):
+            self.code(self.call("get", f"{path}?{bad}", sam), 400, "bad_range")
+
+    def test_customers_journey(self):
+        """RPT-4, RPT-5, ACC-6, GEN-8: distinct bookers in the period (club timezone), the repeat rate 66.67 of the
+        worked example, ties by name, null with no customers; staff may not read it."""
+        rana, ali, maya, ben, sam, bob = (self.user(n) for n in ("rana", "ali", "maya", "ben", "sam", "bob"))
+        self.staff(sam)
+        for day in (4, 11, 18):
+            self.session(self.court1, at(dt.date(2027, 1, day), 10), at(dt.date(2027, 1, day), 11), rana)
+        self.session(self.court2, at(dt.date(2027, 1, 5), 10), at(dt.date(2027, 1, 5), 11), ali)
+        self.session(self.court2, at(dt.date(2027, 1, 6), 10), at(dt.date(2027, 1, 6), 11), ali, status="cancelled")  # not counted
+        self.session(self.court1, at(dt.date(2027, 1, 12), 10), at(dt.date(2027, 1, 12), 11), maya)
+        self.session(self.court1, at(dt.date(2027, 1, 31), 23), at(dt.date(2027, 2, 1), 0), maya)  # 23:00 local, still January
+        self.session(self.court1, at(dt.date(2027, 2, 1), 0, 30), at(dt.date(2027, 2, 1), 1, 30), rana)  # 22:30Z on the 31st: February
+        other = Club.objects.create(owner=bob, name="Elsewhere", timezone="Asia/Beirut", currency="USD")
+        self.session(self.court("Far court", club=other), at(dt.date(2027, 1, 7), 10), at(dt.date(2027, 1, 7), 11), ali)
+        path = f"clubs/{self.club.id}/customers/"
+
+        # RPT-4, RPT-5: Rana x3, Ali x1, Maya x2: three customers, two repeat, 2 / 3 x 100 = 66.67
+        r = self.call("get", path + "?from=2027-01-01&to=2027-01-31", self.owner, expect=200).data
+        self.assertEqual((r["customers"], r["repeat_rate"]), (3, "66.67"))
+        self.assertEqual([(p["full_name"], p["sessions"]) for p in r["people"]], [("Rana", 3), ("Maya", 2), ("Ali", 1)])
+        self.assertEqual(r["people"][0]["id"], rana.id)
+        # ties on the count go by name; nobody repeats: 0.00
+        self.session(self.court2, at(dt.date(2027, 2, 2), 10), at(dt.date(2027, 2, 2), 11), ben)
+        self.session(self.court2, at(dt.date(2027, 2, 3), 10), at(dt.date(2027, 2, 3), 11), ali)
+        r = self.call("get", path + "?from=2027-02-01&to=2027-02-28", self.owner, expect=200).data
+        self.assertEqual(([p["full_name"] for p in r["people"]], r["repeat_rate"]), (["Ali", "Ben", "Rana"], "0.00"))
+        # no customers: the rate is null, not 0
+        r = self.call("get", path + "?from=2027-06-01&to=2027-06-30", self.owner, expect=200).data
+        self.assertEqual(r, {"customers": 0, "repeat_rate": None, "people": []})
+        # ACC-6: the owner only; the bad range
+        self.call("get", path + "?from=2027-01-01&to=2027-01-31", sam, expect=403)
+        self.call("get", path + "?from=2027-01-01&to=2027-01-31", rana, expect=403)
+        self.code(self.call("get", path + "?from=2027-01-01&to=2028-01-02", self.owner), 400, "bad_range")
+
+    def test_attendance_and_player_history_journey(self):
+        """RPT-6, RPT-8, ACC-1, GEN-3, GEN-12: attendance for the session coach and the club side only; a coach reads a
+        player's sessions with the training load, newest first, paged, 404 for someone who is not their player."""
+        coach, cora = self.user("coach", is_coach=True), self.user("cora", is_coach=True)
+        hal, ann, pat = self.user("hal"), self.user("ann"), self.user("pat")
+        kid = self.shadow("Kid", coach)
+        team = self.make_team(coach, [hal, kid])
+        Connection.objects.create(user=coach, other_user=ann, type="coaching", status="accepted")
+
+        def train(day, hour, status="confirmed", by=coach, who=hal, row="accepted", **row_fields):
+            session = Session.objects.create(
+                sport=self.basketball, booked_by=by, coach=by, kind="training", status=status, starts_at=at(day, hour),
+                ends_at=at(day, hour + 1), currency="USD", price=0)
+            SessionParticipant.objects.create(session=session, user=by, status="accepted")
+            SessionParticipant.objects.create(session=session, user=who, status=row, **row_fields)
+            return session
+
+        t1 = train(MON, 10, checked_in_at=at(MON, 9, 50), rpe=6, rpe_minutes=60)
+        t2 = train(TUE, 10, rpe=7)  # RPE without minutes: no load
+        t3 = train(dt.date(2027, 1, 13), 10, rpe=5, rpe_minutes=30, checked_in_at=at(dt.date(2027, 1, 13), 10))
+        train(dt.date(2027, 1, 14), 10, status="cancelled")  # not played
+        train(dt.date(2027, 1, 15), 10, row="invited")  # never took part
+        train(dt.date(2027, 1, 16), 10, by=cora)  # another coach's session
+        train(dt.date(2027, 1, 17), 10, who=kid)  # the shadow player's, not hal's
+        self.clock.return_value = at(dt.date(2027, 1, 20), 12)
+
+        # RPT-8: newest first, with the training load rpe x minutes (empty when not logged)
+        r = self.call("get", f"players/{hal.id}/sessions/", coach, expect=200).data
+        self.assertEqual((r["count"], [x["session"] for x in r["results"]]), (3, [t3.id, t2.id, t1.id]))
+        self.assertEqual([(x["rpe"], x["rpe_minutes"], x["training_load"]) for x in r["results"]],
+                         [(5, 30, 150), (7, None, None), (6, 60, 360)])
+        self.assertEqual((r["results"][2]["checked_in_at"], r["results"][2]["starts_at"], r["results"][2]["kind"]),
+                         (z(at(MON, 9, 50)), z(at(MON, 10)), "training"))
+        self.call("get", f"players/{hal.id}/sessions/?page=2", coach, expect=404)  # one page only (GEN-12)
+        self.assertEqual(self.call("get", f"players/{kid.id}/sessions/", coach, expect=200).data["count"], 1)  # a shadow player
+        self.assertEqual(self.call("get", f"players/{ann.id}/sessions/", coach, expect=200).data["count"], 0)  # a coaching connection
+        # ACC-1, GEN-3: not the coach's player, nobody, and a user who is not a coach
+        self.call("get", f"players/{pat.id}/sessions/", coach, expect=404)
+        self.call("get", f"players/{hal.id}/sessions/", cora, expect=404)
+        self.call("get", "players/99999/sessions/", coach, expect=404)
+        self.call("get", f"players/{hal.id}/sessions/", hal, expect=403)
+
+        # RPT-6: after the end, Hal checked in and Coach did not; the session coach and the club side may read it
+        t1.court = self.court1
+        t1.save()
+        sam = self.user("sam")
+        self.staff(sam)
+        r = self.call("get", f"sessions/{t1.id}/attendance/", coach, expect=200).data
+        self.assertEqual((r["session"], len(r["accepted"]), r["checked_in"], [n["full_name"] for n in r["no_shows"]]),
+                         (t1.id, 2, 1, ["Coach"]))
+        self.assertEqual(self.call("get", f"sessions/{t1.id}/attendance/", sam, expect=200).data["checked_in"], 1)
+        self.call("get", f"sessions/{t1.id}/attendance/", hal, expect=403)  # a participant sees the session, not the report
+        self.call("get", f"sessions/{t1.id}/attendance/", cora, expect=404)
+        self.call("get", "sessions/99999/attendance/", coach, expect=404)
