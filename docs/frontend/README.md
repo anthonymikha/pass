@@ -5,7 +5,7 @@
 ## Plan
 
 - One Flutter project in `frontend/`, built for web, iOS and Android.
-- It talks only to the backend's REST API under `/api/` ([API docs](../backend/api/)).
+- It talks only to the backend's REST API under `/api/` ([API docs](../backend/api/)). The OpenAPI schema at `GET /api/schema/` can generate the API client.
 - The web build will be served by a `web` service in `docker-compose.yml`: a reverse proxy that serves the app at `/` and forwards `/api/`, `/admin/` and `/static/` to Django. Same origin, so no CORS configuration.
 - Flutter has no virtual environment. The SDK is installed on the machine; packages are listed in `pubspec.yaml`.
 
@@ -17,9 +17,9 @@
 | Time zones | The API sends timestamps in UTC. Show court times in the club's `timezone` and personal times in the user's |
 | Money | Amounts arrive as decimal strings with a 3-letter currency code. Never add different currencies together. Decimal places vary by currency |
 | Sleep import | Read Apple Health / Google Health Connect on the phone and post the nights to the backend |
-| Video | Upload and play through short-lived links from the backend, straight to storage |
+| Video | Upload and play through short-lived links from the backend, straight to storage (signed POST form, signed GET link). Flutter web needs CORS set on the bucket first |
 | Chat | Poll for new messages; render messages that carry a session as a card with start and end time |
-| Push notifications | Register the device's push token with the backend once that endpoint exists |
+| Push notifications | Get an FCM token (Firebase plugin) and register it with `POST /api/devices/`; pushes carry `data.type` (the trigger) and `data.id` (the object to open) |
 
 ## Suggested layout for these docs once the app exists
 
