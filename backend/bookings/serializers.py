@@ -261,7 +261,7 @@ class ScheduleSessionSerializer(serializers.ModelSerializer):
         return services.shown_status(session)  # BOOK-55
 
 
-class ClosureSerializer(serializers.Serializer):
+class ScheduleClosureSerializer(serializers.Serializer):
     court = serializers.IntegerField()
     starts_at = serializers.DateTimeField()
     ends_at = serializers.DateTimeField()
@@ -270,7 +270,7 @@ class ClosureSerializer(serializers.Serializer):
 
 class ScheduleSerializer(serializers.Serializer):
     sessions = ScheduleSessionSerializer(many=True)
-    closures = ClosureSerializer(many=True)
+    closures = ScheduleClosureSerializer(many=True)
 
 
 class CustomerSerializer(serializers.Serializer):

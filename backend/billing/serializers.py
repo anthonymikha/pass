@@ -1,7 +1,6 @@
 from rest_framework import serializers
 
 from accounts.serializers import PersonSerializer
-from bookings.serializers import PeriodSerializer
 
 from .models import Payment
 
