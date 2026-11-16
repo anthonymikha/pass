@@ -18,6 +18,7 @@ INSTALLED_APPS = [
     "accounts",
     "venues",
     "teams",
+    "bookings",
 ]
 
 MIDDLEWARE = [
