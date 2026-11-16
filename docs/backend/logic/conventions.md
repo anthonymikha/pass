@@ -1,6 +1,6 @@
 # Conventions (GEN)
 
-**Status: planned.** Rules every endpoint follows. Other pages rely on them and do not repeat them.
+**Status: built** (helpers in `backend/config/api.py` and `backend/config/money.py`; every endpoint follows them). Rules every endpoint follows. Other pages rely on them and do not repeat them.
 
 ## Errors
 

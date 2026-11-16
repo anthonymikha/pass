@@ -1,6 +1,6 @@
 # Push notifications and the scheduler (NOTE)
 
-**Status: planned.**
+**Status: partly built.** Built: NOTE-1 to NOTE-3, NOTE-11, NOTE-13, NOTE-14 (`accounts/services.py`, fake sender). Planned: the rest.
 
 ## Devices
 
