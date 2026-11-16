@@ -138,3 +138,25 @@ class UserBlockout(Blockout):
 
     class Meta(Blockout.Meta):
         db_table = "user_blockouts"
+
+
+class Device(models.Model):
+    """A phone registered for pushes (NOTE-1)."""
+
+    class Platform(models.TextChoices):
+        IOS = "ios"
+        ANDROID = "android"
+        WEB = "web"
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="devices")
+    # ponytail: Postgres btree rows cap near 2.7 KB, so a token longer than that fails to insert;
+    # real FCM tokens are ~200 chars. Index a hash of the token if longer ones ever appear.
+    token = models.CharField(max_length=4096, unique=True)
+    platform = models.CharField(max_length=10, choices=Platform.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "devices"
+
+    def __str__(self):
+        return f"{self.user} ({self.platform})"

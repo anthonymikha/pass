@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import Connection, User, UserBlockout
+from .models import Connection, Device, User, UserBlockout
 
 
 # Django's stock user forms work here: the admin rebuilds them for this model via modelform_factory,
@@ -27,3 +27,4 @@ class UserAdmin(DjangoUserAdmin):
 
 admin.site.register(Connection, list_display=("user", "other_user", "type", "status"))
 admin.site.register(UserBlockout, list_display=("user", "starts_on", "start_time", "end_time", "repeat", "repeat_until"))
+admin.site.register(Device, list_display=("user", "platform", "created_at"), search_fields=("user__email", "token"))

@@ -17,6 +17,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework.authtoken",
+    "drf_spectacular",
     "accounts",
     "venues",
     "teams",
@@ -87,7 +88,17 @@ REST_FRAMEWORK = {
     # point CACHES at a shared cache when that matters.
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
     "DEFAULT_THROTTLE_RATES": {"auth": "10/min"},
+    "EXCEPTION_HANDLER": "config.api.exception_handler",  # GEN-1
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",  # GEN-12
+    "PAGE_SIZE": 50,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
+
+# The Flutter client is generated from this schema (GET /api/schema/).
+SPECTACULAR_SETTINGS = {"TITLE": "PASS API", "VERSION": "0.1.0", "SERVE_INCLUDE_SCHEMA": False}
+
+# NOTE-11: path to the Firebase service-account file. Empty = fake sender (logs and records in memory).
+FCM_CREDENTIALS_FILE = os.environ.get("FCM_CREDENTIALS_FILE", "")
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
