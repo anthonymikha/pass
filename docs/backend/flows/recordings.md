@@ -1,6 +1,6 @@
 # Flow: session video and tags
 
-**Status: planned.** Rules: [recordings](../logic/recordings.md). Storage: MinIO (S3-compatible) in docker-compose, signed links, video never passes through Django.
+**Status: built** (`backend/bookings/`, avatars in `backend/accounts/`, [API](../api/bookings.md)). Rules: [recordings](../logic/recordings.md). Storage: SeaweedFS (S3 API) in docker-compose, signed links, video never passes through Django.
 
 Models: [Session, SessionParticipant, Recording, RecordingTag](../models/bookings.md).
 

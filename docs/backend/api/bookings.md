@@ -45,9 +45,9 @@
 
 ## Recordings and tags
 
-Video and avatars live in S3-compatible storage (MinIO in docker-compose, REC-1); Django never receives or serves the bytes. Settings: `STORAGE_ENDPOINT` (how the backend reaches storage for head and delete), `STORAGE_PUBLIC_ENDPOINT` (the address phones use; links and forms are signed for it), `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_REGION`. An empty `STORAGE_ENDPOINT` selects an in-memory fake (REC-3); tests use it and need no MinIO.
+Video and avatars live in S3-compatible storage (SeaweedFS in docker-compose, REC-1); Django never receives or serves the bytes. Settings: `STORAGE_ENDPOINT` (how the backend reaches storage for head and delete), `STORAGE_PUBLIC_ENDPOINT` (the address phones use; links and forms are signed for it), `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_REGION`. An empty `STORAGE_ENDPOINT` selects an in-memory fake (REC-3); tests use it and need no storage server.
 
-Upload with curl (local MinIO; send every returned field as `-F name=value`, the file last):
+Upload with curl (local storage; send every returned field as `-F name=value`, the file last):
 
 ```sh
 curl -s -X POST localhost:8000/api/sessions/<id>/recordings/form/ -H 'Authorization: Token <token>' \

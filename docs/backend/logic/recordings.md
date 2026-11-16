@@ -1,14 +1,14 @@
 # Recordings and file storage (REC)
 
-**Status: planned.** Session video, tags, and avatars.
+**Status: built** (`backend/config/storage.py`, recordings in `backend/bookings/`, avatars in `backend/accounts/`; [API](../api/bookings.md)). Session video, tags, and avatars.
 
 ## Storage
 
-**REC-1.** Files live in S3-compatible object storage: a MinIO container in docker-compose with data in `./data/minio`, one bucket. Django never receives or serves file bytes. Phones upload with a signed POST form and play back with a signed GET link. Moving to a cloud bucket later is a settings change (endpoint, bucket, keys).
+**REC-1.** Files live in S3-compatible object storage: a SeaweedFS container (S3 API) in docker-compose with data in `./data/storage`, one bucket. *Decided during build (2026-11-16): MinIO no longer publishes container images (Docker Hub and quay both refuse them), so the approved "MinIO container" is replaced by SeaweedFS, the upstream image by its author, which passed the signed POST (with size limit), signed GET, head and delete checks.* Django never receives or serves file bytes. Phones upload with a signed POST form and play back with a signed GET link. Moving to a cloud bucket later is a settings change (endpoint, bucket, keys).
 
 **REC-2.** Signed links expire after 1 hour.
 
-**REC-3.** Tests use a fake storage that records which keys were "uploaded"; no MinIO needed to run the test suite.
+**REC-3.** Tests use a fake storage that records which keys were "uploaded"; no storage server is needed to run the test suite (tests force the fake even where real storage is configured).
 
 ## Upload a recording
 
@@ -23,6 +23,8 @@
 **REC-14.** **Delete.** The uploader or the session coach. Deletes the object, the row and its tags.
 
 **REC-15.** No transcoding and no thumbnails: the phone uploads a playable mp4 or mov (settled at the owner's review on 2026-11-16).
+
+**REC-16.** *Decided during build (2026-11-16):* the upload window applies to the form and to the confirm; a repeat confirm of a stored key returns `200` at any time (GEN-5). Confirm checks, in order: permission, input, `bad_key`, repeat, `upload_closed`, `not_uploaded`. A caller who can see the session but may not upload (the booker who did not check in, a declined participant) gets `403`. The form's size limit is 1 byte to `size_bytes`. The upload form and the avatar confirm return `200` (they create no row). An uploader who may not watch yet gets no playback link in the confirm response but may still delete their own recording.
 
 ## Watch
 

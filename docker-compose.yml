@@ -10,30 +10,32 @@ services:
       timeout: 5s
       retries: 10
 
-  # Object storage for recordings and avatars (REC-1): S3-compatible, one bucket, data in ./data/minio.
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY}
+  # Object storage for recordings and avatars (REC-1): SeaweedFS with its S3 API, one bucket, data in ./data/storage.
+  # The access keys come from .env; the S3 identity file is written at start so no secret is committed.
+  storage:
+    image: chrislusf/seaweedfs:4.52
+    env_file: .env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - printf '{"identities":[{"name":"pass","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' "$$STORAGE_ACCESS_KEY" "$$STORAGE_SECRET_KEY" > /tmp/s3.json
+        && exec weed server -dir=/data -s3 -s3.port=8333 -s3.config=/tmp/s3.json
     volumes:
-      - ./data/minio:/data
+      - ./data/storage:/data
     ports:
-      - "${MINIO_PORT:-9000}:9000"  # what phones reach: STORAGE_PUBLIC_ENDPOINT must use this host port
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"  # web console
+      - "${STORAGE_PORT:-9000}:8333"  # what phones reach: STORAGE_PUBLIC_ENDPOINT must use this host port
 
-  # One-shot: waits for MinIO, then creates the bucket if it is missing (safe to run again).
-  minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+  # One-shot: waits for storage, then creates the bucket if it is missing (safe to run again).
+  storage-init:
+    image: chrislusf/seaweedfs:4.52
     env_file: .env
     depends_on:
-      - minio
+      - storage
     restart: "no"
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - until mc alias set local "$$STORAGE_ENDPOINT" "$$STORAGE_ACCESS_KEY" "$$STORAGE_SECRET_KEY"; do sleep 1; done;
-        mc mb --ignore-existing "local/$$STORAGE_BUCKET"
+      - until echo "s3.bucket.list" | weed shell -master=storage:9333 >/dev/null 2>&1; do sleep 1; done;
+        echo "s3.bucket.list" | weed shell -master=storage:9333 | grep -q "^  $$STORAGE_BUCKET[[:space:]]" ||
+        echo "s3.bucket.create -name $$STORAGE_BUCKET" | weed shell -master=storage:9333
 
   backend:
     build: ./backend
@@ -43,7 +45,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      minio-init:
+      storage-init:
         condition: service_completed_successfully
     ports:
       - "${BACKEND_PORT:-8000}:8000"  # host port; set BACKEND_PORT in .env if 8000 is taken

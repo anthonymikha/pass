@@ -9,8 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 # collectstatic needs no DB or real secret; the dummy key exists only during this build step.
 RUN SECRET_KEY=collectstatic-only python manage.py collectstatic --noinput \
-    && useradd --no-create-home app \
-    && mkdir media && chown app media
+    && useradd --no-create-home app
 
 USER app
 EXPOSE 8000

@@ -32,12 +32,12 @@ docker compose exec backend python manage.py createsuperuser
 
 Admin: http://localhost:8000/admin/
 
-### File storage (MinIO)
+### File storage (SeaweedFS, S3 API)
 
-Recordings and avatars live in a MinIO bucket (S3-compatible); data is kept in `./data/minio`. The `minio-init` step creates the bucket on every start (safe to repeat).
+Recordings and avatars live in one S3 bucket served by SeaweedFS (`storage` service); data is kept in `./data/storage`. The `storage-init` step creates the bucket on every start (safe to repeat). MinIO was the plan, but it no longer publishes container images.
 
-- S3 endpoint: http://localhost:9000 (`MINIO_PORT`). Phones upload to and play from this address, so `STORAGE_PUBLIC_ENDPOINT` in `.env` must use the same host and port (set both if 9000 is taken).
-- Web console: http://localhost:9001 (`MINIO_CONSOLE_PORT`), signed in with `STORAGE_ACCESS_KEY` and `STORAGE_SECRET_KEY`.
+- S3 endpoint: http://localhost:9000 (`STORAGE_PORT`). Phones upload to and play from this address, so `STORAGE_PUBLIC_ENDPOINT` in `.env` must use the same host and port.
+- Keys: `STORAGE_ACCESS_KEY` and `STORAGE_SECRET_KEY` from `.env`. Tests never touch it (they use an in-memory fake).
 - Moving to a cloud bucket later only changes the `STORAGE_*` values.
 - With `STORAGE_ENDPOINT` empty (a local run without Docker, and the test suite) an in-memory fake is used and nothing is really stored.
 

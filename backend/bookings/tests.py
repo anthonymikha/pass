@@ -2,6 +2,7 @@ import datetime as dt
 from decimal import Decimal
 from unittest import mock
 
+from django.test import override_settings
 from rest_framework.test import APITestCase
 
 from accounts import services as accounts
@@ -1629,12 +1630,15 @@ class ReportTests(PaymentBase):
 GIB = 1024 ** 3
 
 
+@override_settings(STORAGE_ENDPOINT="")  # REC-3: always the in-memory fake, even where real storage is configured
 class RecordingTests(BookingBase):
     """Training on Monday 10:00-11:00 (Beirut): coach Carl, booker Rana, players Ben and Cara, shadow player Kid,
     Dan declined. Ben checked in at 10:30."""
 
     def setUp(self):
         super().setUp()
+        get_storage.cache_clear()
+        self.addCleanup(get_storage.cache_clear)
         self.storage = get_storage()
         self.storage.keys.clear()
         self.storage.forms.clear()

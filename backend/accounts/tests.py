@@ -4,7 +4,7 @@ from unittest import mock
 
 from django.core.cache import cache
 from django.db import transaction
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from rest_framework import exceptions, serializers
 from rest_framework.settings import api_settings
 from rest_framework.test import APITestCase
@@ -549,9 +549,12 @@ class ShadowPlayerTests(PeopleTestCase):
         self.assertFalse(Connection.objects.exists())
 
 
+@override_settings(STORAGE_ENDPOINT="")  # REC-3: always the in-memory fake, even where real storage is configured
 class AvatarTests(PeopleTestCase):
     def setUp(self):
         super().setUp()
+        get_storage.cache_clear()
+        self.addCleanup(get_storage.cache_clear)
         self.storage = get_storage()
         self.storage.keys.clear()
         self.storage.forms.clear()

@@ -107,7 +107,7 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# REC-1: S3-compatible object storage (MinIO in docker-compose). Moving to a cloud bucket is a change of these values.
+# REC-1: S3-compatible object storage (SeaweedFS in docker-compose). Moving to a cloud bucket is a change of these values.
 # Empty STORAGE_ENDPOINT = in-memory fake (the test suite, a bare `runserver`); see config/storage.py.
 STORAGE_ENDPOINT = os.environ.get("STORAGE_ENDPOINT", "")  # how the backend reaches storage (head, delete)
 STORAGE_PUBLIC_ENDPOINT = os.environ.get("STORAGE_PUBLIC_ENDPOINT", STORAGE_ENDPOINT)  # how phones reach it

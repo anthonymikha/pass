@@ -29,7 +29,7 @@ Run in this order; tasks on one line run in parallel in separate worktrees.
 | T6 | Slots, prices, offers, court booking, invites, rentals, cancel (step 4 part 1) | bookings | AVL-1 to AVL-12, PRC-4 to PRC-12, DSC-1 to DSC-8, BOOK-1 to BOOK-17, BOOK-40 to BOOK-66, CHAT-30, CHAT-31 | done |
 | T7 | Training requests, coach-booked training, personal and group availability (step 5 part 3) | bookings | BOOK-20 to BOOK-33, AVL-20 to AVL-25 | done |
 | T8 | Check-in, payments, commission, mark paid, one-off discount, reports (step 4 part 2) | bookings, billing | PAY, COM, DSC-10 to DSC-14, RPT | done |
-| T9 / T10 / T11 | Wellness (step 6) / recordings, storage, avatars (step 7) / chat (step 8) | wellness / bookings, accounts / chat | WEL / REC / CHAT | T9, T11 done |
+| T9 / T10 / T11 | Wellness (step 6) / recordings, storage, avatars (step 7) / chat (step 8) | wellness / bookings, accounts / chat | WEL / REC / CHAT | done |
 | T12 | Scheduler, RPE reminder, FCM sender, trigger audit (step 9) | accounts, bookings, compose | NOTE-9, NOTE-10, NOTE-20, NOTE-30, NOTE-31 | |
 | T13 | Full pass (step 10): both databases, docs, Eraser, PLAN | all | | |
 
@@ -175,7 +175,7 @@ Django adds `users_groups`, `users_user_permissions` and `authtoken_token`.
 | Sleep import | **Decided:** Apple Health / Google Health Connect are read on the phone by Flutter; backend only receives logs. |
 | Recovery level formula | **Deferred** until the owner meets their partner, a sports expert. Do not invent one. Suggested session times depend on it and are deferred too. |
 | Push notifications | Owner wants the platforms' standard services. **Recommended, not yet confirmed:** send both through Firebase Cloud Messaging (it relays to Apple's APNs), one backend integration and one Flutter plugin. Needs a `devices` table (33rd table), a Firebase project and an Apple developer key. |
-| Video and avatar storage | **Recommended, not yet confirmed:** S3-compatible object storage from the start, run as a MinIO container in compose with data in `./data/minio`. Phones upload and play back through short-lived signed links, so video never passes through Django. Moving to a cloud bucket later is a settings change. The owner asked whether a plain server directory would do; the answer given was no for video (multi-GB uploads block workers, no seeking). |
+| Video and avatar storage | **Decided:** S3-compatible object storage; built with SeaweedFS in compose (`./data/storage`) because MinIO stopped publishing images (REC-1). Phones upload and play back through short-lived signed links, so video never passes through Django. Moving to a cloud bucket later is a settings change. The owner asked whether a plain server directory would do; the answer given was no for video (multi-GB uploads block workers, no seeking). |
 | Virtual environments | `backend/.venv` only. Flutter has no virtualenv (SDK is machine-wide, packages in `pubspec.yaml`). |
 
 ## Roadmap
@@ -252,7 +252,7 @@ Workflow test: owner setup → player sees slots → books in a non-base currenc
 - **Not stored yet:** heart rate, HRV, steps and sleep stages from the health apps. Wait for the sports expert to say which the recovery formula needs.
 - **Deferred:** recovery level, suggested play/training times, team recovery view.
 
-### Step 7: recordings
+### Step 7: recordings (done 2026-11-16: storage in `backend/config/storage.py`, SeaweedFS in compose)
 
 - Storage container and signed upload/playback links (pending the storage decision above).
 - Players attach a video to a session they checked into; coaches upload to sessions they coached.
