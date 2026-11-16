@@ -27,6 +27,7 @@ from .models import Session, SessionParticipant, SessionRental
 
 UTC = datetime.timezone.utc
 HORIZON_DAYS = 60  # AVL-5 item 4
+MAX_REQUEST = datetime.timedelta(hours=8)  # BOOK-20
 MAX_RANGE = datetime.timedelta(days=14)  # AVL-23
 CANCELLED, CONFIRMED, REQUESTED = Session.Status.CANCELLED, Session.Status.CONFIRMED, Session.Status.REQUESTED
 INVITED, ACCEPTED, DECLINED = (SessionParticipant.Status.INVITED, SessionParticipant.Status.ACCEPTED,
@@ -570,8 +571,6 @@ def end_request(session, declining):
 def book_training(coach, data):
     """BOOK-30 (`group` is a team the caller manages) or BOOK-31 (`player` is one of the caller's players).
     Returns the new session."""
-    if not coach.is_coach:
-        raise PermissionDenied("Only coaches can book training.")
     group, chosen = data.get("group"), data.get("coach_fee_payer")  # `chosen`: an id the coach typed
     payer_id = chosen
     if group:  # BOOK-30

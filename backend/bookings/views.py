@@ -208,7 +208,9 @@ class CoachTrainingView(generics.GenericAPIView):
 
     @extend_schema(responses=SessionSerializer)
     def post(self, request):
-        """BOOK-30, BOOK-31."""
+        """BOOK-30, BOOK-31: coaches only."""
+        if not request.user.is_coach:
+            raise PermissionDenied("Only coaches can book training.")
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         session = services.book_training(request.user, serializer.validated_data)
