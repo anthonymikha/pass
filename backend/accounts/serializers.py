@@ -6,7 +6,9 @@ from django.contrib.auth import authenticate, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from .models import User
+from config.money import validate_currency
+
+from .models import Device, User
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -43,9 +45,42 @@ class UserSerializer(serializers.ModelSerializer):
         return value
 
     def validate_coach_currency(self, value):
-        if value and not re.fullmatch(r"[A-Z]{3}", value):
-            raise serializers.ValidationError("Use a 3-letter ISO currency code, e.g. USD.")
-        return value
+        return validate_currency(value) if value else value  # GEN-14
+
+
+class BlockoutSerializer(serializers.ModelSerializer):
+    """Base for the fields of an `accounts.models.Blockout` (CLUB-15, GEN-11).
+
+    Subclass with `Meta.model` set (user block-outs, court closures) and add the owner field:
+    `class Meta(BlockoutSerializer.Meta): model = ...; fields = [*BlockoutSerializer.Meta.fields, "court"]`.
+    """
+
+    class Meta:
+        fields = ["starts_on", "start_time", "end_time", "repeat", "repeat_until", "reason"]  # reason <= 255 comes from the model
+
+    def validate(self, data):
+        # PATCH sends only some fields: fill the rest from the stored row.
+        def value(name):
+            return data[name] if name in data else getattr(self.instance, name, None)
+
+        start, end, starts_on, until = value("start_time"), value("end_time"), value("starts_on"), value("repeat_until")
+        errors = {}
+        if start and end and end != datetime.time(0) and end <= start:  # GEN-11: 00:00 means end of day
+            errors["end_time"] = "End time must be after start time, or 00:00 for the end of the day."
+        if starts_on and until and until < starts_on:  # CLUB-15
+            errors["repeat_until"] = "Cannot be before the first date."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return data
+
+
+class DeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Device
+        fields = ["id", "token", "platform", "created_at"]
+        read_only_fields = ["id", "created_at"]
+        # The token is unique, but registering an existing one is a move or a repeat (NOTE-2), not an error.
+        extra_kwargs = {"token": {"validators": []}}
 
 
 class RegisterSerializer(serializers.Serializer):

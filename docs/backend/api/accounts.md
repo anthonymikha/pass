@@ -15,9 +15,16 @@
 |---|---|---|---|---|
 | POST | `/api/auth/register/` | none | `email`, `password`, `full_name` | `201` `{token, user}` |
 | POST | `/api/auth/login/` | none | `email`, `password` | `200` `{token, user}` |
-| POST | `/api/auth/logout/` | token | none | `204` |
+| POST | `/api/auth/logout/` | token | none | `204` (also deletes the caller's devices, NOTE-3) |
 | GET | `/api/me/` | token | none | `200` user |
 | PATCH | `/api/me/` | token | any editable field | `200` user |
+| POST | `/api/devices/` | token | `token`, `platform` (`ios`, `android`, `web`) | `201` device; `200` if the caller already has it or it moved to the caller (NOTE-2) |
+| DELETE | `/api/devices/<token or id>/` | token | none | `204`; `404` if it is not the caller's own (NOTE-3, GEN-3) |
+| GET | `/api/schema/` | none | none | `200` OpenAPI schema (the Flutter client is generated from it) |
+
+### Devices
+
+A device is a phone registered for pushes: `{id, token, platform, created_at}`. The app registers its Firebase token after sign-in and whenever Firebase renews it. A token held by another user (a shared phone) moves to the caller. Pushes themselves are sent by `accounts.services.notify()` after the transaction commits; until `FCM_CREDENTIALS_FILE` is set, a fake sender only logs them (NOTE-11).
 
 ### The user object
 
