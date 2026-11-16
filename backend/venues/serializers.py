@@ -56,6 +56,13 @@ class ClubSearchSerializer(ClubSerializer):
         return [{"id": c.id, "name": c.name} for c in club.active_courts]
 
 
+class MyClubSerializer(ClubSerializer):
+    roles = serializers.ListField(child=serializers.CharField(), read_only=True)  # CLUB-33
+
+    class Meta(ClubSerializer.Meta):
+        fields = [*ClubSerializer.Meta.fields, "roles"]
+
+
 class SearchParamsSerializer(serializers.Serializer):
     sport = serializers.IntegerField(required=False)
     q = serializers.CharField(required=False)

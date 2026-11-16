@@ -943,3 +943,29 @@ class OwnerSetupTests(VenuesBase):
             self.assertEqual(sorted(ClubMember.objects.values_list("role", flat=True)), ["coach", "staff"])
             self.call("get", f"members/{staff_row}/", user=owner, expect=405)
             self.assertEqual(self.call("get", f"clubs/{club.id}/", user=outsider).status_code, 200)  # a public club
+
+    def test_my_clubs(self):
+        """CLUB-33, ACC-1, ACC-2: the owner of a club with no court sees it; current staff and affiliated coaches see theirs with
+        their roles; expired staff, pending coaches, players and strangers do not."""
+        owner, other = self.user("owner@example.com"), self.user("other@example.com", is_coach=True)
+        staff, expired, pending, player, stranger = (self.user(f"{n}@example.com", is_coach=True) for n in ("staff", "expired", "pending", "player", "stranger"))
+        empty = Club.objects.create(owner=owner, name="Zeta (no court yet)", timezone="Asia/Beirut", currency="USD")
+        club, _ = self.club_with_court(other, name="Alpha")
+        # owner of one club, staff and coach at another: one row, both roles
+        for user, role, status, expires in (
+            (owner, "staff", "active", None), (owner, "coach", "active", dt.date(2027, 1, 11)), (staff, "staff", "active", None),
+            (expired, "staff", "active", dt.date(2027, 1, 10)), (pending, "coach", "pending", None), (player, "player", "active", None),
+        ):
+            ClubMember.objects.create(club=club, user=user, role=role, status=status, expires_on=expires)
+        late = dt.datetime(2027, 1, 10, 23, 30, tzinfo=UTC)  # already the 11th in Beirut: an expiry of the 10th has passed
+
+        with mock.patch("django.utils.timezone.now", return_value=late):
+            r = self.call("get", "me/clubs/", user=owner, expect=200)
+            self.assertEqual([(c["name"], c["roles"]) for c in r.data["results"]], [("Alpha", ["staff", "coach"]), ("Zeta (no court yet)", ["owner"])])
+            self.assertEqual(r.data["results"][1]["id"], empty.id)
+            self.assertEqual([(c["name"], c["roles"]) for c in self.call("get", "me/clubs/", user=other).data["results"]], [("Alpha", ["owner"])])
+            self.assertEqual([c["roles"] for c in self.call("get", "me/clubs/", user=staff).data["results"]], [["staff"]])
+            for nobody in (expired, pending, player, stranger):
+                self.assertEqual(self.call("get", "me/clubs/", user=nobody, expect=200).data, {"count": 0, "next": None, "previous": None, "results": []})
+        self.client.force_authenticate(None)
+        self.call("get", "me/clubs/", expect=401)

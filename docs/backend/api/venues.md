@@ -16,6 +16,7 @@
 | GET | `/api/clubs/` | public | `sport` (id), `q`, `lat` + `lng` + `radius_km` (1-200, default 25) | `200` page of clubs |
 | POST | `/api/clubs/` | any user | `name`, `timezone`, `currency`, optional `address`, `latitude`, `longitude` | `201` club |
 | GET, PATCH | `/api/clubs/<id>/` | visible; PATCH owner | `currency` cannot change (`400 base_currency_fixed`) | `200` |
+| GET | `/api/me/clubs/` | any user | clubs the caller owns or works at (active, unexpired `staff` or `coach`), each with `roles` (`owner`, `staff`, `coach`), by name (CLUB-33) | `200` page |
 | GET, POST | `/api/clubs/<id>/currencies/` | owner | `currency`, `exchange_rate` | `201`; `400 currency_exists` |
 | GET, PATCH, DELETE | `/api/currencies/<id>/` | owner | PATCH: `exchange_rate`. DELETE also deletes the overrides in that currency | `200` / `204` |
 | GET, POST | `/api/clubs/<id>/courts/` | visible; POST owner | `name`, `description`, `slot_minutes`, `sports` (ids), `is_active`. Owner sees inactive courts too | `201` |
@@ -73,4 +74,4 @@ Creating an offer with `user` set sends that user one `offer` push after the req
 
 ## Not built
 
-Price lookup and free slots (PRC-4 onwards, AVL-10), applying offers to bookings (DSC), a list of the owner's own clubs (search shows only clubs with an active court), cancelling sessions from a closure's conflicts (BOOK-50).
+Price lookup and free slots (PRC-4 onwards, AVL-10), applying offers to bookings (DSC), cancelling sessions from a closure's conflicts (BOOK-50).

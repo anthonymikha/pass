@@ -10,7 +10,7 @@ from config.api import BusinessError
 from . import services
 from .models import ClubCurrency, ClubMember, Court, CourtBlockout, CourtRate, Discount, Equipment, PriceOverride
 from .serializers import (
-    ClosureSerializer, ClubCurrencySerializer, ClubCurrencyUpdateSerializer, ClubSearchSerializer, ClubSerializer,
+    ClosureSerializer, ClubCurrencySerializer, ClubCurrencyUpdateSerializer, ClubSearchSerializer, ClubSerializer, MyClubSerializer,
     CourtSerializer, EquipmentSerializer, MemberCreateSerializer, MemberSerializer, MemberUpdateSerializer,
     OfferSerializer, OverridePriceSerializer, OverrideSerializer, RateSerializer, SearchParamsSerializer, court_detail,
 )
@@ -91,6 +91,15 @@ class ClubListView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
+
+class MyClubsView(generics.ListAPIView):
+    """CLUB-33: the clubs the caller owns or works at."""
+
+    serializer_class = MyClubSerializer
+
+    def get_queryset(self):
+        return services.my_clubs(self.request.user)
 
 
 class ClubView(generics.RetrieveUpdateAPIView):

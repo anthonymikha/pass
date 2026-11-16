@@ -203,3 +203,19 @@ def _distance_km(lat1, lng1, lat2, lng2):
     p1, p2 = math.radians(lat1), math.radians(lat2)
     a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lng2 - lng1) / 2) ** 2
     return 2 * EARTH_KM * math.asin(math.sqrt(a))
+
+
+def my_clubs(user):
+    """CLUB-33: clubs the user owns or has a current staff/coach membership in, with their roles, by name."""
+    roles = {c.pk: (c, ["owner"]) for c in Club.objects.filter(owner=user)}
+    rows = ClubMember.objects.filter(
+        user=user, status=ClubMember.Status.ACTIVE, role__in=[ClubMember.Role.STAFF, ClubMember.Role.COACH]
+    ).select_related("club")
+    for row in rows:
+        if row.expires_on is None or row.expires_on >= club_today(row.club):  # ACC-2, club timezone
+            roles.setdefault(row.club_id, (row.club, []))[1].append(row.role)
+    clubs = []
+    for club, club_roles in roles.values():
+        club.roles = sorted(club_roles, key=["owner", "staff", "coach"].index)
+        clubs.append(club)
+    return sorted(clubs, key=lambda c: (c.name, c.pk))
