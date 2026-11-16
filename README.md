@@ -44,6 +44,8 @@ export DEBUG=1
 .venv/bin/python manage.py runserver
 ```
 
+Seed the launch sports, default commission rows and placeholder exercises (safe to run again): `python manage.py seed`.
+
 ## Tests
 
 ```sh
