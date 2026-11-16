@@ -55,7 +55,7 @@ One row per person in a session. Unique per (session, user).
 | `rpe` | Rate of perceived exertion, 1–10 |
 | `rpe_minutes` | Minutes of effort, defaults to the session length |
 | `rpe_logged_at` | When the form was submitted |
-| `rpe_reminded_at` | When the RPE reminder was sent (**planned column**, [NOTE-9](../logic/notifications.md#the-scheduler)) |
+| `rpe_reminded_at` | When the RPE reminder was sent ([NOTE-9](../logic/notifications.md#the-scheduler)) |
 
 - The booker gets a row with status `accepted` when the session is created.
 - Coaches set `checked_in_at` on behalf of shadow players.

@@ -177,6 +177,49 @@ class DeviceTests(APITestCase):
                 with self.captureOnCommitCallbacks(execute=True):
                     services.notify([self.pat], "friend_request", "Hi", "x", {"id": 1})
 
+    def fcm(self, *answers):
+        """Run one notify() through the real sender with FCM mocked; `answers` are (status, body) per post."""
+        def reply(status, body):
+            return mock.Mock(ok=status < 300, status_code=status, content=b"x" if body else b"", text=str(body), json=lambda: body)
+        session = mock.Mock()
+        session.post.side_effect = [reply(*a) for a in answers]
+        with override_settings(FCM_CREDENTIALS_FILE="/fake.json"), mock.patch("accounts.services._fcm_session", return_value=(session, "pass-proj")):
+            with self.captureOnCommitCallbacks(execute=True):
+                services.notify([self.pat], "friend_request", "Hi", "Sam wants to play", {"id": 7})
+        return session
+
+    def test_firebase_sender(self):
+        """NOTE-10, NOTE-11, NOTE-12, NOTE-14: FCM HTTP v1 request shape, an unregistered token deletes the device,
+        any other failure is logged and ignored, and nothing goes to the fake outbox when credentials are set."""
+        keep = Device.objects.create(user=self.pat, token="keep", platform="ios")
+        Device.objects.create(user=self.pat, token="stale", platform="android")
+        unregistered = (404, {"error": {"status": "NOT_FOUND", "details": [{"errorCode": "UNREGISTERED"}]}})
+
+        session = self.fcm((200, {"name": "m1"}), unregistered)
+        (url,), first = session.post.call_args_list[0]
+        self.assertEqual(url, "https://fcm.googleapis.com/v1/projects/pass-proj/messages:send")
+        self.assertEqual(first["json"], {"message": {"token": "keep", "notification": {"title": "Hi", "body": "Sam wants to play"},
+                                                     "data": {"type": "friend_request", "id": "7"}}})
+        self.assertEqual(list(Device.objects.values_list("token", flat=True)), ["keep"])  # NOTE-12
+        self.assertEqual(services.outbox, [])
+
+        with self.assertLogs("accounts.services", "ERROR"):  # NOTE-12: other failures are logged, the device stays
+            self.fcm((500, {"error": {"status": "INTERNAL"}}))
+        with self.assertLogs("accounts.services", "ERROR"):
+            self.fcm((503, None))
+        self.assertTrue(Device.objects.filter(pk=keep.pk).exists())
+
+    def test_firebase_credentials_are_read_once_per_process(self):
+        """NOTE-11: the service-account file is loaded on the first push only and cached."""
+        services._fcm_session.cache_clear()
+        self.addCleanup(services._fcm_session.cache_clear)
+        creds = mock.Mock(project_id="pass-proj")
+        with mock.patch("google.oauth2.service_account.Credentials.from_service_account_file", return_value=creds) as load, \
+                mock.patch("google.auth.transport.requests.AuthorizedSession") as session:
+            first, second = services._fcm_session("/fake.json"), services._fcm_session("/fake.json")
+        self.assertEqual(load.call_count, 1)
+        self.assertEqual((first, second), ((session.return_value, "pass-proj"),) * 2)
+
     def test_schema_is_public(self):
         """The OpenAPI schema is served without signing in."""
         self.assertEqual(self.client.get("/api/schema/").status_code, 200)

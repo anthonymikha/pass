@@ -1,3 +1,4 @@
+import functools
 import logging
 
 from django.conf import settings
@@ -62,13 +63,36 @@ def _send_to_users(user_ids, title, body, data):
         logger.exception("Push sending failed")
 
 
+@functools.lru_cache(maxsize=1)
+def _fcm_session(credentials_file):
+    """The service-account file is read once per process (the session refreshes its own OAuth token)."""
+    from google.auth.transport.requests import AuthorizedSession
+    from google.oauth2 import service_account
+
+    creds = service_account.Credentials.from_service_account_file(
+        credentials_file, scopes=["https://www.googleapis.com/auth/firebase.messaging"])
+    return AuthorizedSession(creds), creds.project_id
+
+
 def send_push(device, title, body, data):
-    """The one place the real FCM sender plugs in (NOTE-10, NOTE-12: delete the device row when
-    Firebase says the token is no longer registered). Raise on failure; the caller logs it."""
-    if settings.FCM_CREDENTIALS_FILE:
-        raise NotImplementedError("The Firebase sender is not built yet")
-    logger.info("Fake push to user %s: %s - %s %s", device.user_id, title, body, data)
-    outbox.append({"user_id": device.user_id, "token": device.token, "title": title, "body": body, "data": data})
+    """NOTE-10, NOTE-12: FCM HTTP v1 when FCM_CREDENTIALS_FILE is set, else the fake sender (NOTE-11).
+    Deletes the device row when Firebase says the token is no longer registered; raises on any other failure
+    (the caller logs it)."""
+    if not settings.FCM_CREDENTIALS_FILE:
+        logger.info("Fake push to user %s: %s - %s %s", device.user_id, title, body, data)
+        outbox.append({"user_id": device.user_id, "token": device.token, "title": title, "body": body, "data": data})
+        return
+    session, project_id = _fcm_session(settings.FCM_CREDENTIALS_FILE)
+    message = {"token": device.token, "notification": {"title": title, "body": body}, "data": data}
+    response = session.post(
+        f"https://fcm.googleapis.com/v1/projects/{project_id}/messages:send", json={"message": message}, timeout=10)
+    if response.ok:
+        return
+    error = response.json().get("error", {}) if response.content else {}
+    if any(d.get("errorCode") == "UNREGISTERED" for d in error.get("details", [])):
+        device.delete()
+        return
+    raise RuntimeError(f"FCM answered {response.status_code}: {response.text[:500]}")
 
 
 # --- People: shadow players, blocked pairs, friends (ACC-1, TEAM-1 to TEAM-7) ---
