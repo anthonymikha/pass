@@ -1,6 +1,6 @@
 # Seed data (SEED)
 
-**Status: planned.** A `python manage.py seed` command fills the lookup data. It is safe to run again: it never duplicates rows and never overwrites rows an admin has edited.
+**Status: built** (command `seed`, tests in `backend/wellness/tests.py`). A `python manage.py seed` command fills the lookup data. It is safe to run again: it never duplicates rows and never overwrites rows an admin has edited.
 
 **SEED-1.** **Sports:** padel, tennis, basketball, volleyball, football (5-a-side), pickleball, squash, badminton. Created by name if missing. Names stored as: `Padel`, `Tennis`, `Basketball`, `Volleyball`, `Football (5-a-side)`, `Pickleball`, `Squash`, `Badminton`.
 

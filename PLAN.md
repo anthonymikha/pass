@@ -24,7 +24,7 @@ Run in this order; tasks on one line run in parallel in separate worktrees.
 | # | Task | Apps | Rules | Status |
 |---|---|---|---|---|
 | T1 | Foundation: error shape with `code`, pagination, strict timestamps, `round_money`, `devices` + `notify()` with fake sender, OpenAPI schema | config, accounts | GEN-1 to GEN-18, NOTE-1 to NOTE-3, NOTE-11 to NOTE-14 | |
-| T2 / T3 / T4 | Seed (step 2) / owner setup (step 3) / friends, coaching links, block-outs, shadow players (step 5 part 1) | wellness command / venues / accounts | SEED / CLUB, PRC-1 to PRC-3 / TEAM-1 to TEAM-15, ACC-10 to ACC-13 | |
+| T2 / T3 / T4 | Seed (step 2) / owner setup (step 3) / friends, coaching links, block-outs, shadow players (step 5 part 1) | wellness command / venues / accounts | SEED / CLUB, PRC-1 to PRC-3 / TEAM-1 to TEAM-15, ACC-10 to ACC-13 | T2 done |
 | T5 | Groups and teams, group chat sync, user and coach search (step 5 part 2) | teams, chat services | TEAM-20 to TEAM-40, ACC-20 to ACC-23 | |
 | T6 | Slots, prices, offers, court booking, invites, rentals, cancel (step 4 part 1) | bookings | AVL-1 to AVL-12, PRC-4 to PRC-12, DSC-1 to DSC-8, BOOK-1 to BOOK-17, BOOK-40 to BOOK-66, CHAT-30, CHAT-31 | |
 | T7 | Training requests, coach-booked training, personal and group availability (step 5 part 3) | bookings | BOOK-20 to BOOK-33, AVL-20 to AVL-25 | |
@@ -186,7 +186,7 @@ Django adds `users_groups`, `users_user_permissions` and `authtoken_token`.
 - **Schema v5** (uncommitted): see the change table above. 33 tables.
 - **Step 1: API foundation.** `POST /api/auth/register/`, `POST /api/auth/login/`, `POST /api/auth/logout/`, `GET|PATCH /api/me/`. Register and login are limited to 10 requests/minute per IP (per-process counter). Skipped on purpose: avatar upload (waits for storage), email verification and password reset (no email sending yet), changing email, role permission classes (arrive in step 3).
 
-### Step 2: seed data (approved, not started)
+### Step 2: seed data (done 2026-11-16: `manage.py seed`, SEED-1 to SEED-3)
 
 An idempotent `manage.py seed` command (or data migration; command preferred so it can be re-run):
 - **Sports:** proposal: padel, tennis, basketball, volleyball, football (5-a-side), pickleball, squash, badminton.
