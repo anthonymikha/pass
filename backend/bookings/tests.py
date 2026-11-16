@@ -1,7 +1,9 @@
 import datetime as dt
 from decimal import Decimal
+from io import StringIO
 from unittest import mock
 
+from django.core.management import call_command
 from django.test import override_settings
 from rest_framework.test import APITestCase
 
@@ -1884,3 +1886,57 @@ class RecordingTests(BookingBase):
         self.call("delete", f"recordings/{theirs.id}/", self.coach, expect=204)  # the coach, tags included
         self.assertEqual((Recording.objects.count(), RecordingTag.objects.count(), self.storage.keys), (0, 0, set()))
         self.call("delete", f"recordings/{theirs.id}/", self.coach, expect=404)
+
+
+class TickTests(BookingBase):
+    def tick(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            call_command("tick", stdout=StringIO())
+
+    def attended(self, user, ended_ago, status="confirmed", **fields):
+        """A session that ended `ended_ago` before NOW with `user` checked in (no RPE unless `fields` says so)."""
+        end = NOW - ended_ago
+        session = self.session(self.court1, end - dt.timedelta(hours=1), end, user, status=status)
+        row = session.participants.get(user=user)  # the booker's row exists already
+        SessionParticipant.objects.filter(pk=row.pk).update(checked_in_at=end, **fields)
+        row.refresh_from_db()
+        return session, row
+
+    def test_rpe_reminder_journey(self):
+        """NOTE-30, NOTE-31, NOTE-9, NOTE-14, NOTE-20: only checked-in participants without an RPE and without a reminder, of a
+        confirmed session that ended within 7 days, get one `rpe_reminder` carrying the session id; never twice, running again
+        changes nothing, a gap in the scheduler is caught up, and nothing older than 7 days is."""
+        rana, ben, cy, dee, eve, fay, gus = (self.user(n) for n in ("rana", "ben", "cy", "dee", "eve", "fay", "gus"))
+        hour, day = dt.timedelta(hours=1), dt.timedelta(days=1)
+        due, row = self.attended(rana, hour)
+        SessionParticipant.objects.create(session=due, user=ben, status="accepted")  # accepted, never checked in
+        SessionParticipant.objects.create(session=due, user=cy, status="accepted", checked_in_at=NOW - hour, rpe=6)  # has an RPE
+        SessionParticipant.objects.create(session=due, user=dee, status="accepted", checked_in_at=NOW - hour,
+                                          rpe_reminded_at=NOW - day)  # already reminded
+        self.attended(eve, hour, status="cancelled")  # not confirmed
+        self.attended(fay, 7 * day + dt.timedelta(seconds=1))  # ended just over 7 days ago
+        edge, edge_row = self.attended(gus, 7 * day)  # exactly 7 days: still in
+        ahead = self.session(self.court1, NOW + hour, NOW + 2 * hour, rana)  # ends later
+        ahead_row = ahead.participants.get(user=rana)
+        SessionParticipant.objects.filter(pk=ahead_row.pk).update(checked_in_at=NOW)
+
+        self.tick()
+        self.assertEqual([(p["user_id"], p["data"]) for p in accounts.outbox], [
+            (rana.id, {"type": "rpe_reminder", "id": str(due.id)}), (gus.id, {"type": "rpe_reminder", "id": str(edge.id)})])
+        self.assertEqual(len(self.pushed(rana, "rpe_reminder")), 1)
+        for r in (row, edge_row):
+            r.refresh_from_db()
+            self.assertEqual(r.rpe_reminded_at, NOW)  # NOTE-9
+        self.assertEqual(SessionParticipant.objects.filter(rpe_reminded_at__isnull=False).count(), 3)  # those two and dee's
+
+        accounts.outbox.clear()  # safe to run twice in a row
+        self.tick()
+        self.assertEqual(accounts.outbox, [])
+
+        # the scheduler was down while the later session ended: it is caught up on the next tick, once
+        self.clock.return_value = NOW + 3 * hour
+        self.tick()
+        self.tick()
+        self.assertEqual([(p["user_id"], p["data"]["id"]) for p in accounts.outbox], [(rana.id, str(ahead.id))])
+        ahead_row.refresh_from_db()
+        self.assertEqual(ahead_row.rpe_reminded_at, NOW + 3 * hour)

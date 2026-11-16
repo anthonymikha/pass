@@ -43,7 +43,7 @@
 
 ### Devices
 
-A device is a phone registered for pushes: `{id, token, platform, created_at}`. The app registers its Firebase token after sign-in and whenever Firebase renews it. A token held by another user (a shared phone) moves to the caller. Pushes themselves are sent by `accounts.services.notify()` after the transaction commits; until `FCM_CREDENTIALS_FILE` is set, a fake sender only logs them (NOTE-11).
+A device is a phone registered for pushes: `{id, token, platform, created_at}`. The app registers its Firebase token after sign-in and whenever Firebase renews it. A token held by another user (a shared phone) moves to the caller. Pushes themselves are sent by `accounts.services.notify()` after the transaction commits; until `FCM_CREDENTIALS_FILE` is set, a fake sender only logs them (NOTE-11). With it set they go through Firebase (HTTP v1; a token Firebase reports as unregistered is deleted, any other failure is logged). A push is `{notification: {title, body}, data: {type, id}}`: `type` is the trigger name (NOTE-20) and `id` the object to open, both strings (NOTE-14). The `rpe_reminder` push has the session id and is sent by the scheduler (NOTE-31), not by a request.
 
 ### The user object
 

@@ -147,11 +147,11 @@ def add_override(club, data):
         raise BusinessError("override_exists", "There is already an override for this item and currency.")
 
 
-def create_offer(serializer, club):
+def create_offer(serializer, club, caller):
     """CLUB-22, CLUB-24."""
     with transaction.atomic():
         offer = serializer.save(club=club)
-        if offer.user:
+        if offer.user and offer.user != caller:  # NOTE-20: nobody is pushed about their own action
             notify([offer.user], "offer", f"New offer from {club.name}", offer.message, {"id": offer.id})  # NOTE-20
     return offer
 

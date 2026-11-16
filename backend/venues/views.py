@@ -297,7 +297,7 @@ class OfferList(ConfigList):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        services.create_offer(serializer, self.club)  # CLUB-22, CLUB-24
+        services.create_offer(serializer, self.club, request.user)  # CLUB-22, CLUB-24
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 

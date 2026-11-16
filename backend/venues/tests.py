@@ -685,7 +685,7 @@ class OwnerSetupTests(VenuesBase):
         club, court = self.club_with_court(owner)
         player = self.user("player@example.com")
         bystander = self.user("bystander@example.com")
-        for who, token in ((player, "tok-player"), (bystander, "tok-bystander")):
+        for who, token in ((player, "tok-player"), (bystander, "tok-bystander"), (owner, "tok-owner")):
             self.call("post", "devices/", {"token": token, "platform": "android"}, 201, user=who)
         self.as_user(owner)
         win = {"starts_at": "2027-01-01T00:00:00Z", "ends_at": "2027-02-01T00:00:00Z", "percent_off": "20"}
@@ -703,6 +703,7 @@ class OwnerSetupTests(VenuesBase):
             self.call("post", f"clubs/{club.id}/offers/", win, 201)  # for everyone: nobody is notified
             self.call("patch", f"offers/{offer['id']}/", {"message": "Changed"}, 200)
             self.call("post", f"clubs/{club.id}/offers/", {**win, "user": player.id, "percent_off": "500"}, 400)
+            self.call("post", f"clubs/{club.id}/offers/", {**win, "user": owner.id}, 201)  # NOTE-20: not about their own action
         self.assertEqual(services.outbox, [])
 
     def test_public_search(self):

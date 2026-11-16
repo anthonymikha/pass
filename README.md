@@ -4,7 +4,7 @@
 
 - `backend/` Django project: `config/` (settings, urls) and 7 apps: `accounts`, `venues`, `teams`, `bookings`, `billing`, `wellness`, `chat`. Foreign keys only point to apps earlier in that list.
 - `frontend/` placeholder for the Flutter app (web, iOS, Android).
-- `docker-compose.yml` Postgres + backend.
+- `docker-compose.yml` Postgres, object storage, backend and scheduler.
 
 - `data/` created by Docker for container data (database files); gitignored, root-owned.
 
@@ -31,6 +31,12 @@ docker compose exec backend python manage.py createsuperuser
 ```
 
 Admin: http://localhost:8000/admin/
+
+### Scheduler and push notifications
+
+The `scheduler` service runs `python manage.py tick` every 60 seconds with the backend image (it never migrates). Today a tick sends the RPE reminder (NOTE-31). To run it once by hand: `docker compose exec backend python manage.py tick`.
+
+Pushes go through Firebase when `FCM_CREDENTIALS_FILE` (a service-account JSON, mounted into the backend and scheduler containers) is set; otherwise they are only written to the log.
 
 ### File storage (SeaweedFS, S3 API)
 
