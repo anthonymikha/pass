@@ -1,0 +1,49 @@
+# teams models
+
+Source: [backend/teams/models.py](../../../backend/teams/models.py). Tables: `groups`, `group_members`.
+
+## Group (`groups`)
+
+A named set of users. Two kinds share one table because they behave the same.
+
+| `type` | Created by | Purpose |
+|---|---|---|
+| `play_group` | Any player | Friends who schedule games together |
+| `team` | A coach | A coached team |
+
+| Field | Meaning |
+|---|---|
+| `name` | |
+| `owner` | The creator and administrator. For a team, the coach |
+| `sport` | Optional |
+
+The owner is not automatically a member row. Create one for them (status `active`) when the group is created, so "members" always means the people who play.
+
+## GroupMember (`group_members`)
+
+| `status` | Meaning |
+|---|---|
+| `invited` | The owner invited the user; waiting for the user |
+| `requested` | The user asked to join; waiting for the owner |
+| `active` | Member |
+
+Unique per (group, user). Declining or leaving deletes the row.
+
+```python
+team = Group.objects.create(type="team", name="U12 Tigers", owner=coach, sport=basketball)
+GroupMember.objects.create(group=team, user=player, status="invited")      # coach invites
+GroupMember.objects.create(group=team, user=other, status="requested")     # player asks to join
+GroupMember.objects.filter(group=team, user=player).update(status="active")  # accepted
+
+active = User.objects.filter(group_memberships__group=team, group_memberships__status="active")
+```
+
+Shadow players can be team members; the coach adds them directly as `active`.
+
+## Used together with
+
+- `bookings.Session.group`: a session booked for the group.
+- `chat.Chat.group`: each group has exactly one chat.
+- `wellness.ExerciseAssignment.group`: exercises a coach sent to the whole team.
+- `accounts.UserBlockout` + sessions: group availability.
+- Full journey: [coaching-and-teams](../flows/coaching-and-teams.md).
