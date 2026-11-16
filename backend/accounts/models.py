@@ -41,6 +41,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Meta:
         db_table = "users"
 
+    def save(self, *args, **kwargs):
+        # One place for every write path (API, admin, manager): emails are case-insensitive,
+        # and a blank email must be NULL or a second shadow player would break the unique constraint.
+        self.email = self.email.strip().lower() if self.email else None
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.email or self.full_name or f"user {self.pk}"
 

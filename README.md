@@ -8,6 +8,20 @@
 
 - `data/` created by Docker for container data (database files); gitignored, root-owned.
 
+URLs: Django admin at `/admin/`, REST API under `/api/`.
+
+## API
+
+JSON only. Send `Authorization: Token <token>` on every call except register and login (those two are limited to 10 requests a minute per IP).
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/api/auth/register/` | `email`, `password`, `full_name` | 201 `{token, user}` |
+| POST | `/api/auth/login/` | `email`, `password` | 200 `{token, user}` |
+| POST | `/api/auth/logout/` | none | 204; the token stops working on every device |
+| GET | `/api/me/` | none | own profile |
+| PATCH | `/api/me/` | any of `full_name`, `phone`, `timezone`, `is_coach`, `coach_bio`, `coach_rate`, `coach_currency` | updated profile |
+
 ## Run with Docker
 
 ```sh

@@ -15,6 +15,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rest_framework",
+    "rest_framework.authtoken",
     "accounts",
     "venues",
     "teams",
@@ -73,6 +75,19 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+
+REST_FRAMEWORK = {
+    # ponytail: one non-expiring token per user (logout signs out every device);
+    # move to per-device expiring tokens when multi-device sessions matter.
+    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.TokenAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    # Only views that set throttle_scope are throttled (register/login).
+    # ponytail: counters live in per-process memory, so the real limit is rate x gunicorn workers;
+    # point CACHES at a shared cache when that matters.
+    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
+    "DEFAULT_THROTTLE_RATES": {"auth": "10/min"},
+}
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
