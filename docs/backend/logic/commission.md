@@ -15,7 +15,7 @@
 
 **COM-3.** The count N: while every commission row has `min_count = 0`, N is 0. Tiers are not switched on. When they are, the count definitions below apply, and this rule is replaced.
 - Coach: the number of the coach's players (ACC-1), counting each user once.
-- Club: not decided (see below).
+- Club: non-cancelled sessions on the club's courts whose `starts_at` is in the 30 days before now (settled at the owner's review on 2026-11-16).
 
 **COM-4.** Rates are changed only in the Django admin, by adding a complete new schedule (every tier, starting at `min_count = 0`) with a later `effective_from`. Old rows are never edited. Past payments are unaffected (COM-2).
 
@@ -32,7 +32,3 @@ Defaults seeded (SEED-2): club 10%, coach 10%, from the seed date. On 2027-03-01
 - Sami's payments checked in on 2027-02-20: Sami's own rows are not yet in effect, so default 10%.
 - From 2027-03-01: Sami's own row, 7%.
 - Another coach: default 10%.
-
-## Not decided
-
-- **Club count for tiers:** booking volume over what window. Recommended default: non-cancelled sessions on the club's courts that started in the last 30 days. Only needed when tiers are switched on.

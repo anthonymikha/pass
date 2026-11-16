@@ -7,7 +7,7 @@
 
 A session carries at most one reduction. It is stored on the session: `discount_amount` (the amount taken off, in the session currency) and `discount` (the offer used, or **empty**).
 
-> **Owner note 18 (2026-11-16):** "for a specific session we should attach the discount to the session id and it can be null." Read as: a discount meant for one session is attached to that session, and the link to an offer is nullable. Built with the existing columns: `sessions.discount_amount` holds the amount and `sessions.discount` stays empty. A `discounts.session` column was not added because `venues` may not point at `bookings` (dependency rule). **Please confirm this reading.**
+> **Owner note 18 (2026-11-16):** "for a specific session we should attach the discount to the session id and it can be null." Read as: a discount meant for one session is attached to that session, and the link to an offer is nullable. Built with the existing columns: `sessions.discount_amount` holds the amount and `sessions.discount` stays empty. A `discounts.session` column was not added because `venues` may not point at `bookings` (dependency rule). **Confirmed by the owner at review, 2026-11-16.**
 
 ## Offers: which one applies
 
@@ -60,7 +60,8 @@ Best is #7: `discount = 7`, `discount_amount = 11.12`. Court amount due later: 1
 
 If the owner then gives Rana a one-off 20.00 EUR off this session: `discount` empty, `discount_amount = 20.00`; offer #7 no longer applies.
 
-## Not decided
+## Limits (settled at the owner's review on 2026-11-16)
 
-- Offers limited to club members (players with an active membership). Recommended default: not built; add a `members_only` flag if owners ask.
-- A cap on how many times a targeted offer can be used. Recommended default: unlimited inside its window.
+**DSC-7.** An offer applies any number of times inside its window, to every booker it is eligible for (DSC-1). There is no usage cap per offer or per user.
+
+**DSC-8.** Offers cannot be limited to club members. (Add a `members_only` flag if owners ask.)

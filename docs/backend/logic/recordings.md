@@ -22,6 +22,8 @@
 
 **REC-14.** **Delete.** The uploader or the session coach. Deletes the object, the row and its tags.
 
+**REC-15.** No transcoding and no thumbnails: the phone uploads a playable mp4 or mov (settled at the owner's review on 2026-11-16).
+
 ## Watch
 
 **REC-20.** A user may watch a session's recordings when they are the session coach, or a participant whose row has both `checked_in_at` and `rpe` set. Anyone else, including an uploader who has not logged RPE: `404` for the list.
@@ -49,7 +51,3 @@
 ## Avatars
 
 **REC-30.** A user asks for an avatar upload form: `file_name` ending in `.jpg`, `.jpeg`, `.png` or `.webp`, `size_bytes` 1 to 5 MiB. Key `avatars/<user id>/<UUID>.<ext>`. Confirm: same checks as REC-12; sets `users.avatar` to the key; the old object is deleted. Wherever a user's avatar is shown (profile, public profile), it is a signed GET link, or empty.
-
-## Not decided
-
-- Video transcoding and thumbnails. Recommended default: none; the phone uploads a playable mp4/mov.

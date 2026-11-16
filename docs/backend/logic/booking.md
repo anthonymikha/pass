@@ -137,7 +137,8 @@ Errors: not the session's coach `404`; not `requested` `400 invalid_status`; plu
 - **Booking that crosses midnight:** Monday 23:00–01:00 needs Monday's 23:00–00:00 slot and Tuesday's 00:00–01:00 slot to both be offered and free (BOOK-4). Each is priced from its own day's rate.
 - **Club timezone and UTC:** the request carries instants; slot matching is done after converting the offered slots to UTC (AVL-6). A booking at 16:00 Beirut in January is `14:00Z`.
 
-## Not decided
+## Limits (settled at the owner's review on 2026-11-16)
 
-- Rental stock across the club for shared items is checked only on approval (BOOK-41), not when the player asks. Recommended default: keep; show the owner the conflict at approval time.
-- Limits on how many future bookings one user may hold. Recommended default: none.
+**BOOK-12.** There is no limit on how many future bookings one user may hold.
+
+**BOOK-43.** Stock is checked only when the club side approves a rental (BOOK-41), never when the player requests it. The club side sees the conflict at approval time.

@@ -58,7 +58,3 @@
 **ACC-22.** **Coach search**: coaches only (`is_coach = true`, active, not shadow), optional `q` on name, optional `club` (affiliated coaches of that club). Sorted by `full_name`. Same public profile.
 
 **ACC-23.** Any user may read any other non-shadow active user's public profile by id. A blocked pair gets `404`.
-
-## Not decided
-
-- Merging a shadow player into a real account when the child gets a phone. Recommended default: not built; a coach creates a normal account invite and the shadow player's history stays separate.

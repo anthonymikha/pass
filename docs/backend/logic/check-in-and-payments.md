@@ -4,7 +4,7 @@
 
 ## Check-in
 
-**PAY-1.** A participant row can be checked in when: the session is `confirmed`; the row's status is `accepted`; and now is between `starts_at − 30 minutes` and `ends_at` (both included).
+**PAY-1.** A participant row can be checked in when: the session is `confirmed`; the row's status is `accepted`; and now is between `starts_at − 30 minutes` and `ends_at` (both included), except for the late check-in of PAY-7.
 
 **PAY-2.** Who may check in a row:
 
@@ -24,7 +24,9 @@
 
 **PAY-5.** Errors: session not visible `404`; caller not allowed for this row `403`; outside the window `400 checkin_closed`; row not `accepted` `400 not_accepted`; session not `confirmed` `400 invalid_status`.
 
-**PAY-6.** No-shows: an accepted participant with no `checked_in_at` after `ends_at`. Nothing is written; it is computed (RPT-6). If the booker is never checked in, no payment rows exist for the session.
+**PAY-6.** No-shows: an accepted participant with no `checked_in_at` after `ends_at`. Nothing is written; it is computed (RPT-6). If the booker is not checked in by `ends_at + 24 hours` (PAY-7), no payment rows ever exist for the session.
+
+**PAY-7.** **Late check-in** (settled at the owner's review on 2026-11-16). The club side may check in the **booker's row** (PAY-3) until `ends_at + 24 hours` (included), for a booker who forgot. Everything else in PAY-1 to PAY-5 holds, and the booker's check-in creates the payments as usual (PAY-4). Nobody else may check in after `ends_at`: `400 checkin_closed`.
 
 ## Creating payments
 
@@ -90,7 +92,3 @@ Same split in USD with `coach_fee = 100.00`: 100 ÷ 3 = 33.333… → 33.33, rem
 - **The booker is the coach and also an accepted participant:** owes the court fee, never a share of their own fee.
 - **Session currency LBP:** shares and fees are whole pounds (GEN-15).
 - **Discount removed after check-in:** impossible; DSC-12 forbids changing the discount once payments exist.
-
-## Not decided
-
-- Late check-in after `ends_at` (a booker who forgot): the club side cannot create the payments after the session has ended. Recommended default: extend the club side's booker check-in to 24 hours after `ends_at`. Not built unless you agree.

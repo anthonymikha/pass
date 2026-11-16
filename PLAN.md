@@ -6,17 +6,32 @@ Last updated: 2026-11-16. Written so a new session can continue with no other co
 
 ## Prompt to resume
 
-Paste this into a new session opened in `/home/ubuntu/pass`:
+Paste this into a new session opened in the repo root:
 
-> Read PLAN.md in the repo root in full (start with "Status on 2026-11-16 (latest)"), then `docs/backend/logic/README.md` and every page it lists, then `git log --oneline` and `backend/*/models.py`. The logic pages are the specification and are waiting for my review. Ask me for my review corrections (or approval), apply them to the docs, then build the roadmap from step 2 with Sonnet 5.5 subagents under the acceptance gate in my original brief, without asking again, within the standing permissions listed in the status section.
+> Read PLAN.md in the repo root in full (start with "Status on 2026-11-16 (latest)"), then `docs/backend/logic/README.md` and every page it lists, then `git log --oneline` and `backend/*/models.py`. The logic pages are the approved specification. Continue the "Build plan" from the first task not ticked, with Sonnet 5.5 subagents under the acceptance gate, within the standing permissions in "Working agreements".
 
 ## Status on 2026-11-16 (latest)
 
-- Schema v5 committed (`62c180b`, `d18e4e0`) and verified on Postgres in Docker (12 tests green). `.env` created locally from `.env.example`.
-- Owner answered every open question on 2026-11-16 (all recommendations accepted except discounts, see below). Answers are written into `docs/backend/logic/` (17 pages, rule ids). **Waiting for the owner's review of those pages.** After approval the lead has full authority within the granted permissions: commit, push, pip install, Docker and `./data`, new compose services (`minio`, `scheduler`), migrations, schema changes (`devices`, `chats.club_last_read_at`; `session_participants.rpe_reminded_at` proposed).
-- Scope: stop after step 10 (no Flutter).
-- Discounts (owner note 18): a discount for one specific session is attached to the session, offer link nullable. Read as: owner sets `sessions.discount_amount` with `sessions.discount` empty (DSC-10). Pending confirmation in review.
-- The decisions below marked "Not decided" / "Proposal" are now settled; the logic pages are the record.
+- **Owner review done (2026-11-16).** Note 18 reading (DSC-10 to DSC-14), `session_participants.rpe_reminded_at` (NOTE-9) and late club-side check-in (PAY-7) approved; every other "Not decided" item took its recommended default and is now a rule (DSC-7, DSC-8, BOOK-12, BOOK-43, COM-3, TEAM-7, REC-15, CHAT-17, NOTE-15). No "Not decided" items remain in `docs/backend/logic/`.
+- Building steps 2 to 10 (backend only) with Sonnet 5.5 subagents under the acceptance gate; the lead reviews every diff. Progress is ticked in "Build plan" below.
+- Docker on this machine: host port 8000 is taken by another project, so `.env` sets `BACKEND_PORT=8001` (compose reads it; default 8000).
+- The business-rule summaries further down this file are history; `docs/backend/logic/` is the only record of rules.
+
+## Build plan (steps 2 to 10)
+
+Run in this order; tasks on one line run in parallel in separate worktrees.
+
+| # | Task | Apps | Rules | Status |
+|---|---|---|---|---|
+| T1 | Foundation: error shape with `code`, pagination, strict timestamps, `round_money`, `devices` + `notify()` with fake sender, OpenAPI schema | config, accounts | GEN-1 to GEN-18, NOTE-1 to NOTE-3, NOTE-11 to NOTE-14 | |
+| T2 / T3 / T4 | Seed (step 2) / owner setup (step 3) / friends, coaching links, block-outs, shadow players (step 5 part 1) | wellness command / venues / accounts | SEED / CLUB, PRC-1 to PRC-3 / TEAM-1 to TEAM-15, ACC-10 to ACC-13 | |
+| T5 | Groups and teams, group chat sync, user and coach search (step 5 part 2) | teams, chat services | TEAM-20 to TEAM-40, ACC-20 to ACC-23 | |
+| T6 | Slots, prices, offers, court booking, invites, rentals, cancel (step 4 part 1) | bookings | AVL-1 to AVL-12, PRC-4 to PRC-12, DSC-1 to DSC-8, BOOK-1 to BOOK-17, BOOK-40 to BOOK-66, CHAT-30, CHAT-31 | |
+| T7 | Training requests, coach-booked training, personal and group availability (step 5 part 3) | bookings | BOOK-20 to BOOK-33, AVL-20 to AVL-25 | |
+| T8 | Check-in, payments, commission, mark paid, one-off discount, reports (step 4 part 2) | bookings, billing | PAY, COM, DSC-10 to DSC-14, RPT | |
+| T9 / T10 / T11 | Wellness (step 6) / recordings, storage, avatars (step 7) / chat (step 8) | wellness / bookings, accounts / chat | WEL / REC / CHAT | |
+| T12 | Scheduler, RPE reminder, FCM sender, trigger audit (step 9) | accounts, bookings, compose | NOTE-9, NOTE-10, NOTE-20, NOTE-30, NOTE-31 | |
+| T13 | Full pass (step 10): both databases, docs, Eraser, PLAN | all | | |
 
 ## Working agreements
 
@@ -74,7 +89,7 @@ Seven apps in this order: `accounts`, `venues`, `teams`, `bookings`, `billing`, 
 - **Models hold data and constraints only.** Every model sets `Meta.db_table` to the plain table name. Value sets are `TextChoices`.
 - **Business logic goes in one `services.py` per app** as plain functions. Views and serializers stay thin.
 - Later apps may read earlier apps' data.
-- **Two deliberate "downward" calls from `bookings`:** booker check-in calls `billing.services.record_payments()`; session confirmed calls `chat.services.post_session_card()`. Explicit calls inside the same transaction, no Django signals. Switch to signals only if that list grows.
+- **Deliberate "downward" calls:** booker check-in calls `billing.services.record_payments()`; session confirmed calls `chat.services.post_session_card()`; group changes call `chat.services` to keep the group chat in step. Push sending lives in `accounts`. Full list: `docs/backend/README.md`. Explicit calls inside the same transaction, no Django signals.
 - **Back office is the Django admin** (sports, exercise catalogue, commission schedules, marking payments settled).
 - Types: money `Decimal(12,3)`; currency 3-letter ISO code; exchange rate `Decimal(18,6)`; percent `Decimal(5,2)`.
 - Future front end: a reverse proxy serves the Flutter web build at `/` and forwards `/api/`, `/admin/` and `/static/` to Django on the same origin, so there is no CORS setup.

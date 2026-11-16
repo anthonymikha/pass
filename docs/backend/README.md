@@ -35,12 +35,17 @@ accounts <- venues <- teams <- bookings <- billing
 
 Later apps may read earlier apps' data freely (for example `wellness` reads RPE from `bookings`).
 
-### The two allowed "downward" calls
+### The allowed "downward" calls
 
-An event in `bookings` sometimes has a consequence owned by a later app. Two such calls are allowed, made explicitly inside the same database transaction:
+An event in an earlier app sometimes has a consequence owned by a later app. These calls are allowed, made explicitly inside the same database transaction:
 
-1. Booker checks in → `billing.services.record_payments(session)`
-2. Group session confirmed → `chat.services.post_session_card(session)`
+1. Booker checks in → `billing.services.record_payments(session)` (PAY-4)
+2. Group session confirmed → `chat.services.post_session_card(session)` (BOOK-60)
+3. Group created, membership changed, coach changed or group deleted (TEAM-20, TEAM-28 to TEAM-30) → `chat.services` functions that keep the group chat in step. *Decided during build (2026-11-16): the logic pages require it and `teams` comes before `chat`.*
+
+One read the other way is allowed: `bookings` asks whether a session already has payments (`session.payments.exists()`, for DSC-12, BOOK-40, BOOK-50). *Decided during build (2026-11-16), same reason.*
+
+Push notifications (NOTE-1 to NOTE-14) live in `accounts` (the `devices` table and `accounts.services.notify()`), the first app, so every app can send a push without a downward call. *Decided during build (2026-11-16).*
 
 No Django signals. If this list grows past a handful, switch to signals.
 

@@ -19,7 +19,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"  # host port; set BACKEND_PORT in .env if 8000 is taken
 
   # Flutter web build goes here later: a reverse proxy serving the web build at /
   # and forwarding /api/, /admin/ and /static/ to backend:8000 (same origin, no CORS).

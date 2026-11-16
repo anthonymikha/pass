@@ -19,6 +19,8 @@
 
 **TEAM-5.** **Unblock.** Who may: the blocker only. Deletes the blocked row.
 
+**TEAM-7.** Friend rows are not stored in a fixed pair order; TEAM-1 step 4 turns a crossing request into an acceptance (settled at the owner's review on 2026-11-16). A true race (both tap within milliseconds) can still leave two pending rows; accepting either makes the pair friends, and every list and check treats the pair once.
+
 **TEAM-6.** **Lists.** The caller's friends; incoming pending requests; outgoing pending requests; users the caller blocked. Users who blocked the caller are never shown.
 
 | From | To | Who |
@@ -84,8 +86,3 @@
 ## What a coach can see about their players
 
 **TEAM-40.** A coach may read, for each of the coach's players (ACC-1): attendance and RPE history (RPT-8), soreness and sleep logs, exercise assignments (WEL-40), and availability (AVL-22). Nothing about users who are not the coach's players.
-
-## Not decided
-
-- Stopping reverse duplicate friend rows by storing the pair in a fixed order. Recommended default: no schema change; TEAM-1 step 4 turns a crossing request into an acceptance. A true race (both tap within milliseconds) can still leave two pending rows; either acceptance makes them friends and the list shows the friend once.
-- Transferring group ownership. Recommended default: not built.

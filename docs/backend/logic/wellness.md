@@ -74,7 +74,7 @@
 - **Streak across a timezone change:** dates are taken in the user's timezone at the moment of checking; earlier completions are re-read in the new timezone.
 - **Coach sends to a team, then a player leaves:** their assignment stays theirs.
 
-## Not decided
+## Deferred
 
-- Recovery level and suggested times: **deferred** (see the top of this page).
-- Whether coaches may see a player's sleep: allowed by TEAM-40 now. Recommended default: keep; revisit with the sports expert.
+- Recovery level and suggested times: deferred to the sports expert (see the top of this page).
+- TEAM-40 lets a coach read a player's sleep logs; revisit with the sports expert.

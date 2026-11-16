@@ -22,6 +22,8 @@
 
 **NOTE-14.** A push carries a `title`, a short `body`, and a `data` object with `type` (the trigger name in NOTE-20) and the id of the object to open.
 
+**NOTE-15.** Every trigger is always on: no quiet hours and no per-user switches (settled at the owner's review on 2026-11-16).
+
 ## Triggers
 
 **NOTE-20.**
@@ -50,9 +52,4 @@ Shadow players have no devices, so they never receive pushes. Nobody receives a 
 
 **NOTE-31.** **RPE reminder.** Each tick finds participant rows with `checked_in_at` set, `rpe` empty, `rpe_reminded_at` empty, whose session is `confirmed` and has `ends_at` between now − 7 days and now. For each, it sends `rpe_reminder` and sets `rpe_reminded_at` = now. Each row is reminded at most once, even if the scheduler was down for a while.
 
-**NOTE-9.** New column `session_participants.rpe_reminded_at` (nullable) supports NOTE-31. *(Proposed in this review; see the [logic README](README.md#schema-changes-these-pages-require).)*
-
-## Not decided
-
-- Quiet hours (no pushes at night). Recommended default: none.
-- Per-user switches to turn trigger types off. Recommended default: not built.
+**NOTE-9.** New column `session_participants.rpe_reminded_at` (nullable) supports NOTE-31. Approved by the owner at review, 2026-11-16.

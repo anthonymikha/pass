@@ -40,6 +40,8 @@
 
 **CHAT-16.** Messages cannot be edited or deleted in this version.
 
+**CHAT-17.** Messages are text only; there are no attachments (settled at the owner's review on 2026-11-16).
+
 ## Session cards
 
 **CHAT-30.** `post_session_card(session)`: called from bookings when a group session becomes `confirmed` (BOOK-60), in the same transaction. Creates a message in the group's chat with `sender` empty, `body` empty and `session` set. If a card for that session already exists in that chat, nothing is created. If the group has no chat (it was deleted), nothing is created.
@@ -51,7 +53,3 @@
 - **Member leaves a group:** their `chat_members` row goes (TEAM-28); they can no longer read the group chat.
 - **Staff membership expires:** they lose the club's inquiry chats at once (ACC-2).
 - **A blocked pair with an existing direct chat:** both can still read history; neither can send (CHAT-3).
-
-## Not decided
-
-- Attachments (photos) in chat. Recommended default: not built.

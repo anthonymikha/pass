@@ -34,7 +34,7 @@ Model pages ([models/](../models/)) say what each field means. Flow pages ([flow
 
 ## Schema changes these pages require
 
-Three changes to schema v5, approved on 2026-11-16:
+Three changes to schema v5, all approved by the owner on 2026-11-16:
 
 | Table | Change | Rule |
 |---|---|---|
@@ -42,4 +42,4 @@ Three changes to schema v5, approved on 2026-11-16:
 | `chats` | New column `club_last_read_at` (nullable): the club side's shared read marker on inquiry chats | CHAT-11 |
 | `session_participants` | New column `rpe_reminded_at` (nullable): when the RPE reminder was sent, so it is sent once | NOTE-9 |
 
-The last one was not on the approved list. It is proposed here, for review, instead of a stateless reminder that would miss sessions while the scheduler is down.
+`rpe_reminded_at` was added at review instead of a stateless reminder, which would miss sessions while the scheduler is down.
