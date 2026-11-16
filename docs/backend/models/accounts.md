@@ -1,6 +1,6 @@
 # accounts models
 
-Source: [backend/accounts/models.py](../../../backend/accounts/models.py). Tables: `users`, `connections`, `user_blockouts`.
+Source: [backend/accounts/models.py](../../../backend/accounts/models.py). Tables: `users`, `connections`, `user_blockouts`, `devices`.
 
 ## User (`users`)
 
@@ -97,6 +97,16 @@ blockout.occurs_on(date(2027, 2, 15))   # True
 Patterns such as "every two weeks" or "first Monday of the month" are not supported. Exact occurrence rules: [AVL-8](../logic/court-availability.md#closures).
 
 A user is free at a given time when no block-out covers it and they are in no session then. Availability for a group is the same check across all active members. See [coaching-and-teams](../flows/coaching-and-teams.md).
+
+## Device (`devices`)
+
+A phone registered for push notifications ([NOTE-1 to NOTE-3](../logic/notifications.md#devices)).
+
+| Field | Meaning |
+|---|---|
+| `user` | The owner. Deleted with the user |
+| `token` | The Firebase registration token. Unique across all users (up to 4096 characters); registering a token that belongs to someone else moves it |
+| `platform` | `ios`, `android` or `web` |
 
 ## Used together with
 
