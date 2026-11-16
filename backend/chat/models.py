@@ -16,6 +16,8 @@ class Chat(models.Model):
     # OneToOne null=True = unique when set (NULLs never collide): one chat per group.
     group = models.OneToOneField(Group, null=True, blank=True, on_delete=models.SET_NULL, related_name="chat")
     club = models.ForeignKey(Club, null=True, blank=True, on_delete=models.SET_NULL, related_name="chats")  # inquiry
+    # CHAT-11: the club side's read marker on an inquiry, shared by the owner and all staff.
+    club_last_read_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

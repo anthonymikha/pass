@@ -10,6 +10,8 @@ Source: [backend/chat/models.py](../../../backend/chat/models.py). Tables: `chat
 | `group` | All members of a play group or team | set | empty |
 | `inquiry` | One user and a club | empty | set |
 
+`club_last_read_at` (empty by default): on an inquiry, the club side's read marker, shared by the owner and all staff ([CHAT-11](../logic/chat.md#messages)); unused on other types.
+
 - A group has exactly one chat (`group` is one-to-one). Create it together with the group.
 - A direct chat between two users should be reused, not duplicated: look for an existing `direct` chat having both as members before creating one.
 - An inquiry is one chat per (user, club).
@@ -22,7 +24,7 @@ Who is in a chat, and how far they have read. Unique per (chat, user).
 |---|---|
 | `last_read_at` | Messages newer than this are unread for that user |
 
-The club side's read marker on an inquiry is a planned column `chats.club_last_read_at`, shared by the owner and staff ([CHAT-11](../logic/chat.md#messages)). Unread counts: [CHAT-13](../logic/chat.md#messages).
+The club side's read marker on an inquiry is `chats.club_last_read_at`, shared by the owner and staff ([CHAT-11](../logic/chat.md#messages)). Unread counts: [CHAT-13](../logic/chat.md#messages).
 
 - Group chats: keep members in step with the group's active members, shadow players excluded ([TEAM-28](../logic/teams-and-coaching.md#play-groups-and-teams)).
 - Inquiry chats: the inquiring user is the member. The club side is whoever owns or staffs the club at the time, so they are not stored as members.
