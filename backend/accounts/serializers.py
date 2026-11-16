@@ -101,7 +101,7 @@ class UploadFormSerializer(serializers.Serializer):
     size_bytes = serializers.IntegerField(min_value=1)
 
     def validate_file_name(self, value):
-        if value.rsplit(".", 1)[-1].lower() not in self.EXTENSIONS:
+        if "." not in value or value.rsplit(".", 1)[-1].lower() not in self.EXTENSIONS:
             raise serializers.ValidationError(f"Use a file ending in {', '.join('.' + e for e in self.EXTENSIONS)}.")
         return value
 

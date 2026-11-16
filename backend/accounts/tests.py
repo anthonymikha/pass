@@ -10,6 +10,7 @@ from rest_framework.settings import api_settings
 from rest_framework.test import APITestCase
 
 from config.api import BusinessError, VisibleRelatedField, exception_handler
+from config.storage import UUID, get_storage
 from config.money import minor_units, round_money, validate_currency, validate_typed_money
 
 from . import services
@@ -546,6 +547,72 @@ class ShadowPlayerTests(PeopleTestCase):
         r = self.call(pat, "post", "coaching/", {"coach": sam.id})
         self.assertEqual(r.status_code, 400)
         self.assertFalse(Connection.objects.exists())
+
+
+class AvatarTests(PeopleTestCase):
+    def setUp(self):
+        super().setUp()
+        self.storage = get_storage()
+        self.storage.keys.clear()
+        self.storage.forms.clear()
+
+    def form(self, user, name="me.PNG", size=1000):
+        return self.call(user, "post", "me/avatar/form/", {"file_name": name, "size_bytes": size})
+
+    def test_avatar_journey(self):
+        """REC-1, REC-2, REC-3, REC-12, REC-30, ACC-21, GEN-5: form, upload, confirm; the profile and the public profile
+        show a signed link; a new avatar deletes the old object; a repeat changes nothing; bad input and keys."""
+        ann, bob = self.user("ann"), self.user("bob")
+        self.assertEqual(self.call(ann, "get", "me/").data["avatar"], "")  # none yet: empty
+        self.assertEqual(self.call(bob, "get", f"users/{ann.id}/").data["avatar"], "")
+
+        r = self.form(ann, size=5 * 1024 * 1024)  # the limit itself
+        self.assertEqual(r.status_code, 200, r.data)
+        key = r.data["storage_key"]
+        self.assertRegex(key, rf"^avatars/{ann.id}/{UUID}\.png$")
+        self.assertEqual((set(r.data), self.storage.forms[key]), ({"url", "fields", "storage_key"}, 5 * 1024 * 1024))
+        r = self.call(ann, "post", "me/avatar/", {"storage_key": key})
+        self.assertEqual((r.status_code, r.data["code"]), (400, "not_uploaded"))
+        ann.refresh_from_db()
+        self.assertFalse(ann.avatar)
+
+        self.storage.put(key)
+        r = self.call(ann, "post", "me/avatar/", {"storage_key": key})
+        self.assertEqual((r.status_code, r.data["avatar"]), (200, f"http://storage.test/pass/{key}?expires=3600"))  # REC-2
+        ann.refresh_from_db()
+        self.assertEqual(ann.avatar.name, key)
+        self.assertEqual(self.call(ann, "get", "me/").data["avatar"], r.data["avatar"])
+        public = self.call(bob, "get", f"users/{ann.id}/").data  # ACC-21
+        self.assertEqual((public["avatar"], "email" in public), (r.data["avatar"], False))
+        self.assertEqual(self.call(ann, "post", "me/avatar/", {"storage_key": key}).status_code, 200)  # GEN-5: repeat
+        self.assertIn(key, self.storage.keys)  # the repeat did not delete the current object
+
+        second = self.form(ann, name="new.jpeg").data["storage_key"]
+        self.storage.put(second)
+        self.assertEqual(self.call(ann, "post", "me/avatar/", {"storage_key": second}).status_code, 200)
+        ann.refresh_from_db()
+        self.assertEqual((ann.avatar.name, self.storage.keys), (second, {second}))  # the old object is gone
+
+        # input: extension and size per field; the key must be the caller's own and well formed
+        for name in ("me.gif", "me", "png", "me.png.exe"):
+            self.assertIn("file_name", self.form(ann, name=name).data)
+        for size in (0, 5 * 1024 * 1024 + 1):
+            self.assertEqual(list(self.form(ann, size=size).data), ["size_bytes"])
+        for name in ("a.jpg", "a.JPEG", "a.webp"):
+            self.assertEqual(self.form(ann, name=name).status_code, 200)
+        theirs = self.form(bob).data["storage_key"]
+        self.storage.put(theirs)
+        uuid_name = second.split("/")[2]
+        for bad in (theirs, f"avatars/{ann.id}/x.png", f"avatars/{ann.id}/{uuid_name[:-5]}.gif", f"recordings/1/{uuid_name}"):
+            r = self.call(ann, "post", "me/avatar/", {"storage_key": bad})
+            self.assertEqual((r.status_code, r.data["code"]), (400, "bad_key"), bad)
+        self.assertEqual(self.call(ann, "post", "me/avatar/", {}).status_code, 400)
+        ann.refresh_from_db()
+        self.assertEqual(ann.avatar.name, second)
+        self.assertEqual(self.call(ann, "patch", "me/", {"avatar": "avatars/1/evil.png"}).data["avatar"],
+                         f"http://storage.test/pass/{second}?expires=3600")  # not writable through the profile
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.post("/api/me/avatar/form/", {}, format="json").status_code, 401)
 
 
 class ConventionTests(SimpleTestCase):
