@@ -6,6 +6,8 @@
 - `frontend/` placeholder for the Flutter app (web, iOS, Android).
 - `docker-compose.yml` Postgres + backend.
 
+- `data/` created by Docker for container data (database files); gitignored, root-owned.
+
 ## Run with Docker
 
 ```sh
