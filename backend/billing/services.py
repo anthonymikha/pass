@@ -113,7 +113,7 @@ def visible_payments(user):
 def set_paid(payment, paid):
     """The view has checked the caller is the payee side. A repeat changes nothing (GEN-5)."""
     with transaction.atomic():
-        payment = Payment.objects.select_for_update().select_related("payer", "club", "coach").get(pk=payment.pk)
+        payment = Payment.objects.select_for_update(of=("self",)).select_related("payer", "club", "coach").get(pk=payment.pk)
         if paid:
             if payment.paid_at is not None:
                 return payment

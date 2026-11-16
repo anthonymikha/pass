@@ -1,6 +1,6 @@
 # Owner and coach reports (RPT)
 
-**Status: planned.** Read-only views, computed on request, never stored. Periods are given as local dates `from` and `to` (both included) in the club's timezone; they cover `from 00:00` to `to + 1 day 00:00` local. At most 366 days; otherwise `400 bad_range`.
+**Status: built** (RPT-1, RPT-4 to RPT-6, RPT-8 in `backend/bookings/`; RPT-2, RPT-3, RPT-7 in `backend/billing/`). Read-only views, computed on request, never stored. Periods are given as local dates `from` and `to` (both included) in the club's timezone; they cover `from 00:00` to `to + 1 day 00:00` local. At most 366 days; otherwise `400 bad_range`.
 
 **RPT-1.** **Schedule.** Who may: the club side. For one court or all the club's courts, the sessions that overlap the period and are not cancelled, ordered by `starts_at`, each with: court, sport, kind, status as shown (BOOK-55), `starts_at`, `ends_at`, booker (`id`, `full_name`), session coach, group name, accepted participant count, rentals with status. Plus the court closures occurring in the period (AVL-8) as `starts_at`/`ends_at`/`reason`. Not paginated.
 
@@ -17,6 +17,8 @@
 **RPT-7.** **Coach earnings.** Who may: a coach, for themselves. Same as RPT-3 for payments where `coach` is the caller, plus their own due list as in RPT-2.
 
 **RPT-8.** **Coach player history.** Who may: a coach. For one of the coach's players (ACC-1): the sessions they coached that the player took part in, with `checked_in_at`, `rpe`, `rpe_minutes`, and training load `rpe × rpe_minutes` (empty when RPE was not logged). Ordered by `starts_at`, newest first; paginated.
+
+**RPT-9.** *Decided during build (2026-11-16):* RPT-6 is read per session. RPT-7's period is in the coach's own timezone (GEN-8). RPT-8 lists the player's `accepted` rows in `confirmed` sessions the caller coached. Due lists and the customer list are not paginated. The repeat rate is a decimal string with 2 places (`"66.67"`) or `null`. A currency with only `owed_to_platform` still appears in revenue, with zero gross, fees and net.
 
 ## Example
 

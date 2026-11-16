@@ -1346,9 +1346,10 @@ class CheckInTests(PaymentBase):
         self.clock.return_value = at(MON, 14, 45)
         self.check_in(hal, training, kid, 403)  # a participant is not the shadow player's coach
         self.code(self.check_in(hal, training, expect=400), 400, "not_accepted")  # hal has not answered yet
-        self.check_in(cora, training, zed, 404)  # BOOK-65: not a participant or the session coach, so no session (see report)
-        self.check_in(coach, training, kid)
-        self.check_in(coach, training, zed)  # the session coach
+        self.check_in(coach, training, kid)  # the session coach
+        self.call("get", f"sessions/{training.id}/", cora, expect=200)  # BOOK-65: the managing coach of a shadow participant sees it
+        self.check_in(cora, training, kid, 403)  # but only for their own shadow players
+        self.check_in(cora, training, zed)  # PAY-2: the managing coach
         self.assertEqual(training.participants.filter(checked_in_at__isnull=False).count(), 2)
 
     def test_check_in_window_journey(self):

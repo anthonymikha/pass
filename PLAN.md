@@ -28,7 +28,7 @@ Run in this order; tasks on one line run in parallel in separate worktrees.
 | T5 | Groups and teams, group chat sync, user and coach search (step 5 part 2) | teams, chat services | TEAM-20 to TEAM-40, ACC-20 to ACC-23 | done |
 | T6 | Slots, prices, offers, court booking, invites, rentals, cancel (step 4 part 1) | bookings | AVL-1 to AVL-12, PRC-4 to PRC-12, DSC-1 to DSC-8, BOOK-1 to BOOK-17, BOOK-40 to BOOK-66, CHAT-30, CHAT-31 | done |
 | T7 | Training requests, coach-booked training, personal and group availability (step 5 part 3) | bookings | BOOK-20 to BOOK-33, AVL-20 to AVL-25 | done |
-| T8 | Check-in, payments, commission, mark paid, one-off discount, reports (step 4 part 2) | bookings, billing | PAY, COM, DSC-10 to DSC-14, RPT | |
+| T8 | Check-in, payments, commission, mark paid, one-off discount, reports (step 4 part 2) | bookings, billing | PAY, COM, DSC-10 to DSC-14, RPT | done |
 | T9 / T10 / T11 | Wellness (step 6) / recordings, storage, avatars (step 7) / chat (step 8) | wellness / bookings, accounts / chat | WEL / REC / CHAT | T9, T11 done |
 | T12 | Scheduler, RPE reminder, FCM sender, trigger audit (step 9) | accounts, bookings, compose | NOTE-9, NOTE-10, NOTE-20, NOTE-30, NOTE-31 | |
 | T13 | Full pass (step 10): both databases, docs, Eraser, PLAN | all | | |
@@ -207,7 +207,7 @@ Open questions to ask first:
 - Workflow test: owner registers, creates a club with two currencies, two courts (one multi-sport), day and evening rates, equipment; another user cannot edit any of it; a player can find the court.
 - Consider adding an OpenAPI schema (e.g. drf-spectacular) here so the Flutter client can be generated later; decide with the owner.
 
-### Step 4: booking and money (the core slice)
+### Step 4: booking and money (done 2026-11-16: `backend/bookings/`, `backend/billing/`)
 
 `bookings/services.py`:
 - **Free slots** for a court and date: take that weekday's rate windows in the club's timezone, cut into `slot_minutes` slots, remove any overlapping a `court_blockouts` occurrence on that date (`occurs_on`) or a session whose status is not `cancelled`.
@@ -228,7 +228,7 @@ Not decided: whether court bookings confirm instantly when the slot is free (pro
 
 Workflow test: owner setup → player sees slots → books in a non-base currency with a rental → second player cannot double-book → invite accepted → booker checks in → one due payment with the right amount, currency and platform fee → owner marks it paid → owner sees it in schedule, revenue and attendance.
 
-### Step 5: players, coaches, teams
+### Step 5: players, coaches, teams (done 2026-11-16: `backend/accounts/`, `backend/teams/`, training in `backend/bookings/`)
 
 - Friends: request, accept, block, list. Block-out times CRUD (one-off and repeating).
 - Change a team's coach.
@@ -241,7 +241,7 @@ Workflow test: owner setup → player sees slots → books in a non-base currenc
 - Coach views: player attendance and RPE history.
 - Workflow tests: play group finds a common free time and books; coach builds a team with a shadow player, books training with a split fee, checks in, payments are split correctly.
 
-### Step 6: wellness (without the recovery score)
+### Step 6: wellness (done 2026-11-16: `backend/wellness/`; recovery score still deferred)
 
 - Log RPE after a session (requires check-in; `rpe_minutes` defaults to the session length).
 - Soreness check-ins morning, evening and post-session: a list of body area + level.
@@ -260,7 +260,7 @@ Workflow test: owner setup → player sees slots → books in a non-base currenc
 - Tags: coach creates on sessions they coached, optionally naming players. A player sees tags naming them and whole-team tags in sessions they checked into.
 - Avatar upload joins the profile here.
 
-### Step 8: chat (polling)
+### Step 8: chat (done 2026-11-16: `backend/chat/`)
 
 - Direct chats, a group chat per play group or team, and inquiry chats between a user and a club (owner and staff reply).
 - `GET messages?after=<id>` for polling, send, mark read (`last_read_at`), unread counts.

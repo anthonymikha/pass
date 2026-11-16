@@ -1,6 +1,6 @@
 # Check-in and payments (PAY)
 
-**Status: planned.** Attendance, and the payment rows that record money owed. There is no payment gateway: money changes hands at the court, and the payee ticks it off.
+**Status: built** (check-in in `backend/bookings/`, payments in `backend/billing/`; API pages [bookings](../api/bookings.md), [billing](../api/billing.md)). Attendance, and the payment rows that record money owed. There is no payment gateway: money changes hands at the court, and the payee ticks it off.
 
 ## Check-in
 
@@ -58,6 +58,8 @@ If there are no payers, no coach-fee row is created.
 **PAY-22.** Payments are never deleted or edited otherwise. Disputes are not handled in the app.
 
 **PAY-23.** A payer sees their own payment rows (what they owe and what they paid); a payee side sees rows where they are the payee. Others: `404`.
+
+**PAY-24.** *Decided during build (2026-11-16):* check-in checks, in order: visibility (`404`), who may (`403`), then inside the lock an already checked-in row returns `200` unchanged (GEN-5) before `invalid_status`, `not_accepted` and `checkin_closed`. The payer marking their own payment is `403` (they can see it); anyone else `404`. Mark paid and back to due return `200` on a repeat.
 
 State of a payment row:
 

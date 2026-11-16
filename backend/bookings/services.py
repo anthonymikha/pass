@@ -354,8 +354,10 @@ def is_club_side(user, club):
 
 
 def can_see(user, session):
-    """BOOK-65: participants, the booker, the session coach, the club side of the court's club."""
-    if user.pk in (session.booked_by_id, session.coach_id) or session.participants.filter(user=user).exists():
+    """BOOK-65: participants, the booker, the session coach, the club side of the court's club, and the managing coach
+    of a shadow participant (so PAY-2 can be used)."""
+    if user.pk in (session.booked_by_id, session.coach_id) or session.participants.filter(
+            Q(user=user) | Q(user__managed_by=user, user__email__isnull=True)).exists():
         return True
     return session.court_id is not None and is_club_side(user, session.court.club)
 

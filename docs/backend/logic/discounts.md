@@ -1,6 +1,6 @@
 # Discounts (DSC)
 
-**Status: partly built.** Built: DSC-1 to DSC-8 (`backend/bookings/`). Planned: DSC-10 to DSC-14. Two ways a session's court price is reduced:
+**Status: built** (`backend/bookings/`). Two ways a session's court price is reduced:
 
 1. **Offers**: rows in `discounts` that the system applies automatically when a session is booked.
 2. **One-off session discount**: the owner reduces the price of one specific session by hand.
@@ -43,7 +43,7 @@ Sessions with no court (PRC-7) get no offer.
 
 **DSC-13.** Effect: `discount_amount = amount`, `discount` = empty. It **replaces** whatever offer was applied (no stacking, DSC-4). An amount of 0 removes the reduction. The offer is not re-applied later, even if the one-off discount is removed.
 
-**DSC-14.** Errors: session not on the owner's club `404`; already has payments `400 already_payable`; cancelled `400 session_cancelled`; amount above price or below 0 `400` on `amount`.
+**DSC-14.** Errors: session the caller cannot see `404`, visible but not the owner's club `403` (GEN-3, *decided during build, 2026-11-16*); already has payments `400 already_payable`; cancelled `400 session_cancelled`; amount above price or below 0 `400` on `amount`.
 
 ## Worked example
 

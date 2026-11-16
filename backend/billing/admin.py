@@ -35,4 +35,14 @@ class PaymentAdmin(admin.ModelAdmin):
         return False
 
 
-admin.site.register(CommissionRate, list_display=("applies_to", "club", "coach", "min_count", "percent", "effective_from"))
+@admin.register(CommissionRate)
+class CommissionRateAdmin(admin.ModelAdmin):
+    """COM-4: a new schedule is new rows with a later effective_from; old rows are never edited or deleted."""
+
+    list_display = ("applies_to", "club", "coach", "min_count", "percent", "effective_from")
+
+    def has_change_permission(self, request, obj=None):
+        return obj is None  # the list view needs it; a saved row cannot be changed
+
+    def has_delete_permission(self, request, obj=None):
+        return False

@@ -1,6 +1,6 @@
 # Commission (COM)
 
-**Status: planned.** The platform's percentage of each payment, and settling it with the payee.
+**Status: built** (`backend/billing/services.py`; settlement and add-only commission rows in the Django admin). The platform's percentage of each payment, and settling it with the payee.
 
 ## Lookup
 

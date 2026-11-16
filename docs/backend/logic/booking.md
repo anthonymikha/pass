@@ -129,7 +129,7 @@ Errors: not the session's coach `404`; not `requested` `400 invalid_status`; plu
 
 ## Reading sessions
 
-**BOOK-65.** A session is visible to: its participants, its booker, its session coach, and the club side of its court's club. Anyone else: `404`.
+**BOOK-65.** A session is visible to: its participants, its booker, its session coach, the club side of its court's club, and the managing coach of a shadow player who is a participant (*decided during build, 2026-11-16*, so PAY-2 can be used). Anyone else: `404`.
 
 **BOOK-66.** "My sessions": sessions where the caller is booker, session coach or a participant with status `invited` or `accepted`; filters `from`, `to`, `status`; ordered by `starts_at`; paginated.
 
