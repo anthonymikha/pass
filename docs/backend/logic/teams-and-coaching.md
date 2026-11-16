@@ -21,6 +21,8 @@
 
 **TEAM-7.** Friend rows are not stored in a fixed pair order; TEAM-1 step 4 turns a crossing request into an acceptance (settled at the owner's review on 2026-11-16). A true race (both tap within milliseconds) can still leave two pending rows; accepting either makes the pair friends, and every list and check treats the pair once.
 
+**TEAM-8.** *Decided during build (2026-11-16), codes the rules above leave open:* a request or block aimed at oneself is `400 cannot_connect`; a coaching request to a user who is not a coach is `400 not_a_coach`; a target that is a shadow player, inactive or unknown is `400` on the field, "Not found." (GEN-18, ACC-11). Only active non-shadow users can be blocked (a shadow player is invisible to others). Both users of a pair may block each other; the pair stays blocked until both unblock.
+
 **TEAM-6.** **Lists.** The caller's friends; incoming pending requests; outgoing pending requests; users the caller blocked. Users who blocked the caller are never shown.
 
 | From | To | Who |
@@ -39,7 +41,7 @@
 
 **TEAM-12.** **End.** Either side deletes an accepted row. Past sessions and assignments stay.
 
-**TEAM-13.** A coach cannot start a coaching link; coaches reach players through teams (TEAM-22) and shadow players (ACC-10).
+**TEAM-13.** A coach cannot start a coaching link **as the coach**; coaches reach players through teams (TEAM-22) and shadow players (ACC-10). The caller of TEAM-10 is always the player, so a coach may ask another coach for coaching as a player. *Decided during build (2026-11-16): TEAM-10 says any user may ask.*
 
 ## Block-out times
 

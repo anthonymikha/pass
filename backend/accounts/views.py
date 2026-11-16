@@ -188,10 +188,8 @@ class CoachingView(generics.ListAPIView):
 
     @extend_schema(request=CoachingRequestSerializer, responses=CoachingSerializer)
     def post(self, request):
-        """TEAM-10, TEAM-13: 201 for a new request, 200 if already pending or accepted."""
+        """TEAM-10, TEAM-13: any user asks a coach (the caller is always the player); 201 new, 200 if pending or accepted."""
         serializer = CoachingRequestSerializer(data=request.data)
-        if request.user.is_coach:  # TEAM-13; permission before input (GEN-4)
-            raise PermissionDenied("A coach cannot start a coaching link.")
         serializer.is_valid(raise_exception=True)
         row, created = services.request_coaching(request.user, serializer.validated_data["coach"])
         return Response(CoachingSerializer(row).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)

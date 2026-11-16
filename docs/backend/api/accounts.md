@@ -32,7 +32,7 @@
 | POST | `/api/blocks/` | token | `user` (id) | `201`; `200` if already blocked. Removes friend and coaching links between the two (TEAM-4) |
 | DELETE | `/api/blocks/<user_id>/` | token | none | `204` unblock; `404` unless the caller is the blocker (TEAM-5) |
 | GET | `/api/coaching/` | token | none | `200` page of the caller's coaching links, as coach or player: `{id, coach, player, status, created_at}` |
-| POST | `/api/coaching/` | token, not a coach | `coach` (id) | `201` request; `200` if already pending or accepted (TEAM-10, TEAM-13) |
+| POST | `/api/coaching/` | token | `coach` (id) | `201` request; `200` if already pending or accepted (TEAM-10, TEAM-13) |
 | POST | `/api/coaching/<id>/accept/` | the coach of the link | none | `200`; `200` again if already accepted (TEAM-11) |
 | DELETE | `/api/coaching/<id>/` | either side | none | `204`: the coach declines a pending link; either side ends an accepted one (TEAM-11, TEAM-12) |
 | GET, POST | `/api/shadow-players/` | token; POST: coach only | POST: shadow player fields | `200` page of the caller's shadow players; `201` created (ACC-10) |
@@ -95,7 +95,7 @@ Lists show other users as `{id, full_name, is_coach}` (the full public profile, 
 
 - Targets must be active, non-shadow users; anyone else (a shadow player, an inactive or unknown id) is `400` on that field, "Not found." (GEN-18, ACC-12).
 - Refusals (`400`, `{detail, code}`): `cannot_connect` for a blocked pair (either way), for yourself; `not_a_coach` when the coaching target is not a coach. The blocked user cannot tell who blocked them: their lists never show it, and unblocking is `404` for them.
-- A coach asking for a coaching link is `403 forbidden` (TEAM-13). A player cannot decline or accept for the coach (`403`); a link the caller is not part of is `404`.
+- Any user, coaches included, may ask a coach; the caller is always the player (TEAM-10, TEAM-13). A player cannot decline or accept for the coach (`403`); a link the caller is not part of is `404`.
 - Pushes: `friend_request` to the other user, `coaching_request` to the coach; `data.id` is the connection id.
 
 ### Block-outs

@@ -391,7 +391,7 @@ class CoachingTests(PeopleTestCase):
         self.assertFalse(Connection.objects.exists())
 
     def test_coaching_requests_that_are_refused(self):
-        """TEAM-10, TEAM-13, ACC-12, GEN-18: non-coach target, self, shadow, inactive coach, a coach starting a link."""
+        """TEAM-10, TEAM-13, ACC-12, GEN-18: non-coach target, self, shadow, inactive coach refused; a coach may ask another coach."""
         pat, coach = self.user("pat"), self.user("coach", is_coach=True)
         other_coach = self.user("other", is_coach=True)
         friend = self.user("friend")
@@ -407,11 +407,14 @@ class CoachingTests(PeopleTestCase):
             self.assertEqual((r.status_code, r.data), (400, {"coach": ["Not found."]}))
         self.assertEqual(self.call(pat, "post", "coaching/", {}).status_code, 400)
 
-        r = self.call(coach, "post", "coaching/", {"coach": other_coach.id})  # TEAM-13
-        self.assertEqual((r.status_code, r.data["code"]), (403, "forbidden"))
-        self.assertEqual(self.call(coach, "post", "coaching/", {}).status_code, 403)  # permission before input (GEN-4)
         self.assertFalse(Connection.objects.exists())
         self.assertEqual(services.outbox, [])
+
+        # TEAM-13: a coach may still ask another coach as a player; the row always has the asked coach as `user`.
+        r = self.call(coach, "post", "coaching/", {"coach": other_coach.id})
+        self.assertEqual(r.status_code, 201)
+        row = Connection.objects.get()
+        self.assertEqual((row.user, row.other_user), (other_coach, coach))
 
 
 class BlockoutTests(PeopleTestCase):
