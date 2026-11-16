@@ -31,7 +31,7 @@ Links a user to a club, with status `pending` or `active`. Unique per (club, use
 | `staff` | Can answer the club's inquiry chats |
 | `player` | Registered at the club or holding a subscription |
 
-`expires_on` is the end of a subscription; empty means no expiry. A membership counts when `status=active` and `expires_on` is empty or not yet passed.
+`expires_on` is the end of a subscription; empty means no expiry. A membership counts when `status=active` and `expires_on` is empty or not yet passed ([ACC-2](../logic/access-and-roles.md)). Adding and approving members: [CLUB-25 to CLUB-29](../logic/clubs-and-courts.md#club-members).
 
 - The owner is not a member row; ownership is `clubs.owner`.
 - Booking a court does **not** need a membership. The `player` role records registration only; what a subscription costs or includes is not modelled.
@@ -79,7 +79,7 @@ CourtRate.objects.create(court=court, weekday=0, start_time=time(17), end_time=t
 ```
 
 - Open hours are the union of a court's rows. No row for a weekday means closed that day.
-- Windows for the same court and weekday must not overlap. This is checked in code, not by the database.
+- Windows for the same court and weekday must not overlap. This is checked in code, not by the database ([CLUB-12](../logic/clubs-and-courts.md#rates-open-hours-and-prices)). How windows become slots: [AVL-1 to AVL-6](../logic/court-availability.md).
 - Rates repeat weekly only. Closures, including monthly ones, are `CourtBlockout` rows.
 
 ## CourtBlockout (`court_blockouts`)
@@ -117,12 +117,7 @@ What a player can see for a court: `Equipment.objects.filter(Q(court=court) | Q(
 
 A hand-set price in a non-base currency, for one court rate **or** one equipment item (exactly one must be set). One row per target and currency.
 
-Price lookup for a rate or an item in currency `C`:
-
-1. `C` is the base currency → the base price.
-2. An override exists for `C` → the override price.
-3. Otherwise → base price × the club's `exchange_rate` for `C`.
-4. `C` is neither base nor in `club_currencies` → not accepted.
+Price lookup, conversion and rounding: [PRC-1 to PRC-6](../logic/pricing-and-currency.md).
 
 ```python
 PriceOverride.objects.create(court_rate=evening_rate, currency="LBP", price=Decimal("6000000"))
@@ -148,7 +143,7 @@ Discount.objects.create(club=club, court=court, percent_off=20, starts_at=a, end
 Discount.objects.create(club=club, min_bookings=10, amount_off=10, starts_at=a, ends_at=b)
 ```
 
-The discount used is copied onto the session (`discount`, `discount_amount`), so editing or deleting the offer later does not change past bookings. Whether discounts stack is not decided; the working proposal is to apply the single best one.
+The discount used is copied onto the session (`discount`, `discount_amount`), so editing or deleting the offer later does not change past bookings. Which offer applies (never stacked, the window is about play time) and one-off discounts on a single session: [discounts](../logic/discounts.md).
 
 ## Used together with
 

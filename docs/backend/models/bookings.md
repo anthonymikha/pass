@@ -33,7 +33,7 @@ The centre of the system: one booked block of time.
 | `cancelled` | Called off; frees the slot |
 | `completed` | Took place |
 
-A slot is taken by any session on that court that overlaps it and is not `cancelled`, or by a [`CourtBlockout`](venues.md#courtblockout-court_blockouts).
+A slot is taken by any session on that court that overlaps it and is not `cancelled`, or by a [`CourtBlockout`](venues.md#courtblockout-court_blockouts). Who moves a session between statuses, and when: [BOOK-1](../logic/booking.md). `completed` is never stored; it is shown for confirmed sessions that have ended ([BOOK-55](../logic/booking.md#completed)).
 
 ### What one table covers
 
@@ -55,11 +55,13 @@ One row per person in a session. Unique per (session, user).
 | `rpe` | Rate of perceived exertion, 1–10 |
 | `rpe_minutes` | Minutes of effort, defaults to the session length |
 | `rpe_logged_at` | When the form was submitted |
+| `rpe_reminded_at` | When the RPE reminder was sent (**planned column**, [NOTE-9](../logic/notifications.md#the-scheduler)) |
 
 - The booker gets a row with status `accepted` when the session is created.
 - Coaches set `checked_in_at` on behalf of shadow players.
 - Training load for one participation is `rpe × rpe_minutes`.
-- **Video unlock:** `checked_in_at` and `rpe` both set.
+- **Video unlock:** `checked_in_at` and `rpe` both set ([REC-20](../logic/recordings.md#watch)).
+- Check-in window and who may check in whom: [PAY-1 to PAY-5](../logic/check-in-and-payments.md).
 
 ```python
 p = SessionParticipant.objects.get(session=s, user=me)
@@ -80,7 +82,7 @@ Equipment requested with a session.
 | `price` | Total for this line in the session's currency, copied at request time |
 | `status` | `requested` → `approved` or `declined` by the owner |
 
-Only approved rentals are charged. Checking stock against overlapping rentals is not built yet.
+Only approved rentals are charged. Stock is checked when the club side approves ([BOOK-40, BOOK-41](../logic/booking.md#rentals)).
 
 ## Recording (`recordings`)
 
@@ -106,7 +108,7 @@ A labelled moment or span in a recording.
 | `label`, `note` | |
 | `players` | Many-to-many (`recording_tag_players`). **No players = whole-team tag** |
 
-Who sees a tag: its creator, the session's coach, the tagged players, and for whole-team tags every participant who checked in.
+Who sees a tag: [REC-27](../logic/recordings.md#tags) (the session coach sees all; a player who may watch sees tags naming them and whole-team tags).
 
 ```python
 tag = RecordingTag.objects.create(recording=r, created_by=coach, start_second=312, end_second=330, label="Fast break")

@@ -1,48 +1,22 @@
 # Flow: messaging
 
-**Status: planned.** Delivery is by polling first; WebSockets later.
+**Status: planned.** Rules: [chat](../logic/chat.md). Delivery by polling first; WebSockets later.
 
 Models: [Chat, ChatMember, Message](../models/chat.md), [Group](../models/teams.md), [Club, ClubMember](../models/venues.md), [Session](../models/bookings.md).
 
-## Direct messages
+| Kind | Who talks | Rules |
+|---|---|---|
+| Direct | Friends, or a coach and their player; never a blocked pair | [CHAT-1 to CHAT-3](../logic/chat.md#who-may-talk-to-whom) |
+| Group | The active members of a play group or team | [CHAT-4](../logic/chat.md#who-may-talk-to-whom), [TEAM-28](../logic/teams-and-coaching.md#play-groups-and-teams) |
+| Inquiry | One user and a club's owner and staff (a shared inbox) | [CHAT-5 to CHAT-8](../logic/chat.md#who-may-talk-to-whom) |
 
-1. Player or coach opens a conversation with another user.
-2. Find an existing `Chat` with `type=direct` that has both users as `ChatMember`; create it with both members if none.
-3. Send: create a `Message` with `sender`.
-
-## Group chats
-
-- Created together with the `Group` (`type=group`, `group` set).
-- Members mirror the group's active members: add a `ChatMember` when someone becomes active, remove it when they leave.
-- **Session cards:** when a session for the group is confirmed, a `Message` with `session` set and no sender is posted. The app shows the start and end time and opens the session page from it.
+| Action | Rules |
+|---|---|
+| Send, poll (`after=<id>`), scroll back (`before=<id>`) | [CHAT-10, CHAT-14](../logic/chat.md#messages) |
+| Mark read, unread counts, chat list | [CHAT-11 to CHAT-15](../logic/chat.md#messages) |
+| Session card when a group session is confirmed | [CHAT-30, CHAT-31](../logic/chat.md#session-cards) |
+| Push for new messages | [NOTE-20](../logic/notifications.md#triggers) |
 
 ```
 Session(group) confirmed ─> Message(chat=group.chat, session=…) ─> card in the chat
 ```
-
-## Court inquiries
-
-1. A player or coach opens an inquiry with a club: a `Chat` with `type=inquiry`, `club` set, and themselves as the `ChatMember`. One per user and club.
-2. The club's owner and its active staff (`ClubMember`, `role=staff`) can read and reply. They are not stored as members; access is checked against the club at the time.
-3. Owners also use this chat to tell a player about an offer (a `Discount` with `user` set).
-
-## Reading and unread counts
-
-- **Poll:** fetch messages in a chat with `id` greater than the last one the client has.
-- **Mark read:** set the caller's `ChatMember.last_read_at` to now.
-- **Unread:** messages newer than `last_read_at` not sent by the caller.
-
-For the club side of an inquiry there is no member row, so unread state for owners and staff still needs a decision.
-
-## Access rules
-
-| Chat type | Who can read and write |
-|---|---|
-| direct | its two members |
-| group | its members |
-| inquiry | its member, plus the club's owner and active staff |
-
-## Open points
-
-- Unread tracking for club owners and staff on inquiries.
-- Whether direct chats are limited to friends and coach–player pairs.

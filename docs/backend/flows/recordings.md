@@ -1,62 +1,20 @@
 # Flow: session video and tags
 
-**Status: planned.** Where the video files live is not finally decided; the working recommendation is S3-compatible object storage with signed links.
+**Status: planned.** Rules: [recordings](../logic/recordings.md). Storage: MinIO (S3-compatible) in docker-compose, signed links, video never passes through Django.
 
 Models: [Session, SessionParticipant, Recording, RecordingTag](../models/bookings.md).
 
-## Upload
-
-Who may add a recording to a session:
-- a participant who checked in (a "play-through"), or
-- the session's coach.
-
-Intended sequence with object storage:
-1. The app asks the backend for an upload link for a session.
-2. The backend checks the rule above and returns a short-lived signed link plus the `storage_key`.
-3. The app uploads the file straight to storage.
-4. The app confirms; the backend creates the `Recording` with that `storage_key`.
-
-Video never passes through Django.
-
-## Watch
-
-A user may watch a session's recordings when either holds:
-- they are the session's coach, or
-- their `SessionParticipant` row has both `checked_in_at` and `rpe` set.
-
-This is why check-in exists and why the RPE form matters: logging RPE is what unlocks the video. On success the backend returns a short-lived signed playback link.
+| Step | What happens | Rules |
+|---|---|---|
+| 1. Ask for an upload form | A checked-in participant or the coach; mp4/mov up to 2 GiB | [REC-10, REC-11](../logic/recordings.md#upload-a-recording) |
+| 2. Upload | The phone posts the file straight to storage | [REC-1, REC-2](../logic/recordings.md#storage) |
+| 3. Confirm | The backend checks the file is there and creates the `Recording` | [REC-12, REC-13](../logic/recordings.md#upload-a-recording) |
+| 4. Watch | The coach, or a participant who checked in **and** logged RPE | [REC-20, REC-21](../logic/recordings.md#watch) |
+| 5. Tag | The coach marks moments, optionally naming players | [REC-25 to REC-28](../logic/recordings.md#tags) |
 
 ```
 SessionParticipant.checked_in_at ─┐
 SessionParticipant.rpe ───────────┴─> may watch Recording ─> signed link
 ```
 
-## Tag
-
-The coach of the session marks moments:
-
-1. Create a `RecordingTag` with `start_second`, optional `end_second`, a `label` and a `note`.
-2. Attach the players involved (`tag.players`). Leave empty for a whole-team tag.
-
-Coaches can tag any recording on sessions they coached, whoever uploaded it.
-
-## Who sees which tags
-
-| Viewer | Sees |
-|---|---|
-| The session's coach | every tag |
-| A player who may watch | tags that name them, plus whole-team tags |
-| Anyone else | nothing |
-
-```python
-from django.db.models import Q
-
-RecordingTag.objects.filter(recording__session=session).filter(
-    Q(players=me) | Q(players__isnull=True)
-).distinct()
-```
-
-## Open points
-
-- Storage choice and file size limits.
-- Whether players can create their own private tags.
+Avatars use the same storage: [REC-30](../logic/recordings.md#avatars).

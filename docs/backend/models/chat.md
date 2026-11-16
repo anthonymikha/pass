@@ -22,7 +22,9 @@ Who is in a chat, and how far they have read. Unique per (chat, user).
 |---|---|
 | `last_read_at` | Messages newer than this are unread for that user |
 
-- Group chats: keep members in step with the group's active members (add on join, remove on leave).
+The club side's read marker on an inquiry is a planned column `chats.club_last_read_at`, shared by the owner and staff ([CHAT-11](../logic/chat.md#messages)). Unread counts: [CHAT-13](../logic/chat.md#messages).
+
+- Group chats: keep members in step with the group's active members, shadow players excluded ([TEAM-28](../logic/teams-and-coaching.md#play-groups-and-teams)).
 - Inquiry chats: the inquiring user is the member. The club side is whoever owns or staffs the club at the time, so they are not stored as members.
 
 ```python

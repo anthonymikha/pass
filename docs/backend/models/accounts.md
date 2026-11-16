@@ -70,7 +70,7 @@ my_players = User.objects.filter(
 )
 ```
 
-Before creating a friend request, check the reverse row does not already exist; the unique rule only covers one direction.
+The unique rule only covers one direction; requests, crossing requests and blocking are handled by [TEAM-1 to TEAM-6](../logic/teams-and-coaching.md#friends).
 
 ## Blockout (shared shape) and UserBlockout (`user_blockouts`)
 
@@ -94,7 +94,7 @@ UserBlockout.objects.create(user=me, starts_on=date(2027, 1, 15), start_time=tim
 blockout.occurs_on(date(2027, 2, 15))   # True
 ```
 
-Patterns such as "every two weeks" or "first Monday of the month" are not supported.
+Patterns such as "every two weeks" or "first Monday of the month" are not supported. Exact occurrence rules: [AVL-8](../logic/court-availability.md#closures).
 
 A user is free at a given time when no block-out covers it and they are in no session then. Availability for a group is the same check across all active members. See [coaching-and-teams](../flows/coaching-and-teams.md).
 

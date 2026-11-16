@@ -20,7 +20,7 @@ A named set of users. Two kinds share one table because they behave the same.
 
 The owner is not automatically a member row. Create one for them (status `active`) when the group is created, so "members" always means the people who play.
 
-**Changing a team's coach:** set `coach` to the new coach. Members, chat and history stay with the team. Sessions already held keep the coach who ran them (`sessions.coach`). `owner` does not change unless the team is also handed over; whether the new coach also becomes owner is a product decision, not a schema one.
+**Changing a team's coach:** set `coach` to the new coach. Members, chat and history stay with the team. Sessions already held keep the coach who ran them (`sessions.coach`). `owner` does not change (decided 2026-11-16, [TEAM-29](../logic/teams-and-coaching.md#play-groups-and-teams)). Invites, join requests and leaving: [TEAM-20 to TEAM-31](../logic/teams-and-coaching.md#play-groups-and-teams).
 
 ```python
 Group.objects.filter(pk=team.pk).update(coach=new_coach)

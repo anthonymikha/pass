@@ -18,6 +18,7 @@ docs/
       billing.md         payments, commission rates
       wellness.md        soreness, sleep, exercises, achievements
       chat.md            chats, members, messages
+    logic/               THE SPECIFICATION: every business rule, with ids (BOOK-3, PAY-7)
     flows/               user journeys that combine several models
       owner-setup.md
       booking-and-payment.md
@@ -38,6 +39,7 @@ docs/
 |---|---|
 | Understand how the backend is organised | [backend/README.md](backend/README.md) |
 | Know what a table or field means | the matching page in [backend/models/](backend/models/) |
+| Know exactly how something must behave | [backend/logic/](backend/logic/README.md): the rules code is built from |
 | Build a feature that touches several tables | the matching page in [backend/flows/](backend/flows/) |
 | Call the API | [backend/api/](backend/api/) |
 | Work on the app | [frontend/README.md](frontend/README.md) |
@@ -49,4 +51,5 @@ Each flow page says what is **built** (has endpoints and tests) and what is **pl
 ## Keeping these docs true
 
 - The models in `backend/*/models.py` are the source of truth for fields and constraints. When a model changes, update its page in the same commit.
-- When an endpoint is added, add it to `backend/api/` and flip the status in the flow page.
+- Business rules are written in `backend/logic/` first and reviewed there; code implements only what those pages say.
+- When an endpoint is added, add it to `backend/api/` and flip the status in the flow page. Mark the rules it implements as built on their logic page.

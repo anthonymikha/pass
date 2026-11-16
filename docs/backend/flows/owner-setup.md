@@ -1,56 +1,37 @@
 # Flow: owner sets up a club
 
-**Status: planned.** Schema exists; endpoints and logic are not built.
+**Status: planned.** Schema exists; endpoints and logic are not built. Rules: [clubs-and-courts](../logic/clubs-and-courts.md).
 
 Models: [User](../models/accounts.md), [Club, ClubCurrency, Court, CourtRate, CourtBlockout, Equipment, PriceOverride, Discount, ClubMember](../models/venues.md), [Session](../models/bookings.md), [Payment](../models/billing.md).
 
-## 1. Create the club
+## Setting up
 
-1. A registered user creates a `Club` with themselves as `owner`, a `timezone` and a base `currency`.
-2. For each extra currency they accept, add a `ClubCurrency` with their exchange rate.
+| Step | What the owner does | Rules |
+|---|---|---|
+| 1. Create the club | Name, timezone, base currency | [CLUB-1 to CLUB-4](../logic/clubs-and-courts.md#club) |
+| 2. Accept other currencies | One row per currency with the club's exchange rate | [CLUB-5 to CLUB-7](../logic/clubs-and-courts.md#accepted-currencies) |
+| 3. Add courts | Slot length and sports | [CLUB-8 to CLUB-10](../logic/clubs-and-courts.md#courts) |
+| 4. Set hours and prices | Rate windows per weekday; optional overrides per currency | [CLUB-11 to CLUB-13](../logic/clubs-and-courts.md#rates-open-hours-and-prices), [CLUB-20, CLUB-21](../logic/clubs-and-courts.md#price-overrides) |
+| 5. Add equipment | Included and rentable items | [CLUB-18, CLUB-19](../logic/clubs-and-courts.md#equipment) |
+| 6. Add people | Staff, registered players; approve coaches | [CLUB-25 to CLUB-29](../logic/clubs-and-courts.md#club-members) |
 
 ```
 User ──owner──> Club ──> ClubCurrency (LBP @ 89500)
+                  └────> Court ──> CourtRate, CourtBlockout, Equipment
 ```
 
-## 2. Add courts
+## Day to day
 
-1. Create a `Court` per physical court with its `slot_minutes`.
-2. Attach the sports it supports (`court.sports`). A multi-sport court lists several.
-
-## 3. Set hours and prices
-
-One `CourtRate` per court, weekday and price window. Example for a weekday: 09:00–17:00 at 50, 17:00–00:00 at 70.
-
-- No row for a weekday = closed that day.
-- Windows on the same court and weekday must not overlap.
-- Optional: a `PriceOverride` per rate and currency to hand-set the price instead of converting.
-
-## 4. Add equipment
-
-`Equipment` rows for what comes with a court (free) and what can be rented (priced). Leave `court` empty for items shared across the club. Optional `PriceOverride` per item and currency.
-
-## 5. Day-to-day
-
-| Owner wants to | Reads or writes |
+| Owner wants to | Rules |
 |---|---|
-| See the schedule | `Session` rows for their courts in a date range, excluding `cancelled` |
-| Close a court (once, or daily / weekly / monthly) | A `CourtBlockout` |
-| See who still owes money | `Payment` where `club` is theirs and `paid_at` is empty |
-| Mark a payment received | Set `Payment.method` and `paid_at` |
-| Approve a rental | `SessionRental.status` → `approved` |
-| See revenue | `Payment` where `club` is theirs, summed per `currency`; net = `amount − platform_fee` |
-| See what they owe the platform | `Payment.platform_fee` where `settled_at` is empty |
-| See customers | Distinct `Session.booked_by` on their courts |
-| Repeat-customer rate | Share of those customers with two or more non-cancelled sessions |
-| See attendance | `SessionParticipant.checked_in_at` per session |
-| Send an offer to a player | A `Discount` with `user` set, plus a message in the inquiry chat |
-| Reward frequent players | A `Discount` with `min_bookings` |
-| Discount one time slot | A `Discount` with `court` and a narrow `starts_at`–`ends_at` |
-| Take on a coach | `ClubMember` with `role=coach`, `pending` → `active` |
-| Register a player or subscriber | `ClubMember` with `role=player`, optional `expires_on` |
+| See the schedule | [RPT-1](../logic/owner-reports.md) |
+| Close a court once or repeatedly | [CLUB-15 to CLUB-17](../logic/clubs-and-courts.md#closures-court-block-outs) |
+| See who still owes money; mark a payment received | [RPT-2](../logic/owner-reports.md), [PAY-20, PAY-21](../logic/check-in-and-payments.md#marking-paid) |
+| Check in a booker who does not use the app | [PAY-3](../logic/check-in-and-payments.md) |
+| Approve a rental | [BOOK-40, BOOK-41](../logic/booking.md#rentals) |
+| Revenue, customers, repeat rate, attendance | [RPT-3 to RPT-6](../logic/owner-reports.md) |
+| Run an offer (targeted, frequent-player, time slot) | [CLUB-22 to CLUB-24](../logic/clubs-and-courts.md#offers-the-discounts-table), [DSC-1 to DSC-6](../logic/discounts.md) |
+| Discount one booked session | [DSC-10 to DSC-14](../logic/discounts.md#one-off-session-discount) |
+| Answer inquiries | [CHAT-5 to CHAT-8](../logic/chat.md) |
 
-## Access rules
-
-- Only `club.owner` may change the club and everything under it.
-- Players can read active courts, rates, equipment and currently valid discounts that apply to them.
+Who may do what (owner versus staff): [ACC-5, ACC-6](../logic/access-and-roles.md#default-rules). What the public sees: [CLUB-30 to CLUB-32](../logic/clubs-and-courts.md#public-search-and-detail).

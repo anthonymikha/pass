@@ -69,7 +69,7 @@ Which areas an exercise targets. One row per (exercise, body area); an exercise 
 
 ### Suggesting exercises
 
-For each area a player reported, suggest exercises that target the area and whose range contains the level:
+For each area a player reported, suggest exercises that target the area and whose range contains the level. Suggestions are computed, not stored; a row is created only when the player picks one ([WEL-30 to WEL-33](../logic/wellness.md#exercise-suggestions)):
 
 ```python
 Exercise.objects.filter(
@@ -106,7 +106,7 @@ ExerciseAssignment.objects.bulk_create([
 | `achievement_code` | A code defined in the application, e.g. `first_exercise` |
 | `earned_at` | |
 
-One per (user, code). The list of achievements and their conditions lives in code, not in a table.
+One per (user, code). The list of achievements and their conditions lives in code, not in a table, and is written in [WEL-50](../logic/wellness.md#achievements).
 
 ## Recovery level
 

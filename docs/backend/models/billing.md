@@ -21,17 +21,7 @@ One row per amount **owed** by one person to one payee for one session. A row sa
 
 ### When rows are created
 
-A confirmed session becomes payable when its **booker checks in**. That check-in creates, with `paid_at` empty, in one transaction:
-
-| Payment | Payer | Payee | Amount |
-|---|---|---|---|
-| Court fee | booker | the court's club | `price − discount_amount` + approved rentals |
-| Coach fee, single payer | `coach_fee_payer` | the coach | `coach_fee` |
-| Coach fee, split (default) | each accepted team member | the coach | `coach_fee` ÷ members; any rounding remainder goes on the first share |
-
-No check-in by the booker means no payment rows. Creation must be safe to repeat: if rows already exist for the session, do nothing.
-
-The payee (club owner or staff, or the coach) then marks each row paid, which sets `method` and `paid_at`.
+A confirmed session becomes payable when its **booker checks in**. Which rows are created, the split of a coach fee, and who marks them paid: [PAY-10 to PAY-23](../logic/check-in-and-payments.md).
 
 ### Reading the money
 
@@ -70,17 +60,13 @@ A **schedule** is the set of rows sharing a target and an `effective_from` date.
 
 ### Lookup
 
-To find the rate for a payee on a date:
-
-1. Use the payee's own rows if any are in effect; otherwise the default rows for that `applies_to`.
-2. Keep rows with `effective_from` ≤ the date and `min_count` ≤ the payee's count.
-3. Order by newest `effective_from`, then highest `min_count`. Take the first.
+The rules are [COM-1 to COM-4](../logic/commission.md). In code:
 
 ```python
 rows = CommissionRate.objects.filter(applies_to="coach", effective_from__lte=today, min_count__lte=count)
 rate = (rows.filter(coach=coach).order_by("-effective_from", "-min_count").first()
         or rows.filter(coach__isnull=True, club__isnull=True).order_by("-effective_from", "-min_count").first())
-platform_fee = amount * rate.percent / 100
+platform_fee = round_money(amount * rate.percent / 100, currency)   # COM-2
 ```
 
 ### Rules for editing schedules
@@ -91,10 +77,7 @@ platform_fee = amount * rate.percent / 100
 
 ### The count (for tiers, later)
 
-- Coach: distinct active players (accepted coaching connections plus active members of their teams).
-- Club: booking volume; the time window is not decided.
-
-While only `min_count` 0 rows exist, the count does not matter.
+See [COM-3](../logic/commission.md). While only `min_count` 0 rows exist, the count is 0.
 
 Example of a tiered coach schedule, when tiers are switched on:
 

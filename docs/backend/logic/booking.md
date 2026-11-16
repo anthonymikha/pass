@@ -1,0 +1,143 @@
+# Booking (BOOK)
+
+**Status: planned.** Booking a court, training requests, coach-booked training, invites, rentals, cancelling, session cards.
+
+## Sessions in general
+
+**BOOK-1.** Session status changes:
+
+| From | To | Who | When |
+|---|---|---|---|
+| (new) | `confirmed` | booker | a court booking (BOOK-8) or coach-booked training (BOOK-30, BOOK-31) |
+| (new) | `requested` | player | a training request (BOOK-20) |
+| `requested` | `confirmed` | the session coach | accepts the request (BOOK-21) |
+| `requested` | `cancelled` | the session coach (declines) or the booker (withdraws) | before `starts_at` |
+| `confirmed` | `cancelled` | see BOOK-50 | before the booker checks in and before `ends_at` |
+
+No other change is allowed. `completed` is never written (BOOK-55).
+
+**BOOK-2.** Every write that puts a session on a court (BOOK-8, BOOK-21, BOOK-30, BOOK-31) runs in **one database transaction** that first locks the court row (`select_for_update`). Inside the lock it re-checks that every slot is offered and free (AVL-5), then writes. Two people booking the same court therefore run one after the other; the second sees the first's session and fails.
+
+**BOOK-3.** The free check counts every session on the court whose status is not `cancelled`, including `requested` ones that have a court (there are none in practice: BOOK-20 requests carry no court).
+
+**BOOK-4.** The run of slots: `starts_at` must equal the start of an offered slot and `ends_at` the end of an offered slot, and every slot between must be offered and free, each starting exactly where the previous one ends. The run may cross rate windows and midnight (for example Monday 23:00–00:00 then Tuesday 00:00–01:00) as long as the slots are contiguous. Rule AVL-5 items 3 and 4 apply to every slot.
+
+## Booking a court (play)
+
+**BOOK-5.** Who may: any user. The booker becomes `booked_by`.
+
+**BOOK-6.** **Quote** (optional, read-only): the same input as BOOK-7; returns `price`, the offer that would apply and its `discount_amount` (DSC-1 to DSC-4), each rental line's price, and the court amount `price − discount_amount + rentals`. Nothing is written or held; a later booking can still fail.
+
+**BOOK-7.** Input: `court`, `sport`, `starts_at`, `ends_at`, `currency`, optional `rentals` (list of `equipment`, `quantity`), optional `group`, optional `invitees` (list of user ids). Checks, in this order:
+
+| Check | Error |
+|---|---|
+| Court exists and is active | `400` on `court` |
+| `sport` is one of the court's sports | `400 sport_not_offered` |
+| Currency accepted (PRC-1) | `400 currency_not_accepted` |
+| Run of slots valid (BOOK-4) and within 60 days (AVL-5) | `400 not_bookable` |
+| Each rental: item of this club, `court` empty or this court, `rental_price` set, `1 ≤ quantity ≤ item.quantity`, no item twice | `400` on `rentals` |
+| `group`: caller is an active member or a group manager of it | `400` on `group` |
+| Each invitee: a friend of the caller, not shadow, not the caller, no duplicates | `400` on `invitees` |
+| Inside the lock: every slot still free | `409 slot_taken` |
+
+**BOOK-8.** Steps, inside the transaction of BOOK-2:
+1. Lock the court; re-check every slot is free.
+2. Compute `price` (PRC-5) and the offer (DSC-1 to DSC-5).
+3. Create the `sessions` row: `kind = play`, `status = confirmed`, `booked_by` = caller, `coach` empty, `coach_fee = 0`, `group` if given, `currency`, `price`, `discount`, `discount_amount`.
+4. Create the booker's `session_participants` row with `status = accepted`.
+5. Create one `session_rentals` row per rental with `status = requested` and `price` (PRC-6).
+6. Create `invited` participant rows: each invitee, plus, when `group` is set, every active member of the group who is not the booker.
+7. If `group` is set: post the session card (BOOK-60).
+8. After commit: notify invitees (NOTE-20).
+
+**BOOK-9.** Court bookings are confirmed at once when the slot is free. The club does not approve them.
+
+## Group bookings
+
+**BOOK-10.** A play group or team booking is a normal booking (BOOK-5 to BOOK-8) with `group` set. Every active member other than the booker is invited and accepts or declines on their own (BOOK-16). Shadow players in the group are added as `accepted` (they cannot answer).
+
+**BOOK-11.** Members who join the group after the session was booked are not added to it.
+
+## Invites
+
+**BOOK-15.** Who may invite, after booking: the booker, adding friends of the booker (or active members of the session's group), while the session is `confirmed` and before `starts_at`. A user who already has a participant row in the session is skipped, not re-invited. Errors as in BOOK-7.
+
+**BOOK-16.** The invitee changes their own row. All changes only before `starts_at`, while the session is not cancelled:
+
+| From | To | Who |
+|---|---|---|
+| `invited` | `accepted` | the invitee |
+| `invited` | `declined` | the invitee |
+| `accepted` | `declined` | the participant (withdraws), except the booker |
+| `declined` | `accepted` | the participant (changes their mind) |
+
+Errors: session started or cancelled `400 session_closed`; booker tries to withdraw `400 booker_cannot_leave`.
+
+**BOOK-17.** The booker may remove a participant (delete the row) who has not checked in, before `starts_at`. The booker's own row cannot be removed.
+
+## Training requests (player asks a coach)
+
+**BOOK-20.** Who may: any user, to a coach who is not themselves and not in a blocked pair with them. Input: `coach`, `sport`, `starts_at`, `ends_at` (the proposed time, in the future, `ends_at` after `starts_at`, at most 8 hours long). Creates a session: `kind = training`, `status = requested`, `booked_by` = requester, `coach` = the coach, `court` empty, `currency` empty, `price = 0`, `coach_fee = 0`, `coach_fee_payer` = requester; and the requester's participant row as `accepted`. Notifies the coach (NOTE-20). A request does not block anyone's time: it is not in AVL-20 until confirmed.
+
+**BOOK-21.** The coach **confirms**, giving: `starts_at`, `ends_at` (may differ from the proposal), `currency`, `coach_fee` (≥ 0, GEN-17), and optionally `court`.
+- **With a court:** checks and lock as BOOK-7 and BOOK-2 (run of slots, sport offered by the court, currency accepted by the club); `price` from PRC-5; offer from DSC-1 with the **requester** as booker.
+- **Without a court** (the coach's own venue): `price = 0`, no offer; `currency` is any valid code; the time only has to be in the future.
+- Then `status = confirmed`, `coach_fee_payer` stays the requester. Notifies the requester.
+
+Errors: not the session's coach `404`; not `requested` `400 invalid_status`; plus BOOK-7 errors.
+
+**BOOK-22.** The coach **declines**: `status = cancelled`. The requester **withdraws** before it is confirmed: `status = cancelled`. Either notifies the other.
+
+**BOOK-23.** The booker of a confirmed training session is the requester, so the requester's check-in creates the payments: the court fee to the club (if there is a court) and the coach fee, both owed by the requester.
+
+## Training booked by a coach
+
+**BOOK-30.** **Team training.** Who may: a coach who is a group manager of a team. Input as BOOK-7 (court optional, as in BOOK-21) plus `coach_fee` and optional `coach_fee_payer`. Creates: `kind = training`, `status = confirmed`, `booked_by` = `coach` = caller, `group` = team. Participants: the coach as `accepted` (booker row), every active member except the coach as `invited`, except shadow players, who are added as `accepted`. Session card posted (BOOK-60).
+
+**BOOK-31.** **One player.** Who may: a coach, for one of the coach's players (ACC-1). Same input with `player` instead of `group`. Participants: the coach `accepted`, the player `invited` (shadow player: `accepted`). `coach_fee_payer` defaults to the player.
+
+**BOOK-32.** `coach_fee_payer`, when given, must be an active member of the team (BOOK-30) or the player (BOOK-31), and not the coach. Empty means the fee is split (PAY-12). Error: `400` on `coach_fee_payer`.
+
+**BOOK-33.** In coach-booked training the coach is the booker, so the coach owes the court fee to the club (PAY-11) and the coach's check-in creates all payments.
+
+## Rentals
+
+**BOOK-40.** Who may decide: the club side of the court's club. `requested` → `approved` or `declined`; `approved` → `declined` and `declined` → `approved` are also allowed. Only while the session is not cancelled and has no payments yet (after the booker checks in, rentals are frozen; any still `requested` are never charged).
+
+**BOOK-41.** **Stock check on approval.** In one transaction, lock the equipment row; sum `quantity` of `approved` rentals of the same item on non-cancelled sessions that overlap this session; if that sum + this rental's quantity > `equipment.quantity`, refuse with `409 out_of_stock`.
+
+**BOOK-42.** Rentals are requested only with the booking (BOOK-7). Adding or changing rentals afterwards is not supported.
+
+## Cancelling
+
+**BOOK-50.** Who may cancel a `confirmed` session: its booker; its session coach; the club owner of its court. When: before `ends_at` and while the session has no payments (the booker has not checked in). Effect: `status = cancelled`; rentals still `requested` become `declined`; the slots become free. Notifies every accepted and invited participant except the caller (NOTE-20).
+
+**BOOK-51.** Errors: has payments `400 already_payable`; ended `400 session_closed`; caller not allowed `403` (if they can see the session) or `404`. Cancelling an already cancelled session returns `200` and changes nothing (GEN-5). There are no cancellation fees or refunds.
+
+## Completed
+
+**BOOK-55.** `completed` is not stored. The API shows a session as `completed` when its stored status is `confirmed` and `ends_at` ≤ now. Every rule that says "confirmed" means the stored status.
+
+## Session cards
+
+**BOOK-60.** When a session with a `group` becomes `confirmed` (BOOK-8, BOOK-21, BOOK-30), in the same transaction call `chat.services.post_session_card(session)` (CHAT-30).
+
+## Reading sessions
+
+**BOOK-65.** A session is visible to: its participants, its booker, its session coach, and the club side of its court's club. Anyone else: `404`.
+
+**BOOK-66.** "My sessions": sessions where the caller is booker, session coach or a participant with status `invited` or `accepted`; filters `from`, `to`, `status`; ordered by `starts_at`; paginated.
+
+## Edge cases
+
+- **Same user, same request twice** (double tap): the second call fails with `409 slot_taken` because the first holds the slot (GEN-6).
+- **Two users, same slot, same moment:** the court lock serialises them; the second gets `409 slot_taken`.
+- **Closure added over an existing booking:** the booking stays; the owner sees it in the closure's conflict list (CLUB-16) and decides whether to cancel.
+- **Booking that crosses midnight:** Monday 23:00–01:00 needs Monday's 23:00–00:00 slot and Tuesday's 00:00–01:00 slot to both be offered and free (BOOK-4). Each is priced from its own day's rate.
+- **Club timezone and UTC:** the request carries instants; slot matching is done after converting the offered slots to UTC (AVL-6). A booking at 16:00 Beirut in January is `14:00Z`.
+
+## Not decided
+
+- Rental stock across the club for shared items is checked only on approval (BOOK-41), not when the player asks. Recommended default: keep; show the owner the conflict at approval time.
+- Limits on how many future bookings one user may hold. Recommended default: none.
