@@ -15,7 +15,6 @@ class Session(models.Model):
         CONFIRMED = "confirmed"
         CANCELLED = "cancelled"
         COMPLETED = "completed"
-        BLOCKED = "blocked"
 
     court = models.ForeignKey(Court, null=True, blank=True, on_delete=models.PROTECT, related_name="sessions")
     sport = models.ForeignKey(Sport, on_delete=models.PROTECT, related_name="sessions")

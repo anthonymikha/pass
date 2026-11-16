@@ -1,5 +1,4 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-from django.core.validators import MaxValueValidator
 from django.db import models
 
 
@@ -16,11 +15,27 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
+    class Sex(models.TextChoices):
+        MALE = "male"
+        FEMALE = "female"
+
+    class Hand(models.TextChoices):
+        LEFT = "left"
+        RIGHT = "right"
+        BOTH = "both"
+
     email = models.EmailField(unique=True, null=True, blank=True)  # null = shadow player managed by a coach
     phone = models.CharField(max_length=32, blank=True)
     full_name = models.CharField(max_length=255, blank=True)
     avatar = models.FileField(upload_to="avatars/", blank=True)
     timezone = models.CharField(max_length=64, default="UTC")
+    date_of_birth = models.DateField(null=True, blank=True)
+    sex = models.CharField(max_length=10, choices=Sex.choices, blank=True)
+    # ponytail: latest value only; add a measurements table if weight history is ever charted
+    height_cm = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    nationality = models.CharField(max_length=2, blank=True)  # ISO 3166-1 alpha-2
+    dominant_hand = models.CharField(max_length=10, choices=Hand.choices, blank=True)
     is_coach = models.BooleanField(default=False)
     coach_bio = models.TextField(blank=True)
     coach_rate = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
@@ -77,25 +92,49 @@ class Connection(models.Model):
         return f"{self.user} -> {self.other_user} ({self.type}, {self.status})"
 
 
-class UserBlockout(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="blockouts")
-    weekday = models.PositiveSmallIntegerField(
-        null=True, blank=True, validators=[MaxValueValidator(6)]
-    )  # 0=Monday, recurring weekly
-    on_date = models.DateField(null=True, blank=True)  # one-off
+class Blockout(models.Model):
+    """Unavailable time window, one-off or repeating. Shared by users and courts."""
+
+    class Repeat(models.TextChoices):
+        NONE = "none"
+        DAILY = "daily"
+        WEEKLY = "weekly"  # same weekday as starts_on
+        MONTHLY = "monthly"  # same day of month as starts_on; months without that day are skipped
+
+    starts_on = models.DateField()  # the one-off date, or the first occurrence
     start_time = models.TimeField()
     end_time = models.TimeField()
+    repeat = models.CharField(max_length=10, choices=Repeat.choices, default=Repeat.NONE)
+    repeat_until = models.DateField(null=True, blank=True)  # null = repeats forever
+    reason = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "user_blockouts"
+        abstract = True
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(weekday__isnull=False, on_date__isnull=True)
-                | models.Q(weekday__isnull=True, on_date__isnull=False),
-                name="user_blockouts_weekday_xor_on_date",
+                condition=models.Q(repeat_until__gte=models.F("starts_on")),
+                name="%(class)s_repeat_until_after_start",
             ),
         ]
 
+    def occurs_on(self, day):
+        # ponytail: four fixed patterns; switch to iCalendar RRULE if "every 2 weeks" / "first Monday" is needed
+        if day < self.starts_on or (self.repeat_until and day > self.repeat_until):
+            return False
+        return {
+            self.Repeat.NONE: day == self.starts_on,
+            self.Repeat.DAILY: True,
+            self.Repeat.WEEKLY: day.weekday() == self.starts_on.weekday(),
+            self.Repeat.MONTHLY: day.day == self.starts_on.day,
+        }[self.repeat]
+
     def __str__(self):
-        return f"{self.user}: {self.on_date or self.weekday} {self.start_time}-{self.end_time}"
+        return f"{self.starts_on} {self.start_time}-{self.end_time} ({self.repeat})"
+
+
+class UserBlockout(Blockout):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="blockouts")
+
+    class Meta(Blockout.Meta):
+        db_table = "user_blockouts"

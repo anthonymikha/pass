@@ -12,6 +12,10 @@ class Group(models.Model):
     type = models.CharField(max_length=20, choices=Type.choices)
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="owned_groups")
+    # Who runs training. Starts as the owner for teams; change this to hand the team to another coach.
+    coach = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="coached_groups"
+    )
     sport = models.ForeignKey(Sport, null=True, blank=True, on_delete=models.SET_NULL, related_name="groups")
     created_at = models.DateTimeField(auto_now_add=True)
 

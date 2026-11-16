@@ -11,6 +11,7 @@ class UserAdmin(DjangoUserAdmin):
     fieldsets = (
         (None, {"fields": ("email", "password")}),
         ("Profile", {"fields": ("full_name", "phone", "avatar", "timezone", "managed_by")}),
+        ("Body", {"fields": ("date_of_birth", "sex", "height_cm", "weight_kg", "nationality", "dominant_hand")}),
         ("Coach", {"fields": ("is_coach", "coach_bio", "coach_rate", "coach_currency")}),
         ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         ("Dates", {"fields": ("last_login", "created_at")}),
@@ -25,4 +26,4 @@ class UserAdmin(DjangoUserAdmin):
 
 
 admin.site.register(Connection, list_display=("user", "other_user", "type", "status"))
-admin.site.register(UserBlockout, list_display=("user", "weekday", "on_date", "start_time", "end_time"))
+admin.site.register(UserBlockout, list_display=("user", "starts_on", "start_time", "end_time", "repeat", "repeat_until"))

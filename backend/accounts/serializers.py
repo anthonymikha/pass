@@ -1,3 +1,4 @@
+import datetime
 import re
 import zoneinfo
 
@@ -16,10 +17,25 @@ class UserSerializer(serializers.ModelSerializer):
         # ponytail: avatar is left out until object storage exists (uploads have nowhere to be served from).
         fields = [
             "id", "email", "full_name", "phone", "timezone",
+            "date_of_birth", "sex", "height_cm", "weight_kg", "nationality", "dominant_hand",
             "is_coach", "coach_bio", "coach_rate", "coach_currency",
         ]
         read_only_fields = ["id", "email"]
-        extra_kwargs = {"coach_rate": {"min_value": 0}}
+        extra_kwargs = {
+            "coach_rate": {"min_value": 0},
+            "height_cm": {"min_value": 30, "max_value": 300},
+            "weight_kg": {"min_value": 2, "max_value": 500},
+        }
+
+    def validate_date_of_birth(self, value):
+        if value and value > datetime.date.today():
+            raise serializers.ValidationError("Date of birth cannot be in the future.")
+        return value
+
+    def validate_nationality(self, value):
+        if value and not re.fullmatch(r"[A-Z]{2}", value):
+            raise serializers.ValidationError("Use a 2-letter ISO country code, e.g. LB.")
+        return value
 
     def validate_timezone(self, value):
         if value not in zoneinfo.available_timezones():

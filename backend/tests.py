@@ -5,9 +5,10 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from accounts.models import Connection, User, UserBlockout
+from wellness.models import SleepLog
 from billing.models import Payment
 from bookings.models import Session, SessionParticipant
-from venues.models import Club, Court, CourtRate, Equipment, PriceOverride, Sport
+from venues.models import Club, ClubMember, Court, CourtBlockout, CourtRate, Equipment, PriceOverride, Sport
 
 T0 = datetime(2026, 1, 5, 10, tzinfo=timezone.utc)
 T1 = datetime(2026, 1, 5, 11, tzinfo=timezone.utc)
@@ -40,11 +41,38 @@ class SchemaTests(TestCase):
         self.assertIsNone(shadow.email)
         self.assertFalse(shadow.has_usable_password())
 
-    def test_user_blockouts_exactly_one(self):
-        both = dict(weekday=1, on_date=date(2026, 1, 6))
-        self.assertRejected(UserBlockout, user=self.coach, start_time=time(9), end_time=time(10), **both)
-        self.assertRejected(UserBlockout, user=self.coach, start_time=time(9), end_time=time(10))
-        UserBlockout.objects.create(user=self.coach, weekday=1, start_time=time(9), end_time=time(10))
+    def test_blockouts_repeat(self):
+        monthly = CourtBlockout.objects.create(
+            court=self.court, starts_on=date(2026, 1, 31), start_time=time(9), end_time=time(10),
+            repeat="monthly", repeat_until=date(2026, 6, 30),
+        )
+        self.assertTrue(monthly.occurs_on(date(2026, 3, 31)))
+        self.assertFalse(monthly.occurs_on(date(2026, 2, 28)))  # no 31st: skipped
+        self.assertFalse(monthly.occurs_on(date(2026, 7, 31)))  # past repeat_until
+        weekly = UserBlockout.objects.create(
+            user=self.coach, starts_on=date(2026, 1, 6), start_time=time(9), end_time=time(10), repeat="weekly"
+        )
+        self.assertTrue(weekly.occurs_on(date(2026, 1, 13)))
+        self.assertFalse(weekly.occurs_on(date(2026, 1, 14)))
+        self.assertFalse(weekly.occurs_on(date(2025, 12, 30)))  # before the first occurrence
+        once = UserBlockout(starts_on=date(2026, 1, 6), repeat="none")
+        self.assertEqual([once.occurs_on(date(2026, 1, d)) for d in (6, 13)], [True, False])
+        self.assertRejected(
+            UserBlockout, user=self.coach, starts_on=date(2026, 1, 6), start_time=time(9), end_time=time(10),
+            repeat="daily", repeat_until=date(2026, 1, 5),
+        )
+
+    def test_club_member_roles(self):
+        ClubMember.objects.create(club=self.club, user=self.coach, role="coach")
+        ClubMember.objects.create(club=self.club, user=self.coach, role="player", expires_on=date(2026, 12, 31))
+        self.assertRejected(ClubMember, club=self.club, user=self.coach, role="player")
+
+    def test_sleep_sync_is_idempotent(self):
+        night = dict(user=self.coach, sleep_start=T0, sleep_end=T1)
+        SleepLog.objects.create(source="apple_health", external_id="abc", **night)
+        self.assertRejected(SleepLog, source="apple_health", external_id="abc", **night)
+        SleepLog.objects.create(source="manual", **night)
+        SleepLog.objects.create(source="manual", **night)  # manual rows have no external id
 
     def test_price_overrides_exactly_one(self):
         self.assertRejected(PriceOverride, court_rate=self.rate, equipment=self.equipment, currency="USD", price=1)
@@ -53,11 +81,11 @@ class SchemaTests(TestCase):
         self.assertRejected(PriceOverride, court_rate=self.rate, currency="USD", price=2)  # conditional unique
 
     def test_payments_exactly_one_payee(self):
-        base = dict(session=self.session, payer=self.coach, amount=10, currency="KWD", platform_fee=1,
-                    method="offline", paid_at=T1)
+        # no method / paid_at: the payment is recorded as due
+        base = dict(session=self.session, payer=self.coach, amount=10, currency="KWD", platform_fee=1)
         self.assertRejected(Payment, club=self.club, coach=self.coach, **base)
         self.assertRejected(Payment, **base)
-        Payment.objects.create(club=self.club, **base)
+        self.assertIsNone(Payment.objects.create(club=self.club, **base).paid_at)
 
     def test_connection_unique(self):
         other = User.objects.create_user("p@example.com", "pw-123-long")

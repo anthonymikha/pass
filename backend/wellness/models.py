@@ -53,16 +53,26 @@ class SorenessLog(models.Model):
 class SleepLog(models.Model):
     class Source(models.TextChoices):
         MANUAL = "manual"
-        HEALTH_APP = "health_app"
+        APPLE_HEALTH = "apple_health"
+        HEALTH_CONNECT = "health_connect"  # Android
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sleep_logs")
     sleep_start = models.DateTimeField()
     sleep_end = models.DateTimeField()
     source = models.CharField(max_length=20, choices=Source.choices)
+    external_id = models.CharField(max_length=128, blank=True)  # health app's record id; makes re-sync idempotent
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "sleep_logs"
+        constraints = [
+            models.CheckConstraint(condition=models.Q(sleep_end__gt=models.F("sleep_start")), name="sleep_logs_end_after_start"),
+            models.UniqueConstraint(
+                fields=["user", "source", "external_id"],
+                condition=~models.Q(external_id=""),
+                name="sleep_logs_external_unique",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user} {self.sleep_start:%Y-%m-%d %H:%M}-{self.sleep_end:%H:%M}"
@@ -113,6 +123,9 @@ class ExerciseAssignment(models.Model):
     group = models.ForeignKey(
         Group, null=True, blank=True, on_delete=models.SET_NULL, related_name="exercise_assignments"
     )
+    sets = models.PositiveSmallIntegerField(null=True, blank=True)
+    reps = models.PositiveSmallIntegerField(null=True, blank=True)  # per set
+    hold_seconds = models.PositiveSmallIntegerField(null=True, blank=True)  # per rep, for stretches
     due_on = models.DateField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

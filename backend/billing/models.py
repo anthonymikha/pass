@@ -20,8 +20,9 @@ class Payment(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=3)
     currency = models.CharField(max_length=3)
     platform_fee = models.DecimalField(max_digits=12, decimal_places=3)
-    method = models.CharField(max_length=20, choices=Method.choices)
-    paid_at = models.DateTimeField()
+    # A row records that money is owed; method and paid_at are filled when it is actually paid.
+    method = models.CharField(max_length=20, choices=Method.choices, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)  # null = still due
     settled_at = models.DateTimeField(null=True, blank=True)  # platform's cut settled with the payee
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -2,6 +2,8 @@ from django.conf import settings
 from django.core.validators import MaxValueValidator
 from django.db import models
 
+from accounts.models import Blockout
+
 
 class Sport(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -35,6 +37,7 @@ class ClubMember(models.Model):
     class Role(models.TextChoices):
         COACH = "coach"
         STAFF = "staff"
+        PLAYER = "player"  # registered at the club or holding a subscription
 
     class Status(models.TextChoices):
         PENDING = "pending"
@@ -44,11 +47,13 @@ class ClubMember(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="club_memberships")
     role = models.CharField(max_length=20, choices=Role.choices)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    expires_on = models.DateField(null=True, blank=True)  # subscription end; null = no expiry
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "club_members"
-        constraints = [models.UniqueConstraint(fields=["club", "user"], name="club_members_unique")]
+        # role is in the key so a coach can also be a subscribed player at the same club
+        constraints = [models.UniqueConstraint(fields=["club", "user", "role"], name="club_members_unique")]
 
     def __str__(self):
         return f"{self.user} @ {self.club} ({self.role})"
@@ -99,6 +104,14 @@ class CourtRate(models.Model):
 
     def __str__(self):
         return f"{self.court} day {self.weekday} {self.start_time}-{self.end_time}: {self.price}"
+
+
+class CourtBlockout(Blockout):
+    # Closures and maintenance. Bookable time = court_rates minus these minus existing sessions.
+    court = models.ForeignKey(Court, on_delete=models.CASCADE, related_name="blockouts")
+
+    class Meta(Blockout.Meta):
+        db_table = "court_blockouts"
 
 
 class Equipment(models.Model):
