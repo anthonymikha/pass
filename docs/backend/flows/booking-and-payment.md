@@ -1,6 +1,6 @@
 # Flow: book a court, play, pay
 
-**Status: planned.** This is the core flow and the next large piece of work. The rules are in the logic pages linked from each step; this page only tells the journey in order.
+**Status: partly built.** Steps 1 to 5 and cancelling are built (`backend/bookings/`, [API](../api/bookings.md)); check-in, payments and reports are next. The rules are in the logic pages linked from each step; this page only tells the journey in order.
 
 Models: [Court, CourtRate, ClubCurrency, PriceOverride, Equipment, Discount](../models/venues.md), [Session, SessionParticipant, SessionRental](../models/bookings.md), [Payment, CommissionRate](../models/billing.md), [Message](../models/chat.md).
 

@@ -1,6 +1,6 @@
 # Chat (CHAT)
 
-**Status: planned.** Delivery by polling. WebSockets later, with no change to these rules.
+**Status: partly built.** Built: CHAT-30, CHAT-31 (session cards). Planned: the rest. Delivery by polling. WebSockets later, with no change to these rules.
 
 ## Who may talk to whom
 

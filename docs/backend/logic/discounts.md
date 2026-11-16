@@ -1,6 +1,6 @@
 # Discounts (DSC)
 
-**Status: planned.** Two ways a session's court price is reduced:
+**Status: partly built.** Built: DSC-1 to DSC-8 (`backend/bookings/`). Planned: DSC-10 to DSC-14. Two ways a session's court price is reduced:
 
 1. **Offers**: rows in `discounts` that the system applies automatically when a session is booked.
 2. **One-off session discount**: the owner reduces the price of one specific session by hand.

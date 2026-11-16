@@ -1,6 +1,6 @@
 # Court availability and personal availability (AVL)
 
-**Status: planned.** Which slots of a court can be booked, and when a user or a group is free.
+**Status: partly built.** Built: AVL-1 to AVL-12 (`backend/bookings/`, [API](../api/bookings.md)). Planned: AVL-20 to AVL-25. Which slots of a court can be booked, and when a user or a group is free.
 
 ## Court slots
 

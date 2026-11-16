@@ -1,6 +1,6 @@
 # Booking (BOOK)
 
-**Status: planned.** Booking a court, training requests, coach-booked training, invites, rentals, cancelling, session cards.
+**Status: partly built.** Built: BOOK-1 to BOOK-17, BOOK-40 to BOOK-66 (`backend/bookings/`, [API](../api/bookings.md)). Planned: BOOK-20 to BOOK-33 (training). Booking a court, training requests, coach-booked training, invites, rentals, cancelling, session cards.
 
 ## Sessions in general
 
@@ -114,6 +114,8 @@ Errors: not the session's coach `404`; not `requested` `400 invalid_status`; plu
 **BOOK-50.** Who may cancel a `confirmed` session: its booker; its session coach; the club owner of its court. When: before `ends_at` and while the session has no payments (the booker has not checked in). Effect: `status = cancelled`; rentals still `requested` become `declined`; the slots become free. Notifies every accepted and invited participant except the caller (NOTE-20).
 
 **BOOK-51.** Errors: has payments `400 already_payable`; ended `400 session_closed`; caller not allowed `403` (if they can see the session) or `404`. Cancelling an already cancelled session returns `200` and changes nothing (GEN-5). There are no cancellation fees or refunds.
+
+**BOOK-52.** *Decided during build (2026-11-16), codes and choices the rules above leave open:* removing a participant who has checked in is `400 already_checked_in`, and removing the booker is `400 booker_cannot_leave` (BOOK-17); deciding a rental on a cancelled session is `400 session_cancelled`, and on a session with payments `400 already_payable` (BOOK-40); cancelling a session that is not `confirmed` through BOOK-50 is `400 invalid_status`. A run that is not offered, not contiguous, in the past, beyond 60 days or under a closure is `400 not_bookable`; only an overlapping non-cancelled session is `409 slot_taken` (BOOK-7). The quote (BOOK-6) also answers `409 slot_taken` when the times are taken. Invites after booking (BOOK-15) may name friends of the booker or active members of the session's group; shadow players are never invited. An answer, rental decision or cancel equal to the current state returns `200` even after the session started or ended (GEN-5). In "my sessions", `from` is inclusive and `to` exclusive on `starts_at`, and `status=completed` means a confirmed session that has ended.
 
 ## Completed
 

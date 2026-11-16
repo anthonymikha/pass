@@ -1,6 +1,6 @@
 # Pricing and currency (PRC)
 
-**Status: planned.** How a court slot or a rental item gets a price in the currency the booker chose.
+**Status: built** (PRC-1 to PRC-3 in `backend/venues/`, PRC-4 to PRC-12 in `backend/bookings/`). How a court slot or a rental item gets a price in the currency the booker chose.
 
 ## Accepted currencies
 
