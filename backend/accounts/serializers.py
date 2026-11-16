@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from config.money import validate_currency
+from config.money import validate_currency, validate_typed_money
 
 from .models import Device, User
 
@@ -46,6 +46,16 @@ class UserSerializer(serializers.ModelSerializer):
 
     def validate_coach_currency(self, value):
         return validate_currency(value) if value else value  # GEN-14
+
+    def validate(self, data):
+        rate = data.get("coach_rate", getattr(self.instance, "coach_rate", None))
+        currency = data.get("coach_currency", getattr(self.instance, "coach_currency", ""))
+        if rate is not None and currency:
+            try:
+                validate_typed_money(rate, currency)  # GEN-17
+            except serializers.ValidationError as exc:
+                raise serializers.ValidationError({"coach_rate": exc.detail})
+        return data
 
 
 class BlockoutSerializer(serializers.ModelSerializer):

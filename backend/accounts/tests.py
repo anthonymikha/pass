@@ -55,7 +55,7 @@ class AccountsApiTests(APITestCase):
         self.assertEqual(r.data["email"], "player@example.com")  # email is read-only here
 
         for bad in ({"timezone": "Mars/Phobos"}, {"coach_currency": "usd"}, {"coach_rate": "-1"},
-                    {"nationality": "lebanon"}, {"date_of_birth": "2999-01-01"}, {"sex": "x"}, {"height_cm": "5"}):
+                    {"nationality": "lebanon"}, {"coach_rate": "25.555"}, {"coach_rate": "1.5", "coach_currency": "LBP"}, {"date_of_birth": "2999-01-01"}, {"sex": "x"}, {"height_cm": "5"}):
             self.assertEqual(self.client.patch("/api/me/", bad, format="json").status_code, 400, bad)
         self.assertEqual(self.client.put("/api/me/", {}, format="json").status_code, 405)
 
