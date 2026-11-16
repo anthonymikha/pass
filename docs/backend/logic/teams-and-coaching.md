@@ -76,6 +76,10 @@
 
 **TEAM-31.** The owner cannot leave their own group (`400 owner_cannot_leave`); they delete it instead. Ownership cannot be transferred in this version.
 
+**TEAM-32.** **My groups.** A user lists the groups where they have a member row, any status, each with the group summary of TEAM-21 and the caller's own status (`invited`, `requested`, `active`); optional filter `status`; sorted by name; paginated. *Decided during build (2026-11-16): the app needs it to show a user's groups and pending invites.*
+
+**TEAM-33.** *Decided during build (2026-11-16), codes the rules above leave open:* inviting a user in a blocked pair, or a non-friend to a play group, is `400 cannot_invite` (TEAM-22); asking to join while in a blocked pair with the owner or coach is `400 cannot_join` (TEAM-24); adding a shadow player to a play group, or changing the coach of a play group, is `400 not_a_team` (TEAM-27, TEAM-29); removing the owner's row is `400 owner_cannot_leave` for anyone (TEAM-26, TEAM-31). Every group is visible by id (TEAM-21), so an action on a group the caller may not take is `403`, except the member list (`404` for non-members).
+
 | From | To | Who |
 |---|---|---|
 | (new) | `invited` | group manager |
