@@ -2,7 +2,7 @@
 
 PASS (Performance Analytics and Sports Solutions) helps players, coaches, and court/club owners book courts, run teams and coaching, track wellness, review session video and chat.
 
-These docs describe how the system is built and how to use it. The roadmap is kept in a local, untracked `PLAN.md` in the repo root.
+These docs describe how the system is built and how to use it. The roadmap and handoff notes are in [`PLAN.md`](../PLAN.md) in the repo root.
 
 ## Map
 
