@@ -95,7 +95,25 @@ REST_FRAMEWORK = {
 }
 
 # The Flutter client is generated from this schema (GET /api/schema/).
-SPECTACULAR_SETTINGS = {"TITLE": "PASS API", "VERSION": "0.1.0", "SERVE_INCLUDE_SCHEMA": False}
+SPECTACULAR_SETTINGS = {
+    "TITLE": "PASS API",
+    "VERSION": "0.1.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    # Several models have fields named status / type / kind; name each value set so the generated client is stable.
+    "ENUM_NAME_OVERRIDES": {
+        "ConnectionStatusEnum": "accounts.models.Connection.Status",
+        "ConnectionTypeEnum": "accounts.models.Connection.Type",
+        "ClubMemberStatusEnum": "venues.models.ClubMember.Status",
+        "GroupTypeEnum": "teams.models.Group.Type",
+        "GroupMemberStatusEnum": "teams.models.GroupMember.Status",
+        "SessionStatusEnum": "bookings.models.Session.Status",
+        "SessionKindEnum": "bookings.models.Session.Kind",
+        "ParticipantStatusEnum": "bookings.models.SessionParticipant.Status",
+        "RentalStatusEnum": "bookings.models.SessionRental.Status",
+        "ExerciseKindEnum": "wellness.models.Exercise.Kind",
+        "ChatTypeEnum": "chat.models.Chat.Type",
+    },
+}
 
 # NOTE-11: path to the Firebase service-account file. Empty = fake sender (logs and records in memory).
 FCM_CREDENTIALS_FILE = os.environ.get("FCM_CREDENTIALS_FILE", "")
