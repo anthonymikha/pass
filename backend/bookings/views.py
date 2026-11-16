@@ -1,18 +1,20 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, status
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
+from teams.services import coachs_players
 from venues.models import Court
 
 from . import services
 from .models import SessionRental
 from .serializers import (
-    AnswerSerializer, AvailabilityParamsSerializer, BookingSerializer, IntervalSerializer, SessionInviteSerializer,
-    MyParamsSerializer, ParticipantSerializer, QuoteSerializer, RentalDecisionSerializer, RentalSerializer,
-    SessionSerializer, SlotQuerySerializer, SlotSerializer, TrainingBookingSerializer, TrainingConfirmSerializer,
-    TrainingRequestSerializer,
+    AnswerSerializer, AttendanceSerializer, AvailabilityParamsSerializer, BookingSerializer, CustomersSerializer,
+    DiscountSerializer, IntervalSerializer, SessionInviteSerializer, MyParamsSerializer, ParticipantSerializer,
+    PeriodSerializer, PlayerSessionSerializer, QuoteSerializer, RentalDecisionSerializer, RentalSerializer,
+    ScheduleParamsSerializer, ScheduleSerializer, SessionSerializer, SlotQuerySerializer, SlotSerializer,
+    TrainingBookingSerializer, TrainingConfirmSerializer, TrainingRequestSerializer,
 )
 
 
@@ -110,15 +112,20 @@ class ParticipantsView(generics.GenericAPIView):
         return Response(SessionSerializer(services.seen_session(request.user, pk)).data, status=code)
 
 
+def seen_row(user, pk, user_id):
+    """GEN-3: the session must be visible, and the participant row must exist in it."""
+    session = services.seen_session(user, pk)
+    row = session.participants.filter(user_id=user_id).select_related("user").first()
+    if row is None:
+        raise NotFound()
+    return session, row
+
+
 class ParticipantView(generics.GenericAPIView):
     serializer_class = AnswerSerializer
 
     def row(self, pk, user_id):
-        session = services.seen_session(self.request.user, pk)
-        row = session.participants.filter(user_id=user_id).select_related("user").first()
-        if row is None:
-            raise NotFound()
-        return session, row
+        return seen_row(self.request.user, pk, user_id)
 
     @extend_schema(responses=ParticipantSerializer)
     def patch(self, request, pk, user_id):
@@ -231,3 +238,86 @@ class AvailabilityView(generics.GenericAPIView):
         data = params.validated_data
         intervals = services.free_intervals(users, data["from"], data["to"], data["min_minutes"])
         return Response(IntervalSerializer(intervals, many=True).data)
+
+
+class CheckInView(generics.GenericAPIView):
+    serializer_class = ParticipantSerializer
+
+    def post(self, request, pk, user_id):
+        """PAY-1 to PAY-7: check a participant in; `200` also on a repeat (GEN-5). The booker's check-in creates the payments."""
+        session, row = seen_row(request.user, pk, user_id)
+        return Response(self.get_serializer(services.check_in(request.user, session, row)).data)
+
+
+class DiscountView(generics.GenericAPIView):
+    serializer_class = DiscountSerializer
+
+    @extend_schema(responses=SessionSerializer)
+    def put(self, request, pk):
+        """DSC-10 to DSC-14: the club owner sets (or with 0 removes) the one-off discount."""
+        session = services.seen_session(request.user, pk)
+        if not (session.court_id and session.court.club.owner_id == request.user.pk):  # permission before input (GEN-4)
+            raise PermissionDenied("Only the club owner can discount a session.")
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        services.set_session_discount(session, serializer.validated_data["amount"])
+        return Response(SessionSerializer(services.seen_session(request.user, pk)).data)
+
+
+class AttendanceView(generics.GenericAPIView):
+    serializer_class = AttendanceSerializer
+
+    def get(self, request, pk):
+        """RPT-6: the club side of the court's club, or the session coach."""
+        session = services.seen_session(request.user, pk)
+        if not (session.coach_id == request.user.pk or (
+                session.court_id and services.is_club_side(request.user, session.court.club))):
+            raise PermissionDenied("Only the club side or the session coach can read attendance.")
+        rows, no_shows = services.attendance(session)
+        return Response(AttendanceSerializer({
+            "session": session.pk, "accepted": rows, "checked_in": sum(1 for r in rows if r.checked_in_at),
+            "no_shows": no_shows}).data)
+
+
+class ScheduleView(generics.GenericAPIView):
+    serializer_class = ScheduleParamsSerializer
+
+    @extend_schema(parameters=[ScheduleParamsSerializer], responses=ScheduleSerializer)
+    def get(self, request, club):
+        """RPT-1: the club side; not paginated."""
+        club = services.club_report_access(request.user, club)
+        params = self.get_serializer(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        data = params.validated_data
+        court = None
+        if "court" in data:
+            court = club.courts.filter(pk=data["court"]).first()
+            if court is None:
+                raise ValidationError({"court": ["Not found."]})  # GEN-18
+        sessions, closures = services.schedule(club, data["from"], data["to"], court)
+        return Response(ScheduleSerializer({"sessions": sessions, "closures": closures}).data)
+
+
+class CustomersView(generics.GenericAPIView):
+    serializer_class = PeriodSerializer
+
+    @extend_schema(parameters=[PeriodSerializer], responses=CustomersSerializer)
+    def get(self, request, club):
+        """RPT-4, RPT-5: the club owner only (ACC-6); not paginated."""
+        club = services.club_report_access(request.user, club, owner_only=True)
+        params = self.get_serializer(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        people, rate = services.customers(club, params.validated_data["from"], params.validated_data["to"])
+        return Response(CustomersSerializer({"customers": len(people), "repeat_rate": rate, "people": people}).data)
+
+
+class PlayerHistoryView(generics.ListAPIView):
+    serializer_class = PlayerSessionSerializer
+
+    def get_queryset(self):
+        """RPT-8: a coach, for one of the coach's players (ACC-1); anyone else's id is a 404."""
+        coach = self.request.user
+        if not coach.is_coach:
+            raise PermissionDenied("Only coaches can read player history.")
+        player = get_object_or_404(coachs_players(coach), pk=self.kwargs["user_id"])
+        return services.player_history(coach, player)
