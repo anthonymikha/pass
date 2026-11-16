@@ -1,6 +1,6 @@
 # Flow: messaging
 
-**Status: planned.** Rules: [chat](../logic/chat.md). Delivery by polling first; WebSockets later.
+**Status: built** (`backend/chat/`, [API](../api/chat.md)). Rules: [chat](../logic/chat.md). Delivery by polling first; WebSockets later.
 
 Models: [Chat, ChatMember, Message](../models/chat.md), [Group](../models/teams.md), [Club, ClubMember](../models/venues.md), [Session](../models/bookings.md).
 

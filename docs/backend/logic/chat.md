@@ -1,6 +1,6 @@
 # Chat (CHAT)
 
-**Status: partly built.** Built: CHAT-30, CHAT-31 (session cards). Planned: the rest. Delivery by polling. WebSockets later, with no change to these rules.
+**Status: built** (`backend/chat/`, API page [chat](../api/chat.md)). Delivery by polling. WebSockets later, with no change to these rules.
 
 ## Who may talk to whom
 
@@ -41,6 +41,8 @@
 **CHAT-16.** Messages cannot be edited or deleted in this version.
 
 **CHAT-17.** Messages are text only; there are no attachments (settled at the owner's review on 2026-11-16).
+
+**CHAT-18.** *Decided during build (2026-11-16):* CHAT-7's "non-cancelled session at the club" means the user is the booker or has a participant row in it; "membership" means a current one (ACC-1, ACC-2); "an offer targeted at them" means any offer of the club with `user` = them, expired or not. The club side may not open an inquiry with a shadow player, an inactive user, or someone on that club's own side (`400 cannot_chat`). A user who is both the inquirer and on the club side reads as the member. In an inquiry, a message from the member pushes the owner and current staff; a message from the club side pushes the member. Polling with both `after` and `before`, or a `limit` outside 1 to 200, is `400`.
 
 ## Session cards
 
