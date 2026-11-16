@@ -218,9 +218,9 @@ class RpeTests(WellnessBase):
         self.join(absent, pat, checked_in=False)
         self.join(cancelled, pat)
 
-        for s in (absent, cancelled):
+        for s, code in ((absent, "not_checked_in"), (cancelled, "invalid_status")):
             r = self.call("put", f"sessions/{s.id}/rpe/", pat, {"rpe": 5}, 400)
-            self.assertEqual(r.data["code"], "not_checked_in")
+            self.assertEqual(r.data["code"], code)
         self.assertIsNone(SessionParticipant.objects.get(session=absent, user=pat).rpe)
 
         self.call("put", f"sessions/{a.id}/rpe/", pat, {"rpe": 5, "sore_areas": [{"body_area": "hips", "level": 2}]}, 200)

@@ -1,6 +1,6 @@
 # Flow: RPE, soreness, sleep and recovery exercises
 
-**Status: planned.** Rules: [wellness](../logic/wellness.md). The recovery level and suggested times are **deferred** to the owner's sports-expert partner.
+**Status: built** (`backend/wellness/`, [API](../api/wellness.md)), except the deferred recovery level and suggested times. Rules: [wellness](../logic/wellness.md). The recovery level and suggested times are **deferred** to the owner's sports-expert partner.
 
 Models: [SessionParticipant](../models/bookings.md), [SorenessLog, SleepLog, Exercise, ExerciseBodyArea, ExerciseAssignment, UserAchievement](../models/wellness.md), [Group](../models/teams.md).
 

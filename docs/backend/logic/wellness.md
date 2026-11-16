@@ -1,6 +1,6 @@
 # Wellness (WEL)
 
-**Status: planned.** RPE after sessions, soreness check-ins, sleep, exercise suggestions and coach assignments, achievements.
+**Status: built** (`backend/wellness/`, API page [wellness](../api/wellness.md)); recovery level and suggested times stay deferred. RPE after sessions, soreness check-ins, sleep, exercise suggestions and coach assignments, achievements.
 
 > **Deferred to the owner's sports-expert partner, not designed here:** the **recovery level** formula and **suggested play and training times** (for a player, a group or a team). No code computes, stores or approximates them. Heart rate, HRV, steps and sleep stages are not stored until that formula says which are needed.
 
@@ -12,7 +12,7 @@
 
 **WEL-3.** Writes, in one transaction: `rpe`, `rpe_minutes`, `rpe_logged_at` = now on the participant row; and replaces the user's `post_session` soreness rows for this session with one row per listed area (`period = post_session`, `session` set, `logged_on` = the session's start date in the user's timezone). Submitting again inside the window replaces both (an edit). `rpe_logged_at` is updated on every submit.
 
-**WEL-4.** Errors: not checked in `400 not_checked_in`; window over `400 rpe_closed`; bad values `400` per field.
+**WEL-4.** Errors: session not `confirmed` (cancelled) `400 invalid_status` (*decided during build, 2026-11-16*, same code as PAY-5); not checked in `400 not_checked_in`; window over `400 rpe_closed`; bad values `400` per field.
 
 **WEL-5.** Logging RPE is what unlocks the session's video for that participant (REC-20).
 
@@ -53,6 +53,8 @@
 **WEL-42.** **Complete.** The assignment's user sets `completed_at` = now. Already completed: no change (GEN-5). There is no "undo".
 
 **WEL-43.** **Delete.** The user may delete their own self-picked assignments. The assigning coach may delete an assignment they sent while it is not completed. Completed assignments stay.
+
+**WEL-45.** *Decided during build (2026-11-16):* a completed assignment is never deleted by anyone (WEL-43 "completed assignments stay"); trying is `403`. A user cannot delete a coach-sent assignment (`403`). Imported sleep rows (WEL-22) can be deleted but not changed (`403`). Users read their own soreness and sleep logs, assignments and achievements (ACC-4), and any user may read the exercise catalogue (needed to pick and assign).
 
 **WEL-44.** A user sees all their assignments in one list (self-picked and coach-sent, told apart by `assigned_by`), filter `open` (not completed) or `done`.
 

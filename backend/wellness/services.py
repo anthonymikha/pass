@@ -35,9 +35,10 @@ def submit_rpe(row, rpe, rpe_minutes=None, sore_areas=()):
     with transaction.atomic():
         row = SessionParticipant.objects.select_for_update(of=("self",)).select_related("session").get(pk=row.pk)
         session, now = row.session, timezone.now()
-        # WEL-1, WEL-4. ponytail: a checked-in row of a session that is no longer confirmed (cancelled) is
-        # answered as not_checked_in; the pages name no code for it.
-        if row.checked_in_at is None or session.status != Session.Status.CONFIRMED:
+        # WEL-1, WEL-4
+        if session.status != Session.Status.CONFIRMED:
+            raise BusinessError("invalid_status", "This session is not confirmed.")
+        if row.checked_in_at is None:
             raise BusinessError("not_checked_in", "You did not check in to this session.")
         if now > session.ends_at + datetime.timedelta(days=7):
             raise BusinessError("rpe_closed", "RPE can only be logged within 7 days after the session.")
