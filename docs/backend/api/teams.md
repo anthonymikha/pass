@@ -37,7 +37,7 @@ Chat membership follows the rows (TEAM-28, CHAT-4): a row turning `active` adds 
  "clubs": [{"id": 1, "name": "Beirut Hoops"}]}
 ```
 
-`coach_bio`, `coach_rate`, `coach_currency` and `clubs` appear only when `is_coach` is true; `clubs` lists the clubs with an active, unexpired coach membership (ACC-2). `avatar` is always `""` until signed links exist (REC-30). Email, phone and body data are never included.
+`coach_bio`, `coach_rate`, `coach_currency` and `clubs` appear only when `is_coach` is true; `clubs` lists the clubs with an active, unexpired coach membership (ACC-2). `avatar` is a signed link to the user's avatar (valid 1 hour) or `""` (REC-30). Email, phone and body data are never included.
 
 ## Helpers for later tasks
 
