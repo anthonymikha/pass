@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Measuring Player Effort</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root { --ink:#1d2433; --muted:#5b6475; --line:#d9dee7; --soft:#f3f5f9; --accent:#1f6feb; --good:#1a7f37; --bad:#b42318; --pick:#e8f1ff; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.5; margin: 0; background: #fff; }
+  h1 { font-size: 24pt; margin: 0 0 4px; letter-spacing: -0.3px; }
+  h2 { font-size: 15pt; margin: 26px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--ink); break-after: avoid; }
+  h3 { font-size: 12pt; margin: 0 0 6px; break-after: avoid; }
+  p { margin: 0 0 8px; }
+  .sub { color: var(--muted); font-size: 12pt; margin-bottom: 14px; }
+  .meta { color: var(--muted); font-size: 9pt; }
+  .box { background: var(--soft); border-left: 4px solid var(--accent); padding: 10px 14px; margin: 10px 0 12px; border-radius: 4px; }
+  .box p:last-child, .box ul:last-child, .box ol:last-child { margin-bottom: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 9.8pt; break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 5px 7px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  tr.pick td { background: var(--pick); }
+  .decision { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px 4px; margin: 14px 0; break-inside: avoid; }
+  .decision .q { font-weight: 600; margin-bottom: 6px; }
+  .num { display: inline-block; background: var(--ink); color: #fff; border-radius: 4px; padding: 0 7px; margin-right: 6px; font-size: 10pt; }
+  .tag { display: inline-block; font-size: 8pt; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; margin-left: 4px; white-space: nowrap; }
+  .need { font-size: 9.5pt; color: var(--muted); margin-bottom: 8px; }
+  .need b { color: var(--ink); }
+  .good { color: var(--good); }
+  .bad { color: var(--bad); }
+  ul, ol { margin: 0 0 8px; padding-left: 20px; }
+  li { margin-bottom: 2px; }
+  .scale td:first-child { width: 48px; text-align: center; font-weight: 700; }
+  .formula { font-size: 12pt; text-align: center; padding: 8px; margin: 8px 0; background: var(--soft); border-radius: 4px; }
+  .check td:first-child { width: 22px; }
+  .tick { display: inline-block; width: 12px; height: 12px; border: 1.5px solid var(--ink); border-radius: 2px; vertical-align: middle; }
+  .lines { border-bottom: 1px solid var(--line); height: 22px; }
+  .page-break { break-before: page; }
+  .small { font-size: 9pt; color: var(--muted); }
+  .two { display: flex; gap: 12px; }
+  .two > div { flex: 1; }
+</style>
+</head>
+<body>
+
+<h1>Measuring player effort in PASS</h1>
+<div class="sub">The options for working out effort and training load from player ratings (RPE). Your choices decide what we build.</div>
+<div class="meta">Prepared November 2026 · For review by the PASS sports expert</div>
+
+<div class="box">
+  <p><b>How to read this.</b> Section 1 explains RPE in plain words. Section 2 lists the information the app can collect. Section 3 has nine decisions. Each one gives the options with their pros and cons, and marks the one we suggest with <span class="tag">SUGGESTED</span>. These are only suggestions, and the choice is yours. The last page is a checklist where you tick your choices.</p>
+</div>
+
+<h2>The short version</h2>
+<ul>
+  <li>After every session the app asks each player <b>"How hard was that session?"</b> and they answer from 1 to 10. That answer is the RPE (Rating of Perceived Exertion).</li>
+  <li>The method used most around the world, by professional clubs, national teams and researchers, is called <b>session RPE</b>. It multiplies the rating by the session's length in minutes to give one number, the <b>training load</b>.</li>
+  <li>Everything else (weekly totals, warnings, recovery) is built on top of that number.</li>
+  <li>The app can already collect what this method needs. What we need from you: <b>how</b> to ask the question, <b>which</b> numbers to calculate from the answers, and <b>when</b> to warn players or coaches.</li>
+  <li>How load, soreness and sleep combine into a <b>recovery level</b> is entirely your call (Decision 9).</li>
+</ul>
+
+<h2>1. What is RPE?</h2>
+<p>RPE stands for <b>Rating of Perceived Exertion</b>: how hard the player <i>felt</i> they worked. It's a score from the player's own judgement, not a measurement from a device. It has been tested in dozens of studies across many sports and agrees well with heart rate and other lab measures. It's cheap, quick and works for everyone, which is why it's used so widely.</p>
+
+<h3>The standard scale (Foster's 0–10 scale)</h3>
+<p>Most teams use this version. Each number comes with a word that helps players answer the same way every time.</p>
+<table class="scale">
+  <tr><th>Score</th><th>Meaning</th><th>Score</th><th>Meaning</th></tr>
+  <tr><td>0</td><td>Rest</td><td>6</td><td>(between hard and very hard)</td></tr>
+  <tr><td>1</td><td>Very, very easy</td><td>7</td><td>Very hard</td></tr>
+  <tr><td>2</td><td>Easy</td><td>8</td><td>(between)</td></tr>
+  <tr><td>3</td><td>Moderate</td><td>9</td><td>(between)</td></tr>
+  <tr><td>4</td><td>Somewhat hard</td><td>10</td><td>Maximal, the hardest possible</td></tr>
+  <tr><td>5</td><td>Hard</td><td></td><td></td></tr>
+</table>
+
+<h3>From a rating to a training load</h3>
+<div class="formula"><b>Training load</b> = effort rating × minutes of the session</div>
+<p>Example: a player rates a 60-minute session as <b>6</b>. Their load for that session is 6 × 60 = <b>360 load points</b>. The load points have no unit. They only mean something when compared with the same player's other sessions and weeks.</p>
+<p>So a long easy session and a short hard one can come out with similar loads: 90 minutes at 3 = 270, and 45 minutes at 6 = 270. That's intended, because both put a similar total demand on the body.</p>
+
+<h2>2. What the app can collect</h2>
+<div class="two">
+<div>
+<table>
+  <tr><th>The app already knows</th></tr>
+  <tr><td>When each session was booked to start and end</td></tr>
+  <tr><td>When each player actually checked in (so lateness and no-shows are known)</td></tr>
+  <tr><td>The sport, and whether it was <b>play</b> (a match or casual game) or <b>training</b> (with a coach)</td></tr>
+  <tr><td>Which coach and which team, if any</td></tr>
+  <tr><td>The player's effort rating (1–10) after the session, plus the minutes, which they can correct</td></tr>
+  <tr><td>Sore body areas (16 areas, each 0–10) in the morning, in the evening and after sessions</td></tr>
+  <tr><td>Sleep start and end times, typed in or read from the phone's health app</td></tr>
+</table>
+</div>
+<div>
+<table>
+  <tr><th>The app does NOT know (yet)</th></tr>
+  <tr><td>Heart rate during the session</td></tr>
+  <tr><td>GPS distance or speed</td></tr>
+  <tr><td>Training done outside the app (gym, running, other clubs)</td></tr>
+  <tr><td>Sleep <i>quality</i> (only how long)</td></tr>
+  <tr><td>Fatigue, stress or mood</td></tr>
+  <tr><td>Age group or level, if you want different rules for juniors or beginners</td></tr>
+</table>
+<p class="small">Anything in this column can be added if you decide it matters. Some items are easy (a question in the app) and some take more work (reading heart rate from a watch).</p>
+</div>
+</div>
+
+<div class="box"><p><b>Something that helps us:</b> players can only watch their session's video after they've given their effort rating. So we expect far more answers than most clubs get, and missing ratings will be less of a problem.</p></div>
+
+<h2 class="page-break">3. The decisions</h2>
+
+<div class="decision">
+  <div class="q"><span class="num">1</span>Which rating scale should players use?</div>
+  <table>
+    <tr><th style="width:22%">Option</th><th>How it works</th><th style="width:22%">Good</th><th style="width:22%">Bad</th></tr>
+    <tr><td>A. Numbers only, 1–10</td><td>What the app does today: a plain 1–10 slider.</td><td class="good">Simplest.</td><td class="bad">Players read numbers differently. Not the validated scale.</td></tr>
+    <tr class="pick"><td>B. 1–10 with words <span class="tag">SUGGESTED</span></td><td>Same numbers, with "Easy", "Hard" and so on shown (the table in Section 1).</td><td class="good">The international standard. Comparable with research.</td><td class="bad">None really.</td></tr>
+    <tr><td>C. 0–100 scale</td><td>Finer steps; the words sit at 10, 30, 50 and so on.</td><td class="good">More precise.</td><td class="bad">Less familiar to players, and slower to answer.</td></tr>
+    <tr><td>D. Two ratings</td><td>Separate scores for "breathing" and "legs/muscles".</td><td class="good">Shows <i>what kind</i> of effort it was.</td><td class="bad">Two questions instead of one. Mostly used in elite and research settings.</td></tr>
+    <tr><td>E. Picture scale for children</td><td>Cartoon faces or figures that get more tired as the number rises.</td><td class="good">Validated for ages 8–16.</td><td class="bad">Only needed if we have junior players.</td></tr>
+  </table>
+  <div class="need"><b>Data needed:</b> nothing new for A–C. D needs a second rating per session. E needs each player's age.</div>
+</div>
+
+<div class="decision">
+  <div class="q"><span class="num">2</span>When should the app ask the question?</div>
+  <table>
+    <tr><th style="width:22%">Option</th><th>How it works</th><th style="width:22%">Good</th><th style="width:22%">Bad</th></tr>
+    <tr><td>A. Right at the end</td><td>The reminder appears as soon as the session ends.</td><td class="good">Highest chance they answer.</td><td class="bad">The last drill dominates the feeling. A hard finish makes the whole session seem harder.</td></tr>
+    <tr class="pick"><td>B. 15–30 minutes after <span class="tag">SUGGESTED</span></td><td>The reminder appears at a fixed time after the end, for example 20 minutes.</td><td class="good">The original method's recommendation. Rates the whole session.</td><td class="bad">Some players may have left and forget.</td></tr>
+    <tr><td>C. Next morning</td><td>Asked together with the morning soreness check.</td><td class="good">One check-in a day.</td><td class="bad">Memory fades, so less accurate.</td></tr>
+  </table>
+  <div class="need"><b>Data needed:</b> nothing new. Whichever we pick, it must be <b>the same every time</b>. Changing it later makes old and new numbers impossible to compare.</div>
+</div>
+
+<div class="decision">
+  <div class="q"><span class="num">3</span>How many minutes should count?</div>
+  <table>
+    <tr><th style="width:22%">Option</th><th>How it works</th><th style="width:22%">Good</th><th style="width:22%">Bad</th></tr>
+    <tr><td>A. The booked time</td><td>A 90-minute booking counts as 90 minutes for everyone.</td><td class="good">Simplest.</td><td class="bad">Wrong for players who arrive late.</td></tr>
+    <tr class="pick"><td>B. From arrival to end <span class="tag">SUGGESTED</span></td><td>From check-in (or the start, whichever is later) to the end. The player can still correct it.</td><td class="good">Automatic, and fair to late arrivals.</td><td class="bad">Counts breaks as minutes, but so does the standard method.</td></tr>
+    <tr><td>C. The player types it</td><td>The player enters minutes every time.</td><td class="good">Can be most accurate.</td><td class="bad">Extra effort, so guesses and typos.</td></tr>
+  </table>
+  <div class="need"><b>Data needed:</b> already collected (booking times and check-in time). Note that the standard method includes warm-up time.</div>
+</div>
+
+<div class="decision">
+  <div class="q"><span class="num">4</span>Should matches (play) and training count the same?</div>
+  <table>
+    <tr><th style="width:22%">Option</th><th>How it works</th><th style="width:22%">Good</th><th style="width:22%">Bad</th></tr>
+    <tr class="pick"><td>A. Same <span class="tag">SUGGESTED</span></td><td>Load = rating × minutes for every session.</td><td class="good">The standard method. The rating already captures how hard it was.</td><td class="bad">Ignores any extra stress that comes with matches.</td></tr>
+    <tr><td>B. Extra weight for one type</td><td>For example, match load × 1.2.</td><td class="good">Can reflect your experience in this sport.</td><td class="bad">The weight is a guess with no research behind it. Harder to compare.</td></tr>
+  </table>
+  <div class="need"><b>Data needed:</b> already collected (play or training, and the sport).</div>
+</div>
+
+<div class="decision">
+  <div class="q"><span class="num">5</span>What if a player attended but didn't give a rating?</div>
+  <table>
+    <tr><th style="width:22%">Option</th><th>How it works</th><th style="width:22%">Good</th><th style="width:22%">Bad</th></tr>
+    <tr><td>A. Count it as zero</td><td>As if the session never happened.</td><td class="good">Simple.</td><td class="bad"><b>Dangerous:</b> the player looks rested when they weren't.</td></tr>
+    <tr><td>B. Leave it out</td><td>Skip that day in the calculations.</td><td class="good">Honest.</td><td class="bad">Weekly totals come out too low.</td></tr>
+    <tr class="pick"><td>C. Estimate it <span class="tag">SUGGESTED</span></td><td>Use the player's usual rating for that sport and session type, and mark it as "estimated".</td><td class="good">Totals stay realistic, and coaches can see it was estimated.</td><td class="bad">Wrong if that session was unusual.</td></tr>
+  </table>
+  <div class="need"><b>Data needed:</b> already collected (attendance and past ratings). Players who didn't check in get no load either way.</div>
+</div>
+
+<div class="decision">
+  <div class="q"><span class="num">6</span>Which numbers should we calculate from the loads? <span class="small">(you can pick several)</span></div>
+  <table>
+    <tr><th style="width:24%">Number</th><th>What it tells you, in plain words</th><th style="width:30%">Things to know</th></tr>
+    <tr class="pick"><td><b>Weekly load</b> <span class="tag">SUGGESTED</span></td><td>All of the week's session loads added together. The basic "how much did they do".</td><td>Only meaningful compared with the same player's other weeks.</td></tr>
+    <tr class="pick"><td><b>Change from last week</b> <span class="tag">SUGGESTED</span></td><td>"This week is 30% more than last week." Big sudden jumps are the clearest warning sign.</td><td>A common rule of thumb is to be careful above roughly +10–15%. That's a rule of thumb, not hard science.</td></tr>
+    <tr><td><b>Monotony</b></td><td>How <i>samey</i> the week was. Hard days with rest days give a low score, which is good. Similar sessions every day with no rest give a high score.</td><td>Foster linked high monotony (above about 2) combined with high load to illness and overtraining.</td></tr>
+    <tr><td><b>Strain</b></td><td>Weekly load × monotony. High when a player does a lot <i>and</i> every day looks the same.</td><td>Published warning levels vary between sports, so it's better set per team.</td></tr>
+    <tr><td><b>Acute : chronic ratio</b></td><td>This week compared with the average of the last 4 weeks. 1.0 = normal. 1.5 = 50% more than they're used to.</td><td><b>Debated.</b> It was popular from about 2016 as an injury predictor. Since 2020 several researchers have shown it doesn't predict injuries reliably. Use it as one warning among several, never alone.</td></tr>
+    <tr class="pick"><td><b>Compared with their own normal</b> <span class="tag">SUGGESTED</span></td><td>"This week is unusually high <i>for this player</i>." Each player is compared with their own last 4–6 weeks, not with teammates.</td><td>The approach most modern clubs prefer. Needs about 4 weeks of data before it means anything.</td></tr>
+  </table>
+  <div class="need"><b>Data needed:</b> nothing new. All of these come from the ratings and minutes. Rest days count as zero.</div>
+</div>
+
+<div class="decision">
+  <div class="q"><span class="num">7</span>When should the app warn someone, and who should see it?</div>
+  <table>
+    <tr><th style="width:22%">Option</th><th>How it works</th><th style="width:22%">Good</th><th style="width:22%">Bad</th></tr>
+    <tr><td>A. Fixed limits</td><td>For example, warn when this week is more than 1.5 times their usual.</td><td class="good">Easy to explain.</td><td class="bad">One number for everyone ignores fitness and level.</td></tr>
+    <tr class="pick"><td>B. Personal limits <span class="tag">SUGGESTED</span></td><td>Warn when a player is far above their <i>own</i> normal.</td><td class="good">Fair to beginners and experts alike.</td><td class="bad">No warnings for the first ~4 weeks.</td></tr>
+    <tr><td>C. No automatic warnings</td><td>Just show charts. Coaches judge for themselves.</td><td class="good">No false alarms.</td><td class="bad">Players without a coach get no guidance.</td></tr>
+  </table>
+  <div class="need"><b>Also decide:</b> who sees the warnings (the player, their coach, or both), and whether players without a coach get them.</div>
+</div>
+
+<div class="decision">
+  <div class="q"><span class="num">8</span>What about training done outside the app?</div>
+  <table>
+    <tr><th style="width:22%">Option</th><th>How it works</th><th style="width:22%">Good</th><th style="width:22%">Bad</th></tr>
+    <tr class="pick"><td>A. Ignore it for now <span class="tag">SUGGESTED</span></td><td>Only sessions booked in PASS count.</td><td class="good">Nothing extra to build.</td><td class="bad">Loads look lower than they really are.</td></tr>
+    <tr><td>B. Manual entry</td><td>The player adds "gym, 45 min, rating 6".</td><td class="good">Simple and complete.</td><td class="bad">Depends on players bothering to add it.</td></tr>
+    <tr><td>C. Read from the phone or watch</td><td>Import workouts (and heart rate) from Apple Health or Google Health, as we already do for sleep.</td><td class="good">Automatic, and heart rate makes a useful second measure.</td><td class="bad">More work to build. Only works for players with a watch.</td></tr>
+  </table>
+</div>
+
+<div class="decision">
+  <div class="q"><span class="num">9</span>The recovery level: how do load, soreness and sleep combine?</div>
+  <p>This is entirely your decision, and we haven't designed anything for it. The app has three ingredients: <b>training load</b> (from RPE), <b>soreness</b> (16 body areas, 0–10, morning, evening and after sessions) and <b>sleep length</b>. Common approaches in sport are:</p>
+  <table>
+    <tr><th style="width:22%">Approach</th><th>How it works</th><th style="width:22%">Good</th><th style="width:22%">Bad</th></tr>
+    <tr><td>A. Traffic light</td><td>Simple rules. For example, red if soreness is high <i>and</i> sleep is short.</td><td class="good">Very easy for players to understand.</td><td class="bad">Loses detail. The rules are hand-picked.</td></tr>
+    <tr><td>B. Score out of 100</td><td>Each ingredient adds or removes points, with weights you choose.</td><td class="good">One clear number, easy to track.</td><td class="bad">The weights need your expertise.</td></tr>
+    <tr><td>C. Compared with their own normal</td><td>"Your soreness and sleep are worse than your usual." Same idea as Decision 6.</td><td class="good">Personal and fair.</td><td class="bad">Needs a few weeks of data per player.</td></tr>
+  </table>
+  <div class="need"><b>Questions for you:</b> Do we need more check-in questions, such as fatigue, stress, mood or sleep quality? (These are common daily 1–5 questions in professional sport.) Should morning soreness count more than evening soreness? How quickly should a hard session "fade" from the recovery level?</div>
+</div>
+
+<h2>4. Worked example: one player, one week</h2>
+<p>Here is what the numbers look like for one player.</p>
+<table>
+  <tr><th>Day</th><th>Session</th><th>Minutes</th><th>Rating</th><th>Load</th></tr>
+  <tr><td>Monday</td><td>Training</td><td>60</td><td>6</td><td>360</td></tr>
+  <tr><td>Tuesday</td><td>Rest</td><td>–</td><td>–</td><td>0</td></tr>
+  <tr><td>Wednesday</td><td>Training</td><td>90</td><td>7</td><td>630</td></tr>
+  <tr><td>Thursday</td><td>Light play</td><td>60</td><td>4</td><td>240</td></tr>
+  <tr><td>Friday</td><td>Rest</td><td>–</td><td>–</td><td>0</td></tr>
+  <tr><td>Saturday</td><td>Match</td><td>90</td><td>8</td><td>720</td></tr>
+  <tr><td>Sunday</td><td>Rest</td><td>–</td><td>–</td><td>0</td></tr>
+  <tr><th colspan="4">Weekly load</th><th>1,950</th></tr>
+</table>
+
+<table>
+  <tr><th style="width:34%">Number</th><th style="width:18%">Result</th><th>What it means</th></tr>
+  <tr><td>Weekly load</td><td>1,950</td><td>The total for the week.</td></tr>
+  <tr><td>Change from last week (last week was 1,500)</td><td>+30%</td><td>A big jump. Worth a look.</td></tr>
+  <tr><td>Monotony</td><td>1.0</td><td>Low, which is good. Hard days were mixed with rest days.</td></tr>
+  <tr><td>Strain</td><td>about 1,920</td><td>Moderate.</td></tr>
+  <tr><td>Acute : chronic ratio (last 4 weeks averaged 1,500)</td><td>1.3</td><td>30% more than they're used to. At the top edge of what is usually called "normal".</td></tr>
+</table>
+
+<p><b>Same total, different week:</b> if the player had trained every day with <b>no rest days</b>, at a similar effort each time (daily loads between 240 and 330), the weekly load would be the same 1,950. But monotony would jump to about <b>8</b> and strain to about <b>15,600</b>. That's the "every day the same" pattern Foster warned about. The weekly total alone hides it.</p>
+
+<h2>5. Common mistakes to avoid</h2>
+<ul>
+  <li><b>Comparing players with each other.</b> One player's "6" isn't the same as another's. Compare each player with themselves over time.</li>
+  <li><b>Changing the method partway through.</b> A new scale, a new question time or a new minutes rule breaks the comparison with older data. Decide once, then keep it.</li>
+  <li><b>Treating a missing rating as a rest day.</b> See Decision 5.</li>
+  <li><b>Trusting one number.</b> No single figure, including the ratio, predicts injury on its own. Look at load, soreness and sleep together.</li>
+  <li><b>Players copying each other.</b> Ratings should be given privately on each player's own phone, which the app already does.</li>
+  <li><b>Judging too early.</b> Personal comparisons need about 4 weeks of data before they mean anything.</li>
+</ul>
+
+<h2 class="page-break">6. Decision sheet</h2>
+<p>Tick one option per decision (several are allowed for Decision 6) and add any notes. Suggested options are in bold.</p>
+<table class="check">
+  <tr><th></th><th style="width:30%">Decision</th><th>Options</th></tr>
+  <tr><td>1</td><td>Rating scale</td><td><span class="tick"></span> A numbers only &nbsp; <span class="tick"></span> <b>B 1–10 with words</b> &nbsp; <span class="tick"></span> C 0–100 &nbsp; <span class="tick"></span> D two ratings &nbsp; <span class="tick"></span> E picture scale for juniors</td></tr>
+  <tr><td>2</td><td>When to ask</td><td><span class="tick"></span> A right at the end &nbsp; <span class="tick"></span> <b>B ___ minutes after</b> &nbsp; <span class="tick"></span> C next morning</td></tr>
+  <tr><td>3</td><td>Minutes counted</td><td><span class="tick"></span> A booked time &nbsp; <span class="tick"></span> <b>B arrival to end</b> &nbsp; <span class="tick"></span> C player types it</td></tr>
+  <tr><td>4</td><td>Play vs training</td><td><span class="tick"></span> <b>A same</b> &nbsp; <span class="tick"></span> B extra weight for ______ × ____</td></tr>
+  <tr><td>5</td><td>Missing rating</td><td><span class="tick"></span> A zero &nbsp; <span class="tick"></span> B leave out &nbsp; <span class="tick"></span> <b>C estimate and mark</b></td></tr>
+  <tr><td>6</td><td>Numbers to calculate</td><td><span class="tick"></span> <b>weekly load</b> &nbsp; <span class="tick"></span> <b>change from last week</b> &nbsp; <span class="tick"></span> monotony &nbsp; <span class="tick"></span> strain &nbsp; <span class="tick"></span> acute:chronic ratio &nbsp; <span class="tick"></span> <b>compared with own normal</b></td></tr>
+  <tr><td>7</td><td>Warnings</td><td><span class="tick"></span> A fixed limits &nbsp; <span class="tick"></span> <b>B personal limits</b> &nbsp; <span class="tick"></span> C none<br>Who sees them: <span class="tick"></span> player &nbsp; <span class="tick"></span> coach &nbsp; <span class="tick"></span> both</td></tr>
+  <tr><td>8</td><td>Outside training</td><td><span class="tick"></span> <b>A ignore for now</b> &nbsp; <span class="tick"></span> B manual entry &nbsp; <span class="tick"></span> C phone/watch import</td></tr>
+  <tr><td>9</td><td>Recovery level</td><td><span class="tick"></span> A traffic light &nbsp; <span class="tick"></span> B score out of 100 &nbsp; <span class="tick"></span> C compared with own normal<br>Extra questions: <span class="tick"></span> fatigue &nbsp; <span class="tick"></span> stress &nbsp; <span class="tick"></span> mood &nbsp; <span class="tick"></span> sleep quality</td></tr>
+</table>
+<p><b>Notes:</b></p>
+<div class="lines"></div><div class="lines"></div><div class="lines"></div><div class="lines"></div><div class="lines"></div>
+
+<h2>Sources</h2>
+<ul class="small">
+  <li>Foster C. et al. (2001). A new approach to monitoring exercise training. <i>J Strength Cond Res</i>. The original session RPE, monotony and strain method.</li>
+  <li>Haddad M. et al. (2017). Session-RPE method for training load monitoring: validity, ecological usefulness, and influencing factors. <i>Frontiers in Neuroscience</i>.</li>
+  <li>Bourdon P. et al. (2017). Monitoring athlete training loads: consensus statement. <i>Int J Sports Physiol Perform</i>.</li>
+  <li>Soligard T. et al. (2016). How much is too much? IOC consensus statement on load in sport and risk of injury. <i>Br J Sports Med</i>.</li>
+  <li>Fanchini M. et al. (2015–16). Session RPE timing and the 0–100 scale in elite soccer. <i>Int J Sports Physiol Perform</i>.</li>
+  <li>McLaren S. et al. (2016). Differential ratings of perceived exertion (breathing and legs). <i>Int J Sports Physiol Perform</i>.</li>
+  <li>Impellizzeri F. et al. (2020–21). Critiques of the acute:chronic workload ratio. <i>Sports Medicine</i>; Hulin and Gabbett's reply in <i>Br J Sports Med</i> (2019).</li>
+  <li>Robertson R. et al. (2000). Children's OMNI scale of perceived exertion. <i>Med Sci Sports Exerc</i>.</li>
+  <li>Zourdos M. et al. (2016). Repetitions-in-reserve RPE scale for weight training. <i>J Strength Cond Res</i>.</li>
+</ul>
+
+</body>
+</html>
