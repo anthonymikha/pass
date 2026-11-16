@@ -1,6 +1,6 @@
 # Access and roles (ACC)
 
-**Status: planned.** Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
+**Status: partly built.** Built: ACC-10 to ACC-13 (shadow players). The names and default rules are applied by every built endpoint. Planned: ACC-20 to ACC-23. Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
 
 ## Names used on every page
 

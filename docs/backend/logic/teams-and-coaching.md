@@ -1,6 +1,6 @@
 # Friends, coaching links, play groups and teams (TEAM)
 
-**Status: planned.**
+**Status: partly built.** Built: TEAM-1 to TEAM-8, TEAM-10 to TEAM-15 (`backend/accounts/`, API page [accounts](../api/accounts.md)). Planned: TEAM-20 and later.
 
 ## Friends
 
