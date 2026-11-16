@@ -9,8 +9,10 @@ from venues.models import Court
 from . import services
 from .models import SessionRental
 from .serializers import (
-    AnswerSerializer, BookingSerializer, SessionInviteSerializer, MyParamsSerializer, ParticipantSerializer, QuoteSerializer,
-    RentalDecisionSerializer, RentalSerializer, SessionSerializer, SlotQuerySerializer, SlotSerializer,
+    AnswerSerializer, AvailabilityParamsSerializer, BookingSerializer, IntervalSerializer, SessionInviteSerializer,
+    MyParamsSerializer, ParticipantSerializer, QuoteSerializer, RentalDecisionSerializer, RentalSerializer,
+    SessionSerializer, SlotQuerySerializer, SlotSerializer, TrainingBookingSerializer, TrainingConfirmSerializer,
+    TrainingRequestSerializer,
 )
 
 
@@ -149,3 +151,83 @@ class RentalView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(RentalSerializer(services.decide_rental(rental, serializer.validated_data["status"])).data)
+
+
+class TrainingRequestView(generics.GenericAPIView):
+    serializer_class = TrainingRequestSerializer
+
+    @extend_schema(responses=SessionSerializer)
+    def post(self, request):
+        """BOOK-20: a player asks a coach."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        session = services.request_training(request.user, serializer.validated_data)
+        return Response(SessionSerializer(services.seen_session(request.user, session.pk)).data, status=status.HTTP_201_CREATED)
+
+
+class RequestAnswerView(generics.GenericAPIView):
+    """BOOK-21, BOOK-22: an action on a training request is for one party only, and for everyone else the session
+    does not exist (BOOK-21: not the session's coach is a 404). Subclasses set `party` (who may) and `act`."""
+
+    party = "coach_id"
+
+    def post(self, request, pk):
+        session = services.seen_session(request.user, pk)
+        if getattr(session, self.party) != request.user.pk:
+            raise NotFound()
+        session = self.act(request, session)
+        return Response(SessionSerializer(services.seen_session(request.user, pk)).data)
+
+
+class TrainingConfirmView(RequestAnswerView):
+    serializer_class = TrainingConfirmSerializer
+
+    def act(self, request, session):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return services.confirm_training(session, serializer.validated_data)
+
+
+class TrainingDeclineView(RequestAnswerView):
+    serializer_class = SessionSerializer
+
+    def act(self, request, session):
+        return services.end_request(session, declining=True)
+
+
+class TrainingWithdrawView(RequestAnswerView):
+    party = "booked_by_id"
+    serializer_class = SessionSerializer
+
+    def act(self, request, session):
+        return services.end_request(session, declining=False)
+
+
+class CoachTrainingView(generics.GenericAPIView):
+    serializer_class = TrainingBookingSerializer
+
+    @extend_schema(responses=SessionSerializer)
+    def post(self, request):
+        """BOOK-30, BOOK-31: coaches only."""
+        if not request.user.is_coach:
+            raise PermissionDenied("Only coaches can book training.")
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        session = services.book_training(request.user, serializer.validated_data)
+        return Response(SessionSerializer(services.seen_session(request.user, session.pk)).data, status=status.HTTP_201_CREATED)
+
+
+class AvailabilityView(generics.GenericAPIView):
+    """AVL-20 to AVL-24: not paginated. `who` is a function of (asker, id) returning the users to check (404 if not allowed)."""
+
+    serializer_class = AvailabilityParamsSerializer
+    who = None
+
+    @extend_schema(parameters=[AvailabilityParamsSerializer], responses=IntervalSerializer(many=True))
+    def get(self, request, pk):
+        users = self.who(request.user, pk)  # AVL-22 before the input (GEN-4)
+        params = AvailabilityParamsSerializer(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        data = params.validated_data
+        intervals = services.free_intervals(users, data["from"], data["to"], data["min_minutes"])
+        return Response(IntervalSerializer(intervals, many=True).data)

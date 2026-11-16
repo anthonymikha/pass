@@ -13,12 +13,13 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
-from accounts.services import friends_of, is_shadow_player, notify
+from accounts.models import User
+from accounts.services import friends_of, is_blocked_pair, is_shadow_player, notify
 from chat import services as chat
 from config.api import BusinessError
 from config.money import round_money
 from teams.models import Group, GroupMember
-from teams.services import is_active_member, is_group_manager
+from teams.services import coachs_players, is_active_member, is_group_manager
 from venues.models import ClubMember, Equipment
 from venues.services import club_today, current_members, lock_court
 
@@ -26,6 +27,8 @@ from .models import Session, SessionParticipant, SessionRental
 
 UTC = datetime.timezone.utc
 HORIZON_DAYS = 60  # AVL-5 item 4
+MAX_REQUEST = datetime.timedelta(hours=8)  # BOOK-20
+MAX_RANGE = datetime.timedelta(days=14)  # AVL-23
 CANCELLED, CONFIRMED, REQUESTED = Session.Status.CANCELLED, Session.Status.CONFIRMED, Session.Status.REQUESTED
 INVITED, ACCEPTED, DECLINED = (SessionParticipant.Status.INVITED, SessionParticipant.Status.ACCEPTED,
                                SessionParticipant.Status.DECLINED)
@@ -70,18 +73,23 @@ def offered_slots(court, days):
     return slots
 
 
-def _closed_ranges(court, days):
-    """AVL-8: (start, end) of every closure occurrence on the local dates `days`."""
-    # ponytail: closures x days looped in Python (at most 61 days per request); index by date only if courts get many closures
-    tz, midnight = _tz(court.club), datetime.time(0)
+def _occurrences(blockouts, tz, days):
+    """AVL-8: (start, end) UTC instants of every occurrence of `blockouts` on the local dates `days` of `tz`."""
+    # ponytail: blockouts x days looped in Python (at most 61 days per request); index by date only if rows get many
+    midnight = datetime.time(0)
     ranges = []
-    for closure in court.blockouts.all():
+    for blockout in blockouts:
         for day in days:
-            if closure.occurs_on(day):
-                end_day = day + datetime.timedelta(days=1) if closure.end_time == midnight else day
-                ranges.append((datetime.datetime.combine(day, closure.start_time, tzinfo=tz),
-                               datetime.datetime.combine(end_day, closure.end_time, tzinfo=tz)))
+            if blockout.occurs_on(day):
+                end_day = day + datetime.timedelta(days=1) if blockout.end_time == midnight else day
+                ranges.append((datetime.datetime.combine(day, blockout.start_time, tzinfo=tz).astimezone(UTC),
+                               datetime.datetime.combine(end_day, blockout.end_time, tzinfo=tz).astimezone(UTC)))
     return ranges
+
+
+def _closed_ranges(court, days):
+    """AVL-8, AVL-5 item 1: the closures of a court on the club's local dates `days`."""
+    return _occurrences(court.blockouts.all(), _tz(court.club), days)
 
 
 def _overlaps(start, end, ranges):
@@ -246,19 +254,23 @@ def check_invitees(user, ids, group=None):
     return [pool[pk] for pk in ids]
 
 
-def check_court_booking(user, data):
-    """BOOK-7 in its order, up to the lock. Returns what the write needs."""
-    court, sport, currency = data["court"], data["sport"], data["currency"]
-    club = court.club
+def plan_court(court, sport, currency, starts_at, ends_at):
+    """BOOK-7 sport, currency and run rows, in that order (also BOOK-21, BOOK-30, BOOK-31): rate, slots and price."""
     if not court.sports.filter(pk=sport.pk).exists():
         raise BusinessError("sport_not_offered", "This court does not offer that sport.")
-    rate = club_rate(club, currency)
-    slots = run_slots(court, data["starts_at"], data["ends_at"])
-    rentals = check_rentals(court, data.get("rentals", []), currency, rate)
+    rate = club_rate(court.club, currency)
+    slots = run_slots(court, starts_at, ends_at)
+    return {"rate": rate, "slots": slots, "price": court_price(slots, currency, court.club, rate)}
+
+
+def check_court_booking(user, data):
+    """BOOK-7 in its order, up to the lock. Returns what the write needs."""
+    court, currency = data["court"], data["currency"]
+    plan = plan_court(court, data["sport"], currency, data["starts_at"], data["ends_at"])
+    rentals = check_rentals(court, data.get("rentals", []), currency, plan["rate"])
     group = check_group(user, data.get("group"))
     invitees = check_invitees(user, data.get("invitees", []))
-    price = court_price(slots, currency, club, rate)
-    return {"rate": rate, "slots": slots, "rentals": rentals, "group": group, "invitees": invitees, "price": price}
+    return {**plan, "rentals": rentals, "group": group, "invitees": invitees}
 
 
 def quote_court_booking(user, data):
@@ -278,16 +290,25 @@ def quote_court_booking(user, data):
 
 # ---- booking (BOOK-2, BOOK-8, BOOK-10, BOOK-60) ----
 
+def _lock_and_price(booker, data, plan):
+    """BOOK-2, BOOK-8 step 1 and 2: lock the court, re-check the run and the overlap, then pick the offer for `booker`.
+    Without a court (BOOK-21, BOOK-30) there is nothing to lock and no offer (DSC-1)."""
+    court = data.get("court")
+    if court is None:
+        return None, Decimal(0)
+    lock_court(court)  # the court row is locked here; everything below runs one booker at a time
+    run_slots(court, data["starts_at"], data["ends_at"])  # still offered, in the future and not closed
+    if slot_taken(court, data["starts_at"], data["ends_at"]):
+        raise BusinessError("slot_taken", "Someone else just booked these times.", 409)  # GEN-6
+    return best_offer(court, booker, data["starts_at"], plan["price"], data["currency"], plan["rate"])
+
+
 def book_court(user, data):
     """BOOK-8. Returns the new session."""
     plan = check_court_booking(user, data)
     court, starts_at, ends_at, group = data["court"], data["starts_at"], data["ends_at"], plan["group"]
     with transaction.atomic():
-        lock_court(court)  # BOOK-2: the court row is locked here; everything below runs one booker at a time
-        run_slots(court, starts_at, ends_at)  # still offered, in the future and not closed
-        if slot_taken(court, starts_at, ends_at):
-            raise BusinessError("slot_taken", "Someone else just booked these times.", 409)  # GEN-6
-        offer, discount = best_offer(court, user, starts_at, plan["price"], data["currency"], plan["rate"])  # step 2
+        offer, discount = _lock_and_price(user, data, plan)  # BOOK-2, step 2
         session = Session.objects.create(  # step 3
             court=court, sport=data["sport"], booked_by=user, kind=Session.Kind.PLAY, status=CONFIRMED,
             starts_at=starts_at, ends_at=ends_at, group=group, currency=data["currency"], price=plan["price"],
@@ -468,3 +489,166 @@ def cancel(user, session):
             notify(people, "session_cancelled", "Session cancelled",
                    f"{_name(user)} cancelled the session on {session.starts_at:%Y-%m-%d %H:%M} UTC", {"id": session.id})
     return session
+
+
+# ---- training: requests (BOOK-20 to BOOK-22) ----
+
+def _when(session):
+    return f"{session.starts_at:%Y-%m-%d %H:%M} UTC"
+
+
+def request_training(user, data):
+    """BOOK-20: a player asks a coach. The times were checked by the serializer. Returns the new session."""
+    coach = data["coach"]
+    if coach.pk == user.pk or is_blocked_pair(user, coach):
+        raise BusinessError("cannot_request", "You cannot ask this user for training.")
+    if not coach.is_coach:
+        raise BusinessError("not_a_coach", "This user is not a coach.")
+    with transaction.atomic():
+        session = Session.objects.create(  # no court, no currency, nothing owed yet; the requester pays the coach fee
+            sport=data["sport"], booked_by=user, coach=coach, kind=Session.Kind.TRAINING, status=REQUESTED,
+            starts_at=data["starts_at"], ends_at=data["ends_at"], currency="", price=0, coach_fee=0, coach_fee_payer=user)
+        SessionParticipant.objects.create(session=session, user=user, status=ACCEPTED)
+        notify([coach], "training_request", "Training request",
+               f"{_name(user)} asked you for training on {_when(session)}", {"id": session.id})  # NOTE-20
+    return session
+
+
+def plan_training(data):
+    """BOOK-21, BOOK-30, BOOK-31 up to the lock. With a court: BOOK-7 sport, currency and run rows.
+    Without one (the coach's own venue): price 0, any valid currency, the time only has to be in the future."""
+    court = data.get("court")
+    if court is not None:
+        return plan_court(court, data["sport"], data["currency"], data["starts_at"], data["ends_at"])
+    if data["starts_at"] <= timezone.now():
+        raise _field_error("starts_at", "Must be in the future.")
+    if data["ends_at"] <= data["starts_at"]:
+        raise _field_error("ends_at", "Must be after the start.")
+    return {"rate": None, "price": Decimal(0)}
+
+
+def confirm_training(session, data):
+    """BOOK-21 (the view checked the caller is the session coach). Returns the confirmed session."""
+    with transaction.atomic():
+        session = Session.objects.select_for_update().get(pk=session.pk)  # a withdrawal cannot slip in between
+        if session.status != REQUESTED:
+            raise BusinessError("invalid_status", "Only a requested session can be confirmed.")
+        data = {**data, "sport": session.sport}
+        plan = plan_training(data)
+        offer, discount = _lock_and_price(session.booked_by, data, plan)  # BOOK-2; DSC-1: the requester is the booker
+        session.court, session.starts_at, session.ends_at = data.get("court"), data["starts_at"], data["ends_at"]
+        session.currency, session.price, session.coach_fee = data["currency"], plan["price"], data["coach_fee"]
+        session.discount, session.discount_amount, session.status = offer, discount, CONFIRMED
+        session.save()  # coach_fee_payer stays the requester; a request has no group, so no card (BOOK-60)
+        notify([session.booked_by], "training_confirmed", "Training confirmed",
+               f"{_name(session.coach)} confirmed your training on {_when(session)}", {"id": session.id})
+    return session
+
+
+def end_request(session, declining):
+    """BOOK-22 (the view checked the caller): the coach declines or the requester withdraws a request."""
+    with transaction.atomic():
+        session = Session.objects.select_for_update().get(pk=session.pk)
+        if session.status == CANCELLED:  # GEN-5
+            return session
+        if session.status != REQUESTED:
+            raise BusinessError("invalid_status", "Only a requested session can be declined or withdrawn.")
+        if session.starts_at <= timezone.now():  # BOOK-1: before starts_at
+            raise BusinessError("session_closed", "The proposed time has passed.")
+        session.status = CANCELLED
+        session.save(update_fields=["status"])
+        if declining:
+            notify([session.booked_by], "training_declined", "Training declined",
+                   f"{_name(session.coach)} declined your training request for {_when(session)}", {"id": session.id})
+        else:
+            notify([session.coach], "training_withdrawn", "Training request withdrawn",
+                   f"{_name(session.booked_by)} withdrew the training request for {_when(session)}", {"id": session.id})
+    return session
+
+
+# ---- training: booked by a coach (BOOK-30 to BOOK-33) ----
+
+def book_training(coach, data):
+    """BOOK-30 (`group` is a team the caller manages) or BOOK-31 (`player` is one of the caller's players).
+    Returns the new session."""
+    group, chosen = data.get("group"), data.get("coach_fee_payer")  # `chosen`: an id the coach typed
+    payer_id = chosen
+    if group:  # BOOK-30
+        if group.type != Group.Type.TEAM:
+            raise BusinessError("not_a_team", "Training is booked for a team.")
+        if not is_group_manager(coach, group):
+            raise PermissionDenied("Only the team's coach or owner can book training for it.")
+        members = list(GroupMember.objects.filter(group=group, status=GroupMember.Status.ACTIVE).exclude(
+            user=coach).select_related("user"))
+        payers = {m.user_id: m.user for m in members}
+        people = {m.user: ACCEPTED if is_shadow_player(m.user) else INVITED for m in members}
+    else:  # BOOK-31
+        player = coachs_players(coach).filter(pk=data["player"]).first()
+        if player is None:
+            raise BusinessError("not_your_player", "This user is not one of your players.")
+        payers = {player.pk: player}
+        people = {player: ACCEPTED if is_shadow_player(player) else INVITED}
+        payer_id = payer_id or player.pk  # BOOK-31: defaults to the player
+    plan = plan_training(data)
+    payer = payers.get(payer_id)
+    if payer_id and (payer is None or (chosen and is_shadow_player(payer) and payer.managed_by_id != coach.pk)):
+        # BOOK-32: an active member of the team, or the player; never the coach. ACC-12: a shadow player only by their coach
+        raise _field_error("coach_fee_payer", "Must be an active member of the team, or the player, and not the coach.")
+    with transaction.atomic():
+        offer, discount = _lock_and_price(coach, data, plan)  # BOOK-2; DSC-1: the coach is the booker (BOOK-33)
+        session = Session.objects.create(
+            court=data.get("court"), sport=data["sport"], booked_by=coach, coach=coach, group=group,
+            kind=Session.Kind.TRAINING, status=CONFIRMED, starts_at=data["starts_at"], ends_at=data["ends_at"],
+            currency=data["currency"], price=plan["price"], coach_fee=data["coach_fee"], coach_fee_payer=payer,
+            discount=offer, discount_amount=discount)
+        invited = _add_participants(session, {coach: ACCEPTED, **people})
+        if group:
+            chat.post_session_card(session)  # BOOK-60
+        _notify_invited(coach, session, invited)
+    return session
+
+
+# ---- personal and group availability (AVL-20 to AVL-25) ----
+
+def availability_user(asker, pk):
+    """AVL-22: the user themselves, or a coach about one of the coach's players. Anyone else: 404."""
+    if pk != asker.pk and not coachs_players(asker).filter(pk=pk).exists():
+        raise NotFound()
+    return [User.objects.get(pk=pk)]
+
+
+def availability_group(asker, pk):
+    """AVL-22: an active member or a group manager. Anyone else: 404. Returns the active members (AVL-21)."""
+    group = Group.objects.filter(pk=pk).first()
+    if group is None or not (is_active_member(asker, group) or is_group_manager(asker, group)):
+        raise NotFound()
+    return [m.user for m in GroupMember.objects.filter(group=group, status=GroupMember.Status.ACTIVE).select_related("user")]
+
+
+def _busy(user, start, end):
+    """AVL-20: block-outs in the user's own timezone, and confirmed sessions of the user, as (start, end) UTC pairs."""
+    tz = zoneinfo.ZoneInfo(user.timezone)
+    first, last = start.astimezone(tz).date(), (end - datetime.timedelta(microseconds=1)).astimezone(tz).date()
+    days = [first + datetime.timedelta(days=n) for n in range((last - first).days + 1)]
+    sessions = Session.objects.filter(status=CONFIRMED, starts_at__lt=end, ends_at__gt=start).filter(
+        Q(booked_by=user) | Q(coach=user) | Q(participants__user=user, participants__status=ACCEPTED)).distinct()
+    return _occurrences(user.blockouts.all(), tz, days) + [(s.starts_at, s.ends_at) for s in sessions]
+
+
+def free_intervals(users, start, end, min_minutes):
+    """AVL-21, AVL-23: the parts of [start, end) where every user in `users` is free, touching parts merged,
+    at least `min_minutes` long. AVL-24: `bad_range`."""
+    if end <= start or end - start > MAX_RANGE:
+        raise BusinessError("bad_range", "`to` must be after `from`, and at most 14 days later.")
+    # ponytail: two queries per member; fine for team-sized groups, batch by member ids if groups get large
+    busy = sorted(pair for user in users for pair in _busy(user, start, end))
+    free, cursor = [], start
+    for a, b in busy:  # sweep: the gaps between the merged busy ranges are the free intervals
+        if a > cursor:
+            free.append((cursor, min(a, end)))
+        cursor = max(cursor, b)
+        if cursor >= end:
+            break
+    if cursor < end:
+        free.append((cursor, end))
+    return [{"starts_at": a, "ends_at": b} for a, b in free if b - a >= datetime.timedelta(minutes=min_minutes)]
