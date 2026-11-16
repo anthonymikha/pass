@@ -7,6 +7,7 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.generics import get_object_or_404
 
 from config.api import BusinessError
+from config.storage import get_storage, is_key, upload_form
 
 from .models import Connection, Device, User
 
@@ -223,3 +224,36 @@ def end_coaching(user, pk):
 
 def create_shadow_player(coach, data):
     return User.objects.create_user(email=None, managed_by=coach, timezone=coach.timezone, **data)
+
+
+AVATAR_TYPES = ("jpg", "jpeg", "png", "webp")
+AVATAR_MAX_BYTES = 5 * 1024 * 1024
+
+
+def avatar_url(user):
+    """REC-30, ACC-21: a signed link to the avatar, or empty."""
+    return get_storage().url(user.avatar.name) if user.avatar else ""
+
+
+def avatar_form(user, ext, size_bytes):
+    """REC-30: a signed upload form for a new avatar key."""
+    return upload_form(f"avatars/{user.pk}", ext, size_bytes)
+
+
+def set_avatar(user, key):
+    """REC-30: the key must be this user's and the object must exist; the old object is deleted. Repeating the
+    current key changes nothing (GEN-5)."""
+    if not is_key(key, f"avatars/{user.pk}", AVATAR_TYPES):
+        raise BusinessError("bad_key", "This is not an avatar upload key of yours.")
+    with transaction.atomic():
+        user = User.objects.select_for_update().get(pk=user.pk)
+        old = user.avatar.name
+        if old == key:
+            return user
+        if not get_storage().exists(key):
+            raise BusinessError("not_uploaded", "Nothing was uploaded to this key.")
+        user.avatar = key
+        user.save(update_fields=["avatar"])
+        if old:
+            get_storage().delete(old)
+    return user

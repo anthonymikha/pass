@@ -19,12 +19,13 @@ from accounts.services import friends_of, is_blocked_pair, is_shadow_player, not
 from chat import services as chat
 from config.api import BusinessError
 from config.money import round_money, validate_typed_money
+from config.storage import get_storage, is_key, upload_form
 from teams.models import Group, GroupMember
 from teams.services import coachs_players, is_active_member, is_group_manager
 from venues.models import ClubMember, Equipment
 from venues.services import club_today, current_members, lock_court, visible_clubs
 
-from .models import Session, SessionParticipant, SessionRental
+from .models import Recording, RecordingTag, Session, SessionParticipant, SessionRental
 
 UTC = datetime.timezone.utc
 HORIZON_DAYS = 60  # AVL-5 item 4
@@ -37,6 +38,9 @@ APPROVED = SessionRental.Status.APPROVED
 CHECK_IN_OPENS = datetime.timedelta(minutes=30)  # PAY-1: before starts_at
 LATE_CHECK_IN = datetime.timedelta(hours=24)  # PAY-7: after ends_at, club side only
 MAX_PERIOD_DAYS = 366  # owner-reports intro
+RECORDING_TYPES = ("mp4", "mov")  # REC-11
+RECORDING_MAX_BYTES = 2 * 1024 ** 3  # REC-11
+UPLOAD_OPEN_AFTER_END = datetime.timedelta(days=30)  # REC-10
 
 Slot = namedtuple("Slot", "starts_at ends_at rate")  # `rate` is the CourtRate that produced it (AVL-4)
 
@@ -772,3 +776,118 @@ def player_history(coach, player):
     return SessionParticipant.objects.filter(
         user=player, status=ACCEPTED, session__coach=coach, session__status=CONFIRMED).select_related("session").order_by(
         "-session__starts_at", "-id")
+
+
+# ---- recordings and tags (REC) ----
+
+
+def uploadable_session(user, pk):
+    """REC-10, REC-13: who may upload. A session the caller cannot see is `404` (GEN-3); one they see but may not
+    upload to (not the coach, not a participant who checked in) is `403`."""
+    session = seen_session(user, pk)
+    if user.pk != session.coach_id and not session.participants.filter(user=user, checked_in_at__isnull=False).exists():
+        raise PermissionDenied("Only the coach or a participant who checked in can upload a recording.")
+    return session
+
+
+def check_upload_window(session):
+    """REC-10, REC-13: confirmed, from the start until 30 days after the end."""
+    if session.status != CONFIRMED or not session.starts_at <= timezone.now() <= session.ends_at + UPLOAD_OPEN_AFTER_END:
+        raise BusinessError("upload_closed", "Recordings of this session cannot be uploaded now.")
+
+
+def recording_form(session, ext, size_bytes):
+    """REC-11: a signed upload form; nothing is written."""
+    check_upload_window(session)
+    return upload_form(f"recordings/{session.pk}", ext, size_bytes)
+
+
+def confirm_recording(user, session, key, duration_seconds):
+    """REC-12: returns (recording, created). Checks run in the order bad_key, repeat, upload_closed, not_uploaded; the
+    session row lock makes two confirms of one key create one row."""
+    if not is_key(key, f"recordings/{session.pk}", RECORDING_TYPES):
+        raise BusinessError("bad_key", "This is not an upload key of this session.")
+    with transaction.atomic():
+        session = Session.objects.select_for_update().get(pk=session.pk)
+        existing = Recording.objects.filter(session=session, storage_key=key).first()
+        if existing:  # GEN-5
+            return existing, False
+        check_upload_window(session)
+        if not get_storage().exists(key):
+            raise BusinessError("not_uploaded", "Nothing was uploaded to this key.")
+        recording = Recording.objects.create(
+            session=session, uploaded_by=user, storage_key=key, duration_seconds=duration_seconds)
+    return recording, True
+
+
+def is_session_coach(user, session):
+    return user.pk == session.coach_id
+
+
+def may_watch(user, session):
+    """REC-20: the session coach, or a participant whose row has both `checked_in_at` and `rpe`."""
+    return is_session_coach(user, session) or session.participants.filter(
+        user=user, checked_in_at__isnull=False, rpe__isnull=False).exists()
+
+
+def watchable_session(user, pk):
+    """REC-20: anyone who may not watch gets `404`, an uploader without RPE included."""
+    session = Session.objects.filter(pk=pk).first()
+    if session is None or not may_watch(user, session):
+        raise NotFound()
+    return session
+
+
+def watched_recording(user, pk):
+    """REC-20: a recording of a session the caller may watch; anyone else gets `404`."""
+    recording = Recording.objects.select_related("session").filter(pk=pk).first()
+    if recording is None or not may_watch(user, recording.session):
+        raise NotFound()
+    return recording
+
+
+def recording_to_delete(user, pk):
+    """REC-14: the uploader can always reach their own recording, even without RPE; the rest follows REC-20."""
+    recording = Recording.objects.select_related("session").filter(pk=pk, uploaded_by=user).first()
+    return recording or watched_recording(user, pk)
+
+
+def delete_recording(user, recording):
+    """REC-14: the uploader or the session coach. The row goes first inside the transaction, so a storage failure
+    rolls it back."""
+    if recording.uploaded_by_id != user.pk and not is_session_coach(user, recording.session):
+        raise PermissionDenied("Only the uploader or the session coach can delete a recording.")
+    with transaction.atomic():
+        recording.delete()  # the tags go with it
+        get_storage().delete(recording.storage_key)
+
+
+def visible_tags(user, recording):
+    """REC-27: the coach sees every tag; a participant who may watch sees whole-team tags and tags naming them."""
+    tags = recording.tags.order_by("start_second", "id")
+    if is_session_coach(user, recording.session):
+        return tags
+    if may_watch(user, recording.session):
+        return tags.filter(Q(players=None) | Q(players=user)).distinct()
+    return tags.none()
+
+
+def taggable_recording(user, pk):
+    """REC-25, REC-28: a recording the caller may watch (`404` otherwise); only the session coach may tag it."""
+    recording = watched_recording(user, pk)
+    if not is_session_coach(user, recording.session):
+        raise PermissionDenied("Only the session coach can tag a recording.")
+    return recording
+
+
+def tag_for_change(user, pk):
+    """REC-26: the creator or the session coach changes or deletes a tag; anyone who cannot see it gets `404`."""
+    tag = RecordingTag.objects.select_related("recording__session").filter(pk=pk).first()
+    if tag is None:
+        raise NotFound()
+    mine = tag.created_by_id == user.pk
+    if not (mine or visible_tags(user, tag.recording).filter(pk=tag.pk).exists()):
+        raise NotFound()
+    if not (mine or is_session_coach(user, tag.recording.session)):
+        raise PermissionDenied("Only the creator or the session coach can change a tag.")
+    return tag

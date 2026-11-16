@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.db.models import Q
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.generics import get_object_or_404
@@ -10,8 +11,8 @@ from rest_framework.response import Response
 from . import services
 from .models import Connection, User, UserBlockout
 from .serializers import (
-    CoachingRequestSerializer, CoachingSerializer, DeviceSerializer, LoginSerializer, PersonSerializer,
-    RegisterSerializer, ShadowPlayerSerializer, UserBlockoutSerializer, UserSerializer, UserTargetSerializer,
+    AvatarFormSerializer, CoachingRequestSerializer, CoachingSerializer, DeviceSerializer, LoginSerializer, PersonSerializer,
+    RegisterSerializer, ShadowPlayerSerializer, StorageKeySerializer, UserBlockoutSerializer, UserSerializer, UserTargetSerializer,
 )
 
 
@@ -63,6 +64,29 @@ class MeView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class AvatarFormView(generics.GenericAPIView):
+    serializer_class = AvatarFormSerializer
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def post(self, request):
+        """REC-30: a signed form `{url, fields, storage_key}`; nothing is stored yet."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        return Response(services.avatar_form(request.user, data["ext"], data["size_bytes"]))
+
+
+class AvatarView(generics.GenericAPIView):
+    serializer_class = StorageKeySerializer
+
+    @extend_schema(responses=UserSerializer)
+    def post(self, request):
+        """REC-30: confirm the upload; `200` also on a repeat (GEN-5). Returns the profile."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(UserSerializer(services.set_avatar(request.user, serializer.validated_data["storage_key"])).data)
 
 
 class DeviceView(generics.GenericAPIView):
