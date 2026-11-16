@@ -50,6 +50,19 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"  # host port; set BACKEND_PORT in .env if 8000 is taken
 
+  # NOTE-30: one `manage.py tick` a minute (RPE reminders). Same image as the backend; never migrates (the backend does).
+  scheduler:
+    build: ./backend
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: ["sh", "-c", "while true; do python manage.py tick; sleep 60; done"]
+
   # Flutter web build goes here later: a reverse proxy serving the web build at /
   # and forwarding /api/, /admin/ and /static/ to backend:8000 (same origin, no CORS).
   # web:

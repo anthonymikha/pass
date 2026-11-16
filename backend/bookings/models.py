@@ -62,6 +62,7 @@ class SessionParticipant(models.Model):
     rpe = models.PositiveSmallIntegerField(null=True, blank=True)  # rate of perceived exertion, 1-10
     rpe_minutes = models.PositiveIntegerField(null=True, blank=True)
     rpe_logged_at = models.DateTimeField(null=True, blank=True)
+    rpe_reminded_at = models.DateTimeField(null=True, blank=True)  # NOTE-9, NOTE-31
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

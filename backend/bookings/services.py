@@ -891,3 +891,20 @@ def tag_for_change(user, pk):
     if not (mine or is_session_coach(user, tag.recording.session)):
         raise PermissionDenied("Only the creator or the session coach can change a tag.")
     return tag
+
+
+def send_rpe_reminders():
+    """NOTE-31: one `rpe_reminder` per checked-in participant without an RPE, for sessions that ended in the last 7 days.
+    Returns how many were sent. The conditional update claims each row, so two overlapping ticks never remind twice."""
+    now = timezone.now()
+    due = SessionParticipant.objects.filter(
+        checked_in_at__isnull=False, rpe__isnull=True, rpe_reminded_at__isnull=True,
+        session__status=Session.Status.CONFIRMED, session__ends_at__gte=now - datetime.timedelta(days=7), session__ends_at__lte=now,
+    ).select_related("user")
+    sent = 0
+    for p in due:
+        with transaction.atomic():
+            if SessionParticipant.objects.filter(pk=p.pk, rpe_reminded_at__isnull=True).update(rpe_reminded_at=now):
+                notify([p.user], "rpe_reminder", "How hard was it?", "Tell us how the session felt.", {"id": p.session_id})
+                sent += 1
+    return sent
