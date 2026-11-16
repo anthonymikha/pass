@@ -22,6 +22,19 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "type", "sport", "owner", "coach", "member_count"]
 
 
+class MyGroupSerializer(GroupSerializer):
+    """TEAM-32: the summary plus the caller's own status (annotated by the view)."""
+
+    my_status = serializers.CharField(read_only=True)
+
+    class Meta(GroupSerializer.Meta):
+        fields = [*GroupSerializer.Meta.fields, "my_status"]
+
+
+class MyGroupsQuerySerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=GroupMember.Status.choices, required=False)
+
+
 class GroupCreateSerializer(serializers.ModelSerializer):
     """TEAM-20."""
 

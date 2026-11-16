@@ -11,6 +11,7 @@ Every call needs a token. Every group is visible by id to every user (TEAM-21), 
 | Method | Path | Who | Body / notes | Success |
 |---|---|---|---|---|
 | POST | `/api/groups/` | any user; a team needs a coach | `name` (1-255), `type` (`play_group`, `team`), optional `sport` (id). `400 not_a_coach` for a team by a non-coach (TEAM-20) | `201` group |
+| GET | `/api/me/groups/` | any user | groups where the caller has a member row, each `{id, name, type, sport, owner, coach, member_count, my_status}`; optional `?status=invited\|requested\|active` (`400` otherwise); by name then id; paged (TEAM-32) | `200` page |
 | GET | `/api/groups/<id>/` | any user | `{id, name, type, sport, owner, coach, member_count}`; `owner` and `coach` are `{id, full_name, is_coach}` (TEAM-21) | `200` |
 | PATCH | `/api/groups/<id>/` | owner | `name`, `sport` (null clears) (TEAM-30) | `200` |
 | DELETE | `/api/groups/<id>/` | owner | members go; the chat stays with no group and no members (TEAM-30) | `204` |

@@ -159,6 +159,38 @@ class PlayGroupTests(TeamsBase):
         self.call("delete", f"groups/{gid}/", owner, expect=404)
 
 
+class MyGroupsTests(TeamsBase):
+    def test_my_groups(self):
+        """TEAM-32: my groups with my status, the status filter, sorting, and groups I left or never joined are absent."""
+        me, owner, other = self.user("me"), self.user("owner"), self.user("other")
+        for u in (me, other):
+            self.befriend(owner, u)
+        make = lambda name, user=owner: self.call("post", "groups/", user, {"name": name, "type": "play_group"}, 201).data["id"]
+        active, invited, requested, left, never = make("Bravo"), make("Alpha"), make("Delta"), make("Charlie"), make("Echo")
+        self.call("post", f"groups/{active}/members/", owner, {"user": me.id}, 201)
+        self.call("post", f"groups/{active}/accept/", me, expect=200)
+        self.call("post", f"groups/{invited}/members/", owner, {"user": me.id}, 201)
+        self.call("post", f"groups/{requested}/join/", me, expect=201)
+        self.call("post", f"groups/{left}/members/", owner, {"user": me.id}, 201)
+        self.call("post", f"groups/{left}/accept/", me, expect=200)
+        self.call("delete", f"groups/{left}/members/{me.id}/", me, expect=204)
+        mine = self.call("post", "groups/", me, {"name": "Aardvark", "type": "play_group"}, 201).data["id"]
+
+        r = self.call("get", "me/groups/", me, expect=200)
+        self.assertEqual([(g["name"], g["my_status"]) for g in r.data["results"]],
+                         [("Aardvark", "active"), ("Alpha", "invited"), ("Bravo", "active"), ("Delta", "requested")])
+        self.assertEqual(r.data["results"][2]["member_count"], 2)  # the summary of TEAM-21
+        self.assertEqual(r.data["results"][2]["owner"]["id"], owner.id)
+        for status, names in (("active", ["Aardvark", "Bravo"]), ("invited", ["Alpha"]), ("requested", ["Delta"])):
+            r = self.call("get", f"me/groups/?status={status}", me, expect=200)
+            self.assertEqual([g["name"] for g in r.data["results"]], names)
+        self.call("get", "me/groups/?status=banned", me, expect=400)
+        self.assertEqual(self.call("get", "me/groups/", other, expect=200).data["count"], 0)
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get("/api/me/groups/").status_code, 401)
+        self.assertIn(mine, [g["id"] for g in self.call("get", "me/groups/", me).data["results"]])
+
+
 class TeamTests(TeamsBase):
     def test_team_journey(self):
         """TEAM-20, TEAM-27, TEAM-28, TEAM-29, ACC-10, ACC-12: coach-only creation, shadow players, handing the team over."""

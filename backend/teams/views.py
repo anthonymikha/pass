@@ -1,4 +1,4 @@
-from django.db.models import Count, Q
+from django.db.models import Count, OuterRef, Q, Subquery
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import NotFound, PermissionDenied
@@ -12,7 +12,7 @@ from . import services
 from .models import Group, GroupMember
 from .serializers import (
     CoachSearchSerializer, CoachSerializer, GroupCreateSerializer, GroupRenameSerializer, GroupSerializer,
-    InviteSerializer, GroupMemberSerializer, PublicProfileSerializer, ShadowPlayerAddSerializer, UserSearchSerializer,
+    InviteSerializer, GroupMemberSerializer, MyGroupSerializer, MyGroupsQuerySerializer, PublicProfileSerializer, ShadowPlayerAddSerializer, UserSearchSerializer,
 )
 
 
@@ -194,3 +194,18 @@ class PublicProfileView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return services.findable_users(self.request.user)
+
+
+class MyGroupsView(generics.ListAPIView):
+    """TEAM-32: groups where the caller has a member row, with their own status."""
+
+    serializer_class = MyGroupSerializer
+
+    def get_queryset(self):
+        params = MyGroupsQuerySerializer(data=self.request.query_params)
+        params.is_valid(raise_exception=True)
+        mine = GroupMember.objects.filter(user=self.request.user)
+        if "status" in params.validated_data:
+            mine = mine.filter(status=params.validated_data["status"])
+        own_status = GroupMember.objects.filter(group=OuterRef("pk"), user=self.request.user).values("status")
+        return groups().filter(pk__in=mine.values("group")).annotate(my_status=Subquery(own_status)).order_by("name", "id")
