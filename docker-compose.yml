@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:18
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  # Flutter web build goes here later: a reverse proxy serving the web build at /
+  # and forwarding /api/, /admin/ and /static/ to backend:8000 (same origin, no CORS).
+  # web:
+  #   build: ./frontend
+  #   ports:
+  #     - "80:80"
+  #   depends_on:
+  #     - backend
+
+volumes:
+  pgdata:
