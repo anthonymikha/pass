@@ -407,7 +407,8 @@ class OwnerSetupTests(VenuesBase):
         # GEN-17 on a rate: decimals follow the base currency's minor units
         lbp_club, lbp_court = self.club_with_court(owner, name="Beirut LBP", currency="LBP")
         kwd_club, kwd_court = self.club_with_court(owner, name="Kuwait", currency="KWD")
-        self.call("post", f"courts/{lbp_court.id}/rates/", rate("09:00", "10:00", price="1000.5"), 400)
+        r = self.call("post", f"courts/{lbp_court.id}/rates/", rate("09:00", "10:00", price="1000.5"), 400)
+        self.assertEqual(r.data, {"price": ["Too many decimal places for LBP"]})  # GEN-1 field shape, GEN-17
         self.call("post", f"courts/{lbp_court.id}/rates/", rate("09:00", "10:00", price="1000"), 201)
         self.call("post", f"courts/{kwd_court.id}/rates/", rate("09:00", "10:00", price="1.2345"), 400)
         self.call("post", f"courts/{kwd_court.id}/rates/", rate("09:00", "10:00", price="1.234"), 201)
@@ -433,7 +434,8 @@ class OwnerSetupTests(VenuesBase):
         net = self.call("post", eq, {"name": "Net", "quantity": 1, "court": court.id, "rental_price": "2.50"}, 201).data
         self.call("patch", f"equipment/{net['id']}/", {"court": None, "rental_price": None}, 200)  # shared and free
         self.call("patch", f"equipment/{net['id']}/", {"court": other_court.id}, 400)
-        self.call("post", f"clubs/{lbp_club.id}/equipment/", {"name": "Ball", "quantity": 1, "rental_price": "100.5"}, 400)
+        r = self.call("post", f"clubs/{lbp_club.id}/equipment/", {"name": "Ball", "quantity": 1, "rental_price": "100.5"}, 400)
+        self.assertEqual(r.data, {"rental_price": ["Too many decimal places for LBP"]})
         self.call("post", f"clubs/{lbp_club.id}/equipment/", {"name": "Ball", "quantity": 1, "rental_price": "100"}, 201)
 
         # the other owner's data is invisible: a rate of theirs is 404 for us (GEN-3)

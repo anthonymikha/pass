@@ -121,7 +121,7 @@ class RateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_price(self, value):
-        typed_money(value, self.context["club"].currency, "price")  # CLUB-11, GEN-17
+        validate_typed_money(value, self.context["club"].currency)  # CLUB-11, GEN-17
         return value
 
     def validate(self, data):
@@ -171,7 +171,7 @@ class EquipmentSerializer(serializers.ModelSerializer):
 
     def validate_rental_price(self, value):
         if value is not None:
-            typed_money(value, self.context["club"].currency, "rental_price")  # CLUB-18, GEN-17
+            validate_typed_money(value, self.context["club"].currency)  # CLUB-18, GEN-17
         return value
 
 
@@ -239,7 +239,7 @@ class OfferSerializer(serializers.ModelSerializer):
         if value is not None:
             if value <= 0:
                 raise serializers.ValidationError("Must be above 0.")
-            typed_money(value, self.context["club"].currency, "amount_off")  # PRC-3, GEN-17
+            validate_typed_money(value, self.context["club"].currency)  # PRC-3, GEN-17
         return value
 
     def validate(self, data):
