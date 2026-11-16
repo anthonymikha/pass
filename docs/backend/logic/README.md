@@ -34,7 +34,7 @@ Model pages ([models/](../models/)) say what each field means. Flow pages ([flow
 
 ## Schema changes these pages require
 
-Three changes to schema v5, all approved by the owner on 2026-11-16:
+Three changes to schema v5, all approved by the owner on 2026-11-16, all built (migrations `accounts/0002`, `chat/0002`, `bookings/0002`):
 
 | Table | Change | Rule |
 |---|---|---|

@@ -1,4 +1,4 @@
-// PASS schema v5 - bookings
+// PASS schema - bookings
 
 sessions [icon: calendar, color: purple] {
   id bigint pk
@@ -29,6 +29,7 @@ session_participants [icon: calendar, color: purple] {
   rpe smallint null
   rpe_minutes int null
   rpe_logged_at timestamp null
+  rpe_reminded_at timestamp null
   created_at timestamp
 }
 

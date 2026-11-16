@@ -1,4 +1,4 @@
-// PASS schema v5 - teams
+// PASS schema - teams
 
 groups [icon: users, color: orange] {
   id bigint pk

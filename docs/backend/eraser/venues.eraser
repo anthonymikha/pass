@@ -1,4 +1,4 @@
-// PASS schema v5 - venues
+// PASS schema - venues
 
 sports [icon: map-pin, color: green] {
   id bigint pk

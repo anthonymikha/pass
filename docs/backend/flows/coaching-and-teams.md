@@ -1,6 +1,6 @@
 # Flow: friends, play groups, coaches and teams
 
-**Status: planned.** Rules: [teams-and-coaching](../logic/teams-and-coaching.md), [booking](../logic/booking.md), [access-and-roles](../logic/access-and-roles.md).
+**Status: built** (`backend/accounts/`, `backend/teams/`, training in `backend/bookings/`; API pages [accounts](../api/accounts.md), [teams](../api/teams.md), [bookings](../api/bookings.md)). Rules: [teams-and-coaching](../logic/teams-and-coaching.md), [booking](../logic/booking.md), [access-and-roles](../logic/access-and-roles.md).
 
 Models: [User, Connection, UserBlockout](../models/accounts.md), [ClubMember](../models/venues.md), [Group, GroupMember](../models/teams.md), [Session, SessionParticipant](../models/bookings.md), [Payment](../models/billing.md), [Chat](../models/chat.md).
 

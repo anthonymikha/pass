@@ -8,14 +8,17 @@ Last updated: 2026-11-16. Written so a new session can continue with no other co
 
 Paste this into a new session opened in the repo root:
 
-> Read PLAN.md in the repo root in full (start with "Status on 2026-11-16 (latest)"), then `docs/backend/logic/README.md` and every page it lists, then `git log --oneline` and `backend/*/models.py`. The logic pages are the approved specification. Continue the "Build plan" from the first task not ticked, with Sonnet 5.5 subagents under the acceptance gate, within the standing permissions in "Working agreements".
+> Read PLAN.md in the repo root in full (start with "Status on 2026-11-16 (latest)"), then `docs/backend/logic/README.md` and every page it lists, then `git log --oneline` and `backend/*/models.py`. The logic pages are the approved specification. Steps 2 to 10 are done; the next piece of work is step 11 (Flutter) or whatever the owner asks, within the standing permissions in "Working agreements".
 
 ## Status on 2026-11-16 (latest)
 
-- **Owner review done (2026-11-16).** Note 18 reading (DSC-10 to DSC-14), `session_participants.rpe_reminded_at` (NOTE-9) and late club-side check-in (PAY-7) approved; every other "Not decided" item took its recommended default and is now a rule (DSC-7, DSC-8, BOOK-12, BOOK-43, COM-3, TEAM-7, REC-15, CHAT-17, NOTE-15). No "Not decided" items remain in `docs/backend/logic/`.
-- Building steps 2 to 10 (backend only) with Sonnet 5.5 subagents under the acceptance gate; the lead reviews every diff. Progress is ticked in "Build plan" below.
-- Docker on this machine: host port 8000 is taken by another project, so `.env` sets `BACKEND_PORT=8001` (compose reads it; default 8000).
-- The business-rule summaries further down this file are history; `docs/backend/logic/` is the only record of rules.
+- **Roadmap steps 2 to 10 are built** (backend only). 111 tests, green on SQLite and on Postgres in Docker; every step was also exercised with curl against the running stack. Everything is committed and pushed to `origin/main`.
+- Owner review done (2026-11-16): note 18 reading (DSC-10 to DSC-14), `rpe_reminded_at` (NOTE-9) and late club-side check-in (PAY-7) approved; every other open item took its recommended default. Rules added or changed during the build are marked *decided during build* on their logic page (search for that phrase).
+- Known weakness: on a first start from an empty database the scheduler's first `tick` can run before the backend has applied migrations; it logs a traceback and succeeds a minute later (NOTE-30 allows skipped runs).
+- Not done, on purpose: the recovery level and suggested times (deferred to the sports expert), a real Firebase push (no Firebase project yet; the sender is tested with mocks), CORS on the bucket for Flutter web, the Flutter app (step 11).
+- Docker on this machine: host port 8000 is taken by another project, so `.env` sets `BACKEND_PORT=8001`.
+- `docs/backend/logic/` is the only record of rules; the rule summaries that used to be in this file were removed.
+- Next: step 11 (Flutter app), and the sports expert's input for the recovery level and the exercise catalogue.
 
 ## Build plan (steps 2 to 10)
 
@@ -30,8 +33,8 @@ Run in this order; tasks on one line run in parallel in separate worktrees.
 | T7 | Training requests, coach-booked training, personal and group availability (step 5 part 3) | bookings | BOOK-20 to BOOK-33, AVL-20 to AVL-25 | done |
 | T8 | Check-in, payments, commission, mark paid, one-off discount, reports (step 4 part 2) | bookings, billing | PAY, COM, DSC-10 to DSC-14, RPT | done |
 | T9 / T10 / T11 | Wellness (step 6) / recordings, storage, avatars (step 7) / chat (step 8) | wellness / bookings, accounts / chat | WEL / REC / CHAT | done |
-| T12 | Scheduler, RPE reminder, FCM sender, trigger audit (step 9) | accounts, bookings, compose | NOTE-9, NOTE-10, NOTE-20, NOTE-30, NOTE-31 | |
-| T13 | Full pass (step 10): both databases, docs, Eraser, PLAN | all | | |
+| T12 | Scheduler, RPE reminder, FCM sender, trigger audit (step 9) | accounts, bookings, compose | NOTE-9, NOTE-10, NOTE-20, NOTE-30, NOTE-31 | done |
+| T13 | Full pass (step 10): both databases, docs, Eraser, PLAN | all | | done |
 
 ## Working agreements
 
@@ -48,12 +51,12 @@ Run in this order; tasks on one line run in parallel in separate worktrees.
 
 ## Current state
 
-- Repo: branch `main`. Everything is committed and pushed, including this file (tracked since 2026-11-16). Not in git: `.env` (secrets; recreate from `.env.example`).
-- Remote `origin` = `https://github.com/anthonymikha/pass.git`. `main` was pushed on 2026-11-16 (the remote was empty; 13 commits, up to `ed35cca`). Schema v5 is not pushed.
-- Stack: Python 3.13, Django 6.1.3, djangorestframework 3.18.3, psycopg 3.3.9, gunicorn 27.0.1, whitenoise 6.12.0, Postgres 18.
-- Tests: 12 passing on SQLite (8 schema, 4 accounts API). v5 has not been run on Postgres yet.
-- Migrations were deleted and regenerated as one fresh `0001_initial` per app for v5. Any existing database must be recreated (`./data/postgres` did not exist at the time).
-- Documentation lives in `docs/` (tracked): model pages, user flows, API pages, Eraser code. Keep it in step with the models.
+- Repo: branch `main`, committed and pushed to `origin` (`https://github.com/anthonymikha/pass.git`, private). Not in git: `.env` (secrets; recreate from `.env.example` with fresh random values).
+- Stack: Python 3.13, Django 6.1.3, djangorestframework 3.18.3, drf-spectacular 0.30.0, boto3 1.44.3, google-auth 2.62.2, requests 2.34.2, psycopg 3.3.9, gunicorn 27.0.1, whitenoise 6.12.0, Postgres 18, SeaweedFS 4.52 (S3 storage). All pinned in `backend/requirements.txt` and `docker-compose.yml`.
+- Tests: 111 (schema constraints in `backend/tests.py`, workflow tests in each app's `tests.py`), green on SQLite and Postgres.
+- Migrations: `0001_initial` per app plus `accounts/0002` (devices), `chat/0002` (`club_last_read_at`), `bookings/0002` (`rpe_reminded_at`).
+- API: one page per app in `docs/backend/api/`; OpenAPI schema at `GET /api/schema/` (no warnings).
+- Documentation lives in `docs/` (tracked): logic pages (the specification), model pages, flows, API pages, Eraser code. Keep it in step with the code.
 
 ### Layout
 
@@ -64,7 +67,7 @@ backend/            Django project
   tests.py          schema constraint tests
   requirements.txt  Dockerfile  .dockerignore  manage.py
 frontend/           README placeholder; one Flutter project later (web, iOS, Android)
-docker-compose.yml  db (Postgres) + backend; commented stub for the future `web` service
+docker-compose.yml  db (Postgres), storage + storage-init (SeaweedFS S3), backend, scheduler (tick every 60 s); commented stub for the future `web` service
 data/               created by Docker, gitignored, root-owned
 .env.example        copy to .env
 ```
@@ -73,7 +76,8 @@ data/               created by Docker, gitignored, root-owned
 
 ```sh
 cd backend && DEBUG=1 .venv/bin/python manage.py test        # SQLite
-cp .env.example .env && docker compose up --build -d          # full stack on :8000
+cp .env.example .env && docker compose up --build -d          # full stack on :8000 (BACKEND_PORT), storage on :9000
+docker compose exec -T backend python manage.py seed          # sports, default commission, placeholder exercises
 docker compose exec -T backend python manage.py test          # same tests on Postgres
 docker compose down
 docker run --rm -v "$PWD":/w alpine rm -rf /w/data            # remove root-owned test data
@@ -94,9 +98,9 @@ Seven apps in this order: `accounts`, `venues`, `teams`, `bookings`, `billing`, 
 - Types: money `Decimal(12,3)`; currency 3-letter ISO code; exchange rate `Decimal(18,6)`; percent `Decimal(5,2)`.
 - Future front end: a reverse proxy serves the Flutter web build at `/` and forwards `/api/`, `/admin/` and `/static/` to Django on the same origin, so there is no CORS setup.
 
-## Schema v5 (33 tables, source of truth is `backend/*/models.py`)
+## Schema (34 tables, source of truth is `backend/*/models.py`)
 
-- **accounts:** `users`, `connections`, `user_blockouts`
+- **accounts:** `users`, `connections`, `user_blockouts`, `devices`
 - **venues:** `sports`, `clubs`, `club_members`, `club_currencies`, `courts`, `court_sports`, `court_rates`, `court_blockouts`, `equipment`, `price_overrides`, `discounts`
 - **teams:** `groups`, `group_members`
 - **bookings:** `sessions`, `session_participants`, `session_rentals`, `recordings`, `recording_tags`, `recording_tag_players`
@@ -120,51 +124,7 @@ Django adds `users_groups`, `users_user_permissions` and `authtoken_token`.
 | `sleep_logs` | `source` is `manual`/`apple_health`/`health_connect`; new `external_id`; unique (user, source, external_id) when set; `sleep_end` must be after `sleep_start` |
 | `exercise_assignments` | New `sets`, `reps`, `hold_seconds` |
 
-### Business rules agreed (not all are in code yet)
-
-**Users and roles**
-- Login is by email and password; no username. Emails are lowercased on save; a blank email is stored as NULL.
-- A **shadow player** is a `users` row with no email and an unusable password, with `managed_by` set to the coach. Coaches track attendance for them only.
-- Roles are not a column: a coach has `is_coach` true (self-declared in the profile, no approval); an owner is whoever owns a club.
-- `connections` covers friends and 1:1 coaching (`type`), with `pending` / `accepted` / `blocked`.
-- `club_members` links a user to a club as `coach` (many clubs, or none for freelancers), `staff`, or `player` (registered or subscribed, with optional `expires_on`). Booking a court does not need a membership. Subscription price and contents are not modelled.
-- Profile body data (`date_of_birth`, `sex`, `height_cm`, `weight_kg`, `nationality`, `dominant_hand`) is optional. No weight history; add a measurements table if it is ever charted.
-- **Block-outs** (users and courts) are one-off or repeat daily, weekly (weekday of `starts_on`) or monthly (day of month of `starts_on`; months without that day are skipped), until `repeat_until` or forever. "Every two weeks" and "first Monday" are not supported; switch to iCalendar RRULE if needed.
-- **Teams:** `groups.coach` is who runs training (starts as the owner). Changing coach is one field update; past sessions keep their coach. Not decided: whether the new coach also becomes `owner`.
-
-**Courts, hours and prices**
-- A solo court owner is a club with one court. A court can host several sports; the session picks which.
-- `court_rates` is both open hours and pricing: a row means "open in this window at this price per slot". Open hours are the union of rows. An `end_time` of 00:00 means end of day.
-- Booking is in fixed slots of `courts.slot_minutes`.
-- Owner closures and holidays are `court_blockouts` rows. Bookable time = rate windows − court block-outs − non-cancelled sessions.
-- `equipment`: `court` empty means shared across the club's courts; set means tied to that court. `rental_price` empty means included for free. Rental availability checking is deferred.
-
-**Currency**
-- `clubs.currency` is the base currency; all rates, rental prices and `amount_off` discounts are entered in base.
-- `club_currencies` lists other accepted currencies with a club-set `exchange_rate` (units per 1 base).
-- Default price in another currency = base price × exchange rate. A `price_overrides` row replaces that with a hand-set price for one rate or one equipment item in one currency.
-- The booker picks the currency; the session and its payments snapshot the currency and converted amounts. No FX table; the platform's cut is reported per currency.
-
-**Discounts**
-- One table covers targeted offers (`user`), frequent-player discounts (`min_bookings`), court/time promos (`court`, `starts_at`/`ends_at`). The session snapshots `discount` and `discount_amount`.
-- Not decided: whether discounts stack. Proposal: apply the single best one.
-
-**Payments and commission**
-- No payment gateway yet. A payment row records money that is **due**. When the **booker checks in** to a confirmed session, the payment rows are created with `paid_at` and `method` empty. The payee then marks each one paid (`method = offline`, `paid_at = now`). Not decided: exactly who may mark it paid (assumed: club owner/staff or the coach).
-- Each payment has exactly one payee: a club (court fee) or a coach (coach fee). A training session at a club creates both.
-- **Coach fee:** `sessions.coach_fee`. If `coach_fee_payer` is set, that user is billed the whole fee. If empty (the default), it is split equally, one payment per accepted team member (not only those who checked in). All shares are created as due at check-in and ticked off one by one.
-- `platform_fee` on each payment snapshots our cut. `settled_at` records when the cut was settled with the payee.
-- **Commission lookup** (`commission_rates`): one query. Take rows for the payee type with `effective_from` ≤ today and `min_count` ≤ the payee's count; prefer the payee's own override rows over default rows (both ids empty); order newest `effective_from` first, then highest `min_count`; take the first. A new schedule is a full set of rows with a later date. For now each schedule is a single row with `min_count` 0 (flat rate); tiers are a future switch.
-- Count used for tiers: coaches = distinct active players (accepted coaching connections plus active members of their teams); clubs = booking volume, counting window not yet decided.
-
-**Sessions, attendance, RPE, video**
-- `sessions` covers court bookings and coach training requests (`status = requested`, `coach` set). Closures are not sessions.
-- Attendance: `checked_in_at` empty after the session ends is a no-show. Coaches set it for shadow players.
-- RPE lives on `session_participants` (`rpe` 1–10, `rpe_minutes`, `rpe_logged_at`). It stays in `bookings`; it would move to `wellness` only if off-app training load is ever logged.
-- **Video unlock:** a participant can see a session's recordings only when they checked in and logged RPE.
-- Tags: a tag with no players is a whole-team tag; with players it concerns those players.
-
-**Computed, never stored:** revenue, customer and repeat-customer rates, attendance, recovery level, group availability, suggested times, video unlock.
+v5 plus three columns or tables approved at review: `devices` (NOTE-1), `chats.club_last_read_at` (CHAT-11), `session_participants.rpe_reminded_at` (NOTE-9).
 
 ## Decisions on infrastructure
 
@@ -174,7 +134,7 @@ Django adds `users_groups`, `users_user_permissions` and `authtoken_token`.
 | Chat delivery | **Decided:** polling first, WebSockets later. |
 | Sleep import | **Decided:** Apple Health / Google Health Connect are read on the phone by Flutter; backend only receives logs. |
 | Recovery level formula | **Deferred** until the owner meets their partner, a sports expert. Do not invent one. Suggested session times depend on it and are deferred too. |
-| Push notifications | Owner wants the platforms' standard services. **Recommended, not yet confirmed:** send both through Firebase Cloud Messaging (it relays to Apple's APNs), one backend integration and one Flutter plugin. Needs a `devices` table (33rd table), a Firebase project and an Apple developer key. |
+| Push notifications | **Built:** Firebase Cloud Messaging HTTP v1 (relays to Apple's APNs), behind `FCM_CREDENTIALS_FILE`; without it a fake sender logs pushes. Still needed from the owner: a Firebase project (service-account file, mounted into the backend and scheduler containers) and an Apple developer key uploaded to Firebase. |
 | Video and avatar storage | **Decided:** S3-compatible object storage; built with SeaweedFS in compose (`./data/storage`) because MinIO stopped publishing images (REC-1). Phones upload and play back through short-lived signed links, so video never passes through Django. Moving to a cloud bucket later is a settings change. The owner asked whether a plain server directory would do; the answer given was no for video (multi-GB uploads block workers, no seeking). |
 | Virtual environments | `backend/.venv` only. Flutter has no virtualenv (SDK is machine-wide, packages in `pubspec.yaml`). |
 
@@ -183,7 +143,7 @@ Django adds `users_groups`, `users_user_permissions` and `authtoken_token`.
 ### Done
 
 - **Step 0: repo and schema.** Monorepo, Docker, 7 apps, admin, constraint tests.
-- **Schema v5** (uncommitted): see the change table above. 33 tables.
+- **Schema v5**: see the change table above.
 - **Step 1: API foundation.** `POST /api/auth/register/`, `POST /api/auth/login/`, `POST /api/auth/logout/`, `GET|PATCH /api/me/`. Register and login are limited to 10 requests/minute per IP (per-process counter). Skipped on purpose: avatar upload (waits for storage), email verification and password reset (no email sending yet), changing email, role permission classes (arrive in step 3).
 
 ### Step 2: seed data (done 2026-11-16: `manage.py seed`, SEED-1 to SEED-3)
@@ -224,7 +184,7 @@ Open questions to ask first:
 
 Owner views: schedule per court and date, revenue per period and currency, customers and repeat-customer rate, attendance per session.
 
-Not decided: whether court bookings confirm instantly when the slot is free (proposal: yes; training requests wait for the coach); how early check-in opens (proposal: 30 minutes before start until the end); how sessions become `completed` (proposal: computed from time, no job).
+Settled (logic pages): court bookings confirm instantly (BOOK-9), check-in opens 30 minutes before the start (PAY-1), `completed` is computed (BOOK-55).
 
 Workflow test: owner setup → player sees slots → books in a non-base currency with a rental → second player cannot double-book → invite accepted → booker checks in → one due payment with the right amount, currency and platform fee → owner marks it paid → owner sees it in schedule, revenue and attendance.
 
@@ -254,7 +214,7 @@ Workflow test: owner setup → player sees slots → books in a non-base currenc
 
 ### Step 7: recordings (done 2026-11-16: storage in `backend/config/storage.py`, SeaweedFS in compose)
 
-- Storage container and signed upload/playback links (pending the storage decision above).
+- Storage container and signed upload/playback links (SeaweedFS, REC-1).
 - Players attach a video to a session they checked into; coaches upload to sessions they coached.
 - Viewing follows the unlock rule; the session's coach always sees them.
 - Tags: coach creates on sessions they coached, optionally naming players. A player sees tags naming them and whole-team tags in sessions they checked into.
@@ -266,16 +226,16 @@ Workflow test: owner setup → player sees slots → books in a non-base currenc
 - `GET messages?after=<id>` for polling, send, mark read (`last_read_at`), unread counts.
 - When a group session is confirmed, post a session card (start and end time, link to the session).
 
-### Step 9: push notifications
+### Step 9: push notifications (done 2026-11-16: `devices`, FCM sender, `tick` and the `scheduler` service)
 
 - `devices` table (user, token, platform), register and unregister endpoints.
-- Sending through Firebase (pending confirmation).
+- Sending through Firebase (built; needs the owner's Firebase project to go live).
 - Triggers: RPE reminder after a session ends, invites, chat messages, owner offers.
 - The RPE reminder needs something that runs on a schedule. Proposal: a small management command run every minute by a compose service; a task queue only if that stops being enough.
 
-### Step 10: full pass and publish
+### Step 10: full pass and publish (done 2026-11-16)
 
-All workflow tests on Postgres in Docker, then push (owner's go-ahead required). The first push already happened on 2026-11-16.
+All workflow tests on Postgres in Docker from an empty `./data`, docs and Eraser regenerated, pushed.
 
 ### Step 11: Flutter app
 
@@ -289,7 +249,7 @@ Recovery score and suggested times, WebSockets for chat, a payment gateway (`pay
 
 File "PASS - Database Schema v4": https://app.eraser.io/workspace/qn00Arwk1YCFHWdlXAu3
 
-- The diagrams online are still **v4**. The v5 code is in `docs/backend/eraser/` (`overview.eraser` plus one file per app), generated from the Django models. The owner pastes it into Eraser themselves.
+- The diagrams online are still **v4**. The current code is in `docs/backend/eraser/` (`overview.eraser` plus one file per app), generated from the Django models by `docs/backend/eraser/generate.py`. The owner pastes it into Eraser themselves.
 - **The full overview diagram is broken:** it was replaced by an older copy from an open browser tab and now renders tables without relationship lines. To fix: have the owner reload the tab, list the file's diagrams to get the current id, then rewrite the overview code.
 - Eraser's AI tools are out of free credits; write diagram code directly. Eraser's ERD type has no grouping, hence one diagram per app.
-- Regenerate the `.eraser` files whenever the models change (walk `apps.get_models()`, emit one entity per `db_table` and one `a.col > b.id` line per foreign key). `devices` is not in the schema yet.
+- Regenerate the `.eraser` files whenever the models change: from `backend/`, `DEBUG=1 .venv/bin/python manage.py shell < ../docs/backend/eraser/generate.py`.

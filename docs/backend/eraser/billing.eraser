@@ -1,4 +1,4 @@
-// PASS schema v5 - billing
+// PASS schema - billing
 
 payments [icon: dollar-sign, color: red] {
   id bigint pk

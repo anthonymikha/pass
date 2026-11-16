@@ -1,4 +1,4 @@
-// PASS schema v5 - all apps. Colour by Django app: accounts = blue, venues = green, teams = orange, bookings = purple, billing = red, wellness = yellow, chat = pink
+// PASS schema - all apps. Colour by Django app: accounts = blue, venues = green, teams = orange, bookings = purple, billing = red, wellness = yellow, chat = pink
 
 users [icon: user, color: blue] {
   id bigint pk
@@ -42,6 +42,14 @@ user_blockouts [icon: user, color: blue] {
   reason varchar
   created_at timestamp
   user_id bigint
+}
+
+devices [icon: user, color: blue] {
+  id bigint pk
+  user_id bigint
+  token varchar unique
+  platform varchar
+  created_at timestamp
 }
 
 sports [icon: map-pin, color: green] {
@@ -198,6 +206,7 @@ session_participants [icon: calendar, color: purple] {
   rpe smallint null
   rpe_minutes int null
   rpe_logged_at timestamp null
+  rpe_reminded_at timestamp null
   created_at timestamp
 }
 
@@ -329,6 +338,7 @@ chats [icon: message-circle, color: pink] {
   type varchar
   group_id bigint unique null
   club_id bigint null
+  club_last_read_at timestamp null
   created_at timestamp
 }
 
@@ -353,6 +363,7 @@ users.managed_by_id > users.id
 connections.user_id > users.id
 connections.other_user_id > users.id
 user_blockouts.user_id > users.id
+devices.user_id > users.id
 clubs.owner_id > users.id
 club_members.club_id > clubs.id
 club_members.user_id > users.id

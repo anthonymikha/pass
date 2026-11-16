@@ -1,10 +1,11 @@
-// PASS schema v5 - chat
+// PASS schema - chat
 
 chats [icon: message-circle, color: pink] {
   id bigint pk
   type varchar
   group_id bigint unique null
   club_id bigint null
+  club_last_read_at timestamp null
   created_at timestamp
 }
 

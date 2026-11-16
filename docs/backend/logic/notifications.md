@@ -1,6 +1,6 @@
 # Push notifications and the scheduler (NOTE)
 
-**Status: partly built.** Built: NOTE-1 to NOTE-3, NOTE-11, NOTE-13, NOTE-14 (`accounts/services.py`, fake sender). Planned: the rest.
+**Status: built** (devices and the sender in `backend/accounts/`, `tick` in `backend/bookings/management/commands/`, the `scheduler` service in `docker-compose.yml`). The Firebase sender is tested with the HTTP layer mocked; it has not sent a real push yet (no Firebase project).
 
 ## Devices
 
@@ -51,5 +51,7 @@ Shadow players have no devices, so they never receive pushes. Nobody receives a 
 **NOTE-30.** A `scheduler` service in docker-compose runs `python manage.py tick` every 60 seconds (same image as the backend). `tick` is safe to run twice in a row and safe to skip runs.
 
 **NOTE-31.** **RPE reminder.** Each tick finds participant rows with `checked_in_at` set, `rpe` empty, `rpe_reminded_at` empty, whose session is `confirmed` and has `ends_at` between now − 7 days and now. For each, it sends `rpe_reminder` and sets `rpe_reminded_at` = now. Each row is reminded at most once, even if the scheduler was down for a while.
+
+**NOTE-32.** *Decided during build (2026-11-16):* the service-account file is read once per process. Only Firebase's `UNREGISTERED` answer deletes a device (NOTE-12); a malformed-token answer is logged like any other failure. Each reminder row is claimed with a conditional update before the push is sent, so overlapping ticks never remind twice; a push that then fails is not retried (at most once). The reminder window includes both ends (`ends_at` exactly 7 days ago is still reminded). A push carries `data = {"type": <trigger>, "id": <object id>}`, all values as strings.
 
 **NOTE-9.** New column `session_participants.rpe_reminded_at` (nullable) supports NOTE-31. Approved by the owner at review, 2026-11-16.

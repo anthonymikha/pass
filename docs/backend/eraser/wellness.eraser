@@ -1,4 +1,4 @@
-// PASS schema v5 - wellness
+// PASS schema - wellness
 
 soreness_logs [icon: heart, color: yellow] {
   id bigint pk
