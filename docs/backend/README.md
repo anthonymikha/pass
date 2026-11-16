@@ -43,7 +43,13 @@ An event in an earlier app sometimes has a consequence owned by a later app. The
 2. Group session confirmed → `chat.services.post_session_card(session)` (BOOK-60)
 3. Group created, membership changed, coach changed or group deleted (TEAM-20, TEAM-28 to TEAM-30) → `chat.services` functions that keep the group chat in step. *Decided during build (2026-11-16): the logic pages require it and `teams` comes before `chat`.*
 
-One read the other way is allowed: `bookings` asks whether a session already has payments (`session.payments.exists()`, for DSC-12, BOOK-40, BOOK-50). *Decided during build (2026-11-16), same reason.*
+A few reads the other way are allowed, through reverse relations only, never writes. *Decided during build (2026-11-16): the logic pages require them.*
+
+| Earlier app | Reads | For |
+|---|---|---|
+| `bookings` | whether a session already has payments (`session.payments`) | DSC-12, BOOK-40, BOOK-50 |
+| `venues` | a court's sessions (`court.sessions`) | CLUB-10 (court in use), CLUB-16 (closure conflicts) |
+| `venues` | an item's rentals (`equipment.rentals`) | CLUB-19 (equipment in use) |
 
 Push notifications (NOTE-1 to NOTE-14) live in `accounts` (the `devices` table and `accounts.services.notify()`), the first app, so every app can send a push without a downward call. *Decided during build (2026-11-16).*
 
