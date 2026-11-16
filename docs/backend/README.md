@@ -33,7 +33,7 @@ accounts <- venues <- teams <- bookings <- billing
 | Workflow tests | `<app>/tests.py` | Drive real endpoints with `APITestCase` |
 | Schema constraint tests | `backend/tests.py` | |
 
-Later apps may read earlier apps' data freely (for example `wellness` reads RPE from `bookings`).
+Later apps may read earlier apps' data freely (for example `wellness` reads RPE from `bookings`). One later app writes an earlier app's rows: `wellness` stores RPE on `session_participants` (WEL-3), because the RPE and the post-session soreness rows are written in one transaction. *Decided during build (2026-11-16).*
 
 ### The allowed "downward" calls
 
