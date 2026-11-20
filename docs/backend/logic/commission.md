@@ -29,6 +29,6 @@
 
 Defaults seeded (SEED-2): club 10%, coach 10%, from the seed date. On 2027-03-01 the admin gives coach Sami a negotiated 7% from 2027-03-01 (`applies_to = coach`, `coach = Sami`, `min_count = 0`).
 
-- Sami's payments checked in on 2027-02-20: Sami's own rows are not yet in effect, so default 10%.
+- Sami's payments billed on 2027-02-20: Sami's own rows are not yet in effect, so default 10%.
 - From 2027-03-01: Sami's own row, 7%.
 - Another coach: default 10%.

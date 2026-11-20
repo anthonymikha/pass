@@ -1,6 +1,6 @@
 # Access and roles (ACC)
 
-**Status: built.** ACC-10 to ACC-13 in `backend/accounts/`, ACC-20 to ACC-23 in `backend/teams/` (avatar links arrive with REC-30). The names and default rules are applied by every endpoint. Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
+**Status: built, except the changes from the owner's review of 2026-11-17, which are planned** (marked *review 2026-11-17*: ACC-1 group manager and coach's players, ACC-6, ACC-7, ACC-12). ACC-10 to ACC-13 in `backend/accounts/`, ACC-20 to ACC-23 in `backend/teams/` (avatar links arrive with REC-30). The names and default rules are applied by every endpoint. Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
 
 ## Names used on every page
 
@@ -16,12 +16,12 @@
 | **club staff** of K | A user with an active `staff` membership of K |
 | **club side** of K | The club owner of K plus the club staff of K |
 | **affiliated coach** of K | A user with an active `coach` membership of K |
-| **group manager** of group G | `G.owner`, and also `G.coach` when G is a team |
+| **group manager** of group G | For a play group, `G.created_by`. For a team, `G.coach` only: the **team coach**. A team's creator has no rights once they are not its coach (*review 2026-11-17*) |
 | **booker** of session S | `S.booked_by` |
 | **session coach** of S | `S.coach` |
 | **participant** of S | A user with a `session_participants` row in S, any status |
 | **accepted participant** | A participant with `status = accepted` |
-| **coach's players** of coach C | Users with an accepted `coaching` connection from C; active members of teams where C is a group manager; shadow players with `managed_by = C` |
+| **coach's players** of coach C | Users with an accepted `coaching` connection from C; active members of teams where C is the team coach; shadow players with `managed_by = C` |
 | **friends** of U | Users with an accepted `friend` connection to U in either direction |
 | **blocked pair** | Two users with a `blocked` connection in either direction |
 
@@ -35,9 +35,9 @@
 
 **ACC-5.** Everything under a club (currencies, courts, rates, closures, equipment, overrides, discounts, memberships) is changed only by the club owner. The club side may additionally do the day-to-day actions listed in ACC-6. Coaches, players and the platform's admins (through the Django admin) have no API rights over a club's setup.
 
-**ACC-6.** Club staff may: read the club's schedule (RPT-1), approve and decline rentals (BOOK-40), check the booker in (PAY-3), mark the club's payments paid or due again (PAY-20, PAY-21), read the due list (RPT-2), and read and reply to the club's inquiry chats (CHAT-8). Staff may not read revenue, customers or repeat rate (RPT-3 to RPT-5), and may not change any configuration.
+**ACC-6.** Club staff may: read the club's schedule (RPT-1), approve and decline rentals (BOOK-40), check participants in (PAY-2, PAY-3), mark the club's payments paid or due again (PAY-20, PAY-21), read the due list (RPT-2), and read and reply to the club's inquiry chats (CHAT-8). Staff may not read revenue, customers or repeat rate (RPT-3 to RPT-5), and may not change any configuration.
 
-**ACC-7.** Platform admins work through the Django admin only: sports, the exercise catalogue, commission rates, and `settled_at` on payments. No API endpoint changes these.
+**ACC-7.** Platform admins work through the Django admin only: sports, the exercise catalogue, commission rates, `settled_at` on payments, and teams left without a coach (TEAM-34). No API endpoint changes these.
 
 ## Shadow players
 
@@ -45,7 +45,7 @@
 
 **ACC-11.** The managing coach may read and edit those fields, and may deactivate the shadow player (`is_active = false`) and reactivate it (*decided during build, 2026-11-16*). Nobody else can see or edit a shadow player except where a page lists them (team member lists, session participant lists, tags).
 
-**ACC-12.** A shadow player is never: a friend, a coaching-connection target, a chat member, a payer chosen in `coach_fee_payer` by anyone but their managing coach, or found by user search. They can be: an active team member (TEAM-27), a session participant (BOOK-10, BOOK-30, BOOK-31), a payer in a coach-fee split (PAY-12; the coach collects from the parent), and named in a recording tag.
+**ACC-12.** A shadow player is never: a friend, a coaching-connection target, a chat member, a payer chosen in `coach_fee_payer` by anyone but their managing coach, or found by user search. They can be: an active team member (TEAM-27), a session participant (BOOK-10, BOOK-30, BOOK-31), a payer in a split court or coach fee (PAY-11, PAY-12; the club or the coach collects from the parent), and named in a recording tag.
 
 **ACC-13.** A shadow player cannot be converted into a normal account in this version.
 

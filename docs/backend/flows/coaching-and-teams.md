@@ -31,13 +31,13 @@ Models: [User, Connection, UserBlockout](../models/accounts.md), [ClubMember](..
 | 1. The coach creates a team | [TEAM-20](../logic/teams-and-coaching.md#play-groups-and-teams) |
 | 2. Fill it: invites, join requests, shadow players | [TEAM-22 to TEAM-27](../logic/teams-and-coaching.md#play-groups-and-teams), [ACC-10 to ACC-13](../logic/access-and-roles.md#shadow-players) |
 | 3. Book training, choose who pays the coach fee | [BOOK-30 to BOOK-33](../logic/booking.md#training-booked-by-a-coach) |
-| 4. Check in players and shadow players; payments are split | [PAY-2, PAY-12](../logic/check-in-and-payments.md) |
-| 5. Change the team's coach | [TEAM-29](../logic/teams-and-coaching.md#play-groups-and-teams) |
+| 4. Check in players and shadow players; billing splits fees among attendees | [PAY-2, PAY-9 to PAY-13](../logic/check-in-and-payments.md) |
+| 5. Hand the team to another coach | [TEAM-29](../logic/teams-and-coaching.md#play-groups-and-teams) |
 | 6. Follow players | [TEAM-40](../logic/teams-and-coaching.md#what-a-coach-can-see-about-their-players), [RPT-8](../logic/owner-reports.md) |
 
 ```
 coach ─coach─> Group(team) ─> GroupMember(active) ─┐
    │                                               ├─> Session(training, group) ─> SessionParticipant × n
    └─booked_by, coach──────────────────────────────┘            │
-                                                    coach checks in ─> Payment × n (split) or × 1
+                                      check-ins, then billing ─> Payment × n (split) or × 1
 ```

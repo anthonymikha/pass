@@ -10,7 +10,7 @@ The centre of the system: one booked block of time.
 |---|---|
 | `court` | Where. Empty for a training request not yet placed on a court |
 | `sport` | Which sport, important on multi-sport courts |
-| `booked_by` | The **booker**: the user who made it and whose check-in triggers payment |
+| `booked_by` | The **booker**: the user who made it and chose how each fee is paid ([PAY-9](../logic/check-in-and-payments.md#how-each-fee-is-paid)) |
 | `coach` | Set for coached sessions |
 | `group` | Set when booked for a play group or team |
 | `kind` | `play` or `training` |
@@ -19,7 +19,9 @@ The centre of the system: one booked block of time.
 | `currency` | Chosen by the booker from the club's accepted currencies |
 | `price` | Court price for the whole session, in `currency`, **before** discount |
 | `coach_fee` | Coach's fee in `currency`, 0 if none |
-| `coach_fee_payer` | Empty = fee split equally between team members. Set = that user pays all of it |
+| `coach_fee_payer` | Empty = fee split among the attendees. Set = that user pays all of it |
+| `court_fee_split` | False = the booker pays the court fee in full. True = split among the attendees (planned, review 2026-11-17) |
+| `billed_at` | When the payments were created, a day after the session ends; empty = not billed yet (planned, [PAY-10](../logic/check-in-and-payments.md#billing-creating-payments)) |
 | `discount`, `discount_amount` | The offer used and the amount taken off, copied at booking time |
 
 `price`, `currency`, `coach_fee` and `discount_amount` are snapshots. Later changes to rates, exchange rates or offers never alter an existing session.
@@ -51,14 +53,14 @@ One row per person in a session. Unique per (session, user).
 | Field | Meaning |
 |---|---|
 | `status` | `invited` → `accepted` or `declined` |
-| `checked_in_at` | Attendance. Empty after the session ended = no-show |
+| `checked_in_at` | Attendance. Set = **attendee**. Empty once check-in closed (`ends_at + 24h`) = no-show |
 | `rpe` | Rate of perceived exertion, 1–10 |
 | `rpe_minutes` | Minutes of effort, defaults to the session length |
 | `rpe_logged_at` | When the form was submitted |
 | `rpe_reminded_at` | When the RPE reminder was sent ([NOTE-9](../logic/notifications.md#the-scheduler)) |
 
 - The booker gets a row with status `accepted` when the session is created.
-- Coaches set `checked_in_at` on behalf of shadow players.
+- The booker, the session coach and the club side may check in any accepted participant; coaches check in shadow players ([PAY-2](../logic/check-in-and-payments.md#check-in)).
 - Training load for one participation is `rpe × rpe_minutes`.
 - **Video unlock:** `checked_in_at` and `rpe` both set ([REC-20](../logic/recordings.md#watch)).
 - Check-in window and who may check in whom: [PAY-1 to PAY-5](../logic/check-in-and-payments.md).

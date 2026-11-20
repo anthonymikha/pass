@@ -16,12 +16,13 @@ One row per amount **owed** by one person to one payee for one session. A row sa
 | `amount`, `currency` | What is owed |
 | `platform_fee` | The platform's cut of this payment, in the same currency, fixed at creation |
 | `method` | Empty until paid. `offline` today; `online` once a gateway exists |
-| `paid_at` | When the payee received it. **Empty = still due** |
+| `paid_at` | When the payee received it. Empty (and not waived) = still due |
+| `waived_at` | When the payee gave it up (planned, [PAY-25](../logic/check-in-and-payments.md#marking-paid)). Set = not owed |
 | `settled_at` | When the platform's cut was settled with the payee. Empty = still owed |
 
 ### When rows are created
 
-A confirmed session becomes payable when its **booker checks in**. Which rows are created, the split of a coach fee, and who marks them paid: [PAY-10 to PAY-23](../logic/check-in-and-payments.md).
+A confirmed session is **billed** a day after it ends, once check-in has closed, from the people who checked in (planned, review 2026-11-17). Which rows are created, how a fee is split, and who marks them paid: [PAY-9 to PAY-23](../logic/check-in-and-payments.md).
 
 ### Reading the money
 
@@ -34,7 +35,7 @@ Payment.objects.filter(club=club, paid_at__range=(a, b)).values("currency").anno
 )
 
 # what players still owe a club
-Payment.objects.filter(club=club, paid_at__isnull=True).values("currency").annotate(due=Sum("amount"))
+Payment.objects.filter(club=club, paid_at__isnull=True, waived_at__isnull=True).values("currency").annotate(due=Sum("amount"))
 
 # what a club still owes the platform
 Payment.objects.filter(club=club, settled_at__isnull=True).values("currency").annotate(owed=Sum("platform_fee"))

@@ -34,7 +34,7 @@ Admin: http://localhost:8000/admin/
 
 ### Scheduler and push notifications
 
-The `scheduler` service runs `python manage.py tick` every 60 seconds with the backend image (it never migrates). Today a tick sends the RPE reminder (NOTE-31). To run it once by hand: `docker compose exec backend python manage.py tick`.
+The `scheduler` service runs `python manage.py tick` every 60 seconds with the backend image (it never migrates). Today a tick sends the RPE reminder (NOTE-31); billing (NOTE-33) is planned. To run it once by hand: `docker compose exec backend python manage.py tick`.
 
 Pushes go through Firebase when `FCM_CREDENTIALS_FILE` (a service-account JSON, mounted into the backend and scheduler containers) is set; otherwise they are only written to the log.
 

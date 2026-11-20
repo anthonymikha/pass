@@ -27,7 +27,7 @@ User ──owner──> Club ──> ClubCurrency (LBP @ 89500)
 | See the schedule | [RPT-1](../logic/owner-reports.md) |
 | Close a court once or repeatedly | [CLUB-15 to CLUB-17](../logic/clubs-and-courts.md#closures-court-block-outs) |
 | See who still owes money; mark a payment received | [RPT-2](../logic/owner-reports.md), [PAY-20, PAY-21](../logic/check-in-and-payments.md#marking-paid) |
-| Check in a booker who does not use the app | [PAY-3](../logic/check-in-and-payments.md) |
+| Check in players who do not use the app | [PAY-2, PAY-3](../logic/check-in-and-payments.md) |
 | Approve a rental | [BOOK-40, BOOK-41](../logic/booking.md#rentals) |
 | Revenue, customers, repeat rate, attendance | [RPT-3 to RPT-6](../logic/owner-reports.md) |
 | Run an offer (targeted, frequent-player, time slot) | [CLUB-22 to CLUB-24](../logic/clubs-and-courts.md#offers-the-discounts-table), [DSC-1 to DSC-6](../logic/discounts.md) |

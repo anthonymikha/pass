@@ -8,7 +8,7 @@ Models: [Court, CourtRate, ClubCurrency, PriceOverride, Equipment, Discount](../
 CourtRate ─┐
 Session ───┼─> free slots ─> price ─> Session + SessionParticipant (+ SessionRental)
 Discount ──┘                                   │
-                                     booker checks in
+                         participants check in; billed a day later
                                                │
                               CommissionRate ─> Payment(s)
 ```
@@ -20,8 +20,8 @@ Discount ──┘                                   │
 | 3. Book | One transaction with the court locked; confirmed at once | [BOOK-2 to BOOK-9](../logic/booking.md) |
 | 4. Invite others | Friends or the whole group; each accepts or declines | [BOOK-10 to BOOK-17](../logic/booking.md#invites) |
 | 5. Rentals | The club side approves or declines, with a stock check | [BOOK-40 to BOOK-42](../logic/booking.md#rentals) |
-| 6. Check in | From 30 minutes before start; the booker's check-in creates the payments | [PAY-1 to PAY-6](../logic/check-in-and-payments.md) |
-| 7. Record payments | Court fee and coach fee rows, due, with the platform fee | [PAY-10 to PAY-16](../logic/check-in-and-payments.md#creating-payments), [COM-1](../logic/commission.md) |
+| 6. Check in | From 30 minutes before start; the booker, coach or club side can check others in; the first check-in freezes the session | [PAY-1 to PAY-8](../logic/check-in-and-payments.md) |
+| 7. Billing | A day after the end: court fee and coach fee rows, paid in full or split among attendees, due, with the platform fee | [PAY-9 to PAY-16](../logic/check-in-and-payments.md#creating-payments), [COM-1](../logic/commission.md) |
 | 8. Mark paid | The payee side ticks each row off | [PAY-20 to PAY-23](../logic/check-in-and-payments.md#marking-paid) |
 | 9. Afterwards | RPE reminder, video unlock, owner reports | [NOTE-31](../logic/notifications.md), [WEL-1](../logic/wellness.md), [REC-20](../logic/recordings.md), [RPT-1 to RPT-6](../logic/owner-reports.md) |
 

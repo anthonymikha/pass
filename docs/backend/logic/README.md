@@ -15,7 +15,7 @@ Model pages ([models/](../models/)) say what each field means. Flow pages ([flow
 | [pricing-and-currency.md](pricing-and-currency.md) | `PRC` | Accepted currencies, conversion, overrides, rounding, rental prices |
 | [discounts.md](discounts.md) | `DSC` | Which offer applies, how much it takes off, one-off session discounts |
 | [booking.md](booking.md) | `BOOK` | Booking a court, training requests, team training, invites, rentals, cancelling, session cards |
-| [check-in-and-payments.md](check-in-and-payments.md) | `PAY` | Check-in, creating due payments, splitting coach fees, marking paid |
+| [check-in-and-payments.md](check-in-and-payments.md) | `PAY` | Check-in, how each fee is paid, billing, splitting fees, marking paid |
 | [commission.md](commission.md) | `COM` | The platform's cut and settlement |
 | [owner-reports.md](owner-reports.md) | `RPT` | Schedule, dues, revenue, customers, repeat rate, attendance, coach earnings |
 | [teams-and-coaching.md](teams-and-coaching.md) | `TEAM` | Friends, blocking, coaching links, block-out times, play groups and teams, changing coach |
@@ -43,3 +43,12 @@ Three changes to schema v5, all approved by the owner on 2026-11-16, all built (
 | `session_participants` | New column `rpe_reminded_at` (nullable): when the RPE reminder was sent, so it is sent once | NOTE-9 |
 
 `rpe_reminded_at` was added at review instead of a stateless reminder, which would miss sessions while the scheduler is down.
+
+Four more from the owner's review of 2026-11-17, **planned**:
+
+| Table | Change | Rule |
+|---|---|---|
+| `sessions` | New column `court_fee_split` (boolean, default false): the booker pays the court fee in full, or it is split among the attendees | PAY-9, PAY-11 |
+| `sessions` | New column `billed_at` (nullable): when the session was billed, so it is billed once | PAY-10, NOTE-33 |
+| `payments` | New column `waived_at` (nullable): the payee gave the payment up | PAY-25 |
+| `groups` | `owner` renamed `created_by`, now nullable (emptied if that account is deleted); history only, gives no rights | ACC-1, TEAM-20, TEAM-29 |

@@ -1,96 +1,120 @@
 # Check-in and payments (PAY)
 
-**Status: built** (check-in in `backend/bookings/`, payments in `backend/billing/`; API pages [bookings](../api/bookings.md), [billing](../api/billing.md)). Attendance, and the payment rows that record money owed. There is no payment gateway: money changes hands at the court, and the payee ticks it off.
+**Status: built, except the changes from the owner's review of 2026-11-17, which are planned** (marked *review 2026-11-17*: PAY-2, PAY-4, PAY-6 to PAY-16, PAY-21, PAY-25). Check-in in `backend/bookings/`, payments in `backend/billing/`; API pages [bookings](../api/bookings.md), [billing](../api/billing.md). Attendance, how each fee is paid, and the payment rows that record money owed. There is no payment gateway: money changes hands at the court, and the payee ticks it off.
 
 ## Check-in
 
 **PAY-1.** A participant row can be checked in when: the session is `confirmed`; the row's status is `accepted`; and now is between `starts_at − 30 minutes` and `ends_at` (both included), except for the late check-in of PAY-7.
 
-**PAY-2.** Who may check in a row:
+**PAY-2.** Who may check in a row (*review 2026-11-17*: attendance decides who pays, PAY-11 and PAY-12, so the people running the session can mark it and a player cannot dodge a share by not tapping check-in):
 
 | Row | Who |
 |---|---|
 | their own | the participant |
-| a shadow player's | the session coach, or the shadow player's managing coach |
-| the booker's | the booker, or the club side of the court's club (for a booker who does not use the app at the court) |
+| any accepted participant's | the booker; the session coach; the club side of the court's club (PAY-3) |
+| a shadow player's | also the shadow player's managing coach |
 
-**PAY-3.** The club side may check in **only the booker's row**, and only on sessions on their club's courts. (This is the "check the booker in" right in ACC-6.)
+**PAY-3.** The club side may check people in only on sessions on their club's courts (ACC-6).
 
 **PAY-4.** Steps, in one transaction:
 1. Lock the session row (`select_for_update`).
 2. If the row already has `checked_in_at`: change nothing and return it (GEN-5).
 3. Set `checked_in_at` = now.
-4. If the row is the booker's: call `billing.services.record_payments(session)` (PAY-10).
+
+Checking in creates no payments; billing does, after the session (PAY-10). *Review 2026-11-17: before, the booker's check-in created the payments.*
 
 **PAY-5.** Errors: session not visible `404`; caller not allowed for this row `403`; outside the window `400 checkin_closed`; row not `accepted` `400 not_accepted`; session not `confirmed` `400 invalid_status`.
 
-**PAY-6.** No-shows: an accepted participant with no `checked_in_at` after `ends_at`. Nothing is written; it is computed (RPT-6). If the booker is not checked in by `ends_at + 24 hours` (PAY-7), no payment rows ever exist for the session.
+**PAY-6.** A check-in is never undone, by anyone. An **attendee** is an accepted participant with `checked_in_at` set. A **no-show** is an accepted participant with no `checked_in_at` once check-in has closed (PAY-7); nothing is written, it is computed (RPT-6). A no-show owes nothing (PAY-16).
 
-**PAY-7.** **Late check-in** (settled at the owner's review on 2026-11-16). The club side may check in the **booker's row** (PAY-3) until `ends_at + 24 hours` (included), for a booker who forgot. Everything else in PAY-1 to PAY-5 holds, and the booker's check-in creates the payments as usual (PAY-4). Nobody else may check in after `ends_at`: `400 checkin_closed`.
+**PAY-7.** **Late check-in** (*review 2026-11-17*). After `ends_at`, the booker, the session coach, the club side (PAY-3) and a shadow player's managing coach may still check in any accepted row until `ends_at + 24 hours` (included), for someone who forgot. A participant checks themselves in only until `ends_at`. Anything later: `400 checkin_closed`.
 
-## Creating payments
+**PAY-8.** **The first check-in freezes the session** (*review 2026-11-17*). Once any participant has checked in, the session can no longer be cancelled (BOOK-50), its rentals can no longer be decided (BOOK-40) and its one-off discount can no longer be set (DSC-12). Error: `400 already_payable`.
 
-**PAY-10.** `record_payments(session)` runs inside the check-in transaction, with the session row locked. If the session already has any payment row, it does nothing. Otherwise it creates the rows of PAY-11 to PAY-13, each with `currency` = the session currency, `platform_fee` from PAY-14, `method` empty, `paid_at` empty, `settled_at` empty. Because the session row is locked and the check runs inside the lock, two simultaneous booker check-ins create the rows once.
+## How each fee is paid
 
-**PAY-11.** **Court fee** (only if the session has a court): payer = booker, payee = the court's club, amount = `price − discount_amount + sum of approved rental prices`.
+**PAY-9.** *Review 2026-11-17.* Each fee of a session is either **paid in full** by one person or **split** among the attendees. The booker chooses when booking (BOOK-7, BOOK-20, BOOK-30, BOOK-31); the choice is not changed afterwards (like rentals, BOOK-42).
+- Court fee: `court_fee_split` false = paid in full by the booker; true = split.
+- Coach fee: `coach_fee_payer` set = paid in full by that person; empty = split.
 
-**PAY-12.** **Coach fee, split** (when `coach_fee > 0` and `coach_fee_payer` is empty): payee = the session coach. The payers are the session's accepted participants, excluding the session coach; when the session has a `group`, only those who are active members of that group at check-in time. Shadow players are included (the coach collects from the parent). Order the payers by participant row `id`, ascending. With `n` payers and minor unit `u` (GEN-15):
-- `share = coach_fee ÷ n`, rounded **down** to `u`;
-- `remainder = coach_fee − share × n`;
+## Billing (creating payments)
+
+**PAY-10.** **Billing** (*review 2026-11-17*). Each scheduler tick (NOTE-33) bills every session that is `confirmed`, has `ends_at + 24 hours ≤ now` (check-in has closed, PAY-7) and has `billed_at` empty. Per session, in one transaction: lock the session row; if `billed_at` is now set, stop; set `billed_at` = now; if the session has at least one attendee, create the rows of PAY-11 and PAY-12, each with `currency` = the session currency, `platform_fee` from PAY-14, `method` empty, `paid_at` empty, `settled_at` empty. A session with no attendee is billed with no rows: nothing is owed (there are no no-show fees, BOOK-51). Payments therefore appear in the due list a day after the session ends.
+
+**PAY-11.** **Court fee** (only if the session has a court). Amount = `price − discount_amount + sum of approved rental prices`.
+- Paid in full: one row, payer = booker, payee = the court's club.
+- Split: the payers are the attendees except the session coach; shadow players included (the club collects from the parent). Shares by PAY-13. If there are no payers (only the session coach attended), the booker pays it in full; the club side may waive it (PAY-25).
+
+**PAY-12.** **Coach fee** (only if `coach_fee > 0`). Payee = the session coach.
+- Paid in full: one row, payer = `coach_fee_payer`, amount = `coach_fee`. Owed whenever the session has at least one attendee, whether or not the payer attended; when the payer did not attend, the coach may waive it (PAY-25).
+- Split: the payers are the attendees except the session coach; shadow players included (the coach collects from the parent). Shares by PAY-13. If there are no payers, no coach-fee row is created. *Review 2026-11-17: attendance decides; group membership is no longer checked.*
+
+**PAY-13.** **Splitting an amount** among `n` payers, with minor unit `u` (GEN-15). Order the payers by participant row `id`, ascending:
+- `share = amount ÷ n`, rounded **down** to `u`;
+- `remainder = amount − share × n`;
 - the first payer pays `share + remainder`, every other payer pays `share`.
 
-If there are no payers, no coach-fee row is created.
+The booker's row is created first, so a booker who is a payer takes the remainder.
 
-**PAY-13.** **Coach fee, single payer** (when `coach_fee > 0` and `coach_fee_payer` is set): one row, payer = `coach_fee_payer`, payee = the session coach, amount = `coach_fee`.
-
-**PAY-14.** `platform_fee = round_money(amount × percent / 100, currency)`, where `percent` comes from the commission lookup (COM-1) for that row's payee on today's date (UTC) at check-in.
+**PAY-14.** `platform_fee = round_money(amount × percent / 100, currency)`, where `percent` comes from the commission lookup (COM-1) for that row's payee on the billing date (UTC).
 
 **PAY-15.** A row whose amount would be 0 is not created (a free court, a fully discounted session, a zero coach fee).
 
-**PAY-16.** All shares are owed at check-in, including for members who did not attend (they accepted the session).
+**PAY-16.** *Changed at review 2026-11-17:* a no-show owes no share. (Before: every accepted participant owed a share, attending or not.)
 
 ## Marking paid
 
 **PAY-20.** **Mark paid.** Who may: for a club payment, the club side of that club; for a coach payment, that coach. The payer never. Effect: `method = offline`, `paid_at` = now. Already paid: no change (GEN-5).
 
-**PAY-21.** **Back to due** (undo a mistake). Same people. Allowed only while `settled_at` is empty. Effect: `method` and `paid_at` emptied. Already due: no change. Settled: `400 already_settled`.
+**PAY-21.** **Back to due** (undo a mistake). Same people. Allowed only while `settled_at` is empty. Effect: `method` and `paid_at` emptied. A waived payment comes back to due the same way, `waived_at` emptied (PAY-25). Already due: no change. Settled: `400 already_settled`.
 
 **PAY-22.** Payments are never deleted or edited otherwise. Disputes are not handled in the app.
 
 **PAY-23.** A payer sees their own payment rows (what they owe and what they paid); a payee side sees rows where they are the payee. Others: `404`.
 
-**PAY-24.** *Decided during build (2026-11-16):* check-in checks, in order: visibility (`404`), who may (`403`), then inside the lock an already checked-in row returns `200` unchanged (GEN-5) before `invalid_status`, `not_accepted` and `checkin_closed`. The payer marking their own payment is `403` (they can see it); anyone else `404`. Mark paid and back to due return `200` on a repeat.
+**PAY-24.** *Decided during build (2026-11-16):* check-in checks, in order: visibility (`404`), who may (`403`, PAY-2), then inside the lock an already checked-in row returns `200` unchanged (GEN-5) before `invalid_status`, `not_accepted` and `checkin_closed`. The payer marking their own payment is `403` (they can see it); anyone else `404`. Mark paid and back to due return `200` on a repeat.
+
+**PAY-25.** **Waive** (*review 2026-11-17*). Who may: the same people as PAY-20 (the payee side). The payee gives up a due payment, typically one owed by someone who did not attend (PAY-11, PAY-12). Effect: `waived_at` = now. Allowed only while the payment is due; paid: `400 already_paid` (move it back to due first, PAY-21). Already waived: no change (GEN-5). A waived payment is not owed, is not revenue, and carries no platform fee owed (COM-11 counts paid payments only).
 
 State of a payment row:
 
 | From | To | Who | When |
 |---|---|---|---|
-| (new) | due | system | booker's check-in (PAY-10) |
+| (new) | due | system | billing, a day after the session ends (PAY-10) |
 | due | paid | payee side | money handed over (PAY-20) |
 | paid | due | payee side | correcting a mistake, before settlement (PAY-21) |
+| due | waived | payee side | the payee gives it up (PAY-25) |
+| waived | due | payee side | correcting a mistake (PAY-21) |
 | paid | settled | platform admin (Django admin) | the platform's cut is settled with the payee (COM-10) |
 
 ## Worked examples
 
-**Court booking.** The session from [discounts](discounts.md#worked-example): EUR, `price = 111.17`, `discount_amount = 11.12`, shooting machine approved at 13.85. Club commission 10%.
+**Court booking, paid in full.** The session from [discounts](discounts.md#worked-example): EUR, `price = 111.17`, `discount_amount = 11.12`, shooting machine approved at 13.85. Club commission 10%. Rana checks in; the next day the session is billed.
 
 - Court fee: 111.17 − 11.12 + 13.85 = **113.90 EUR**, payer Rana, payee Hoops.
 - Platform fee: 113.90 × 10 / 100 = 11.39 → **11.39 EUR**. Hoops keeps 102.51.
 
-**Team training with a split fee.** Coach Sami books the U12 team at Hoops in **LBP**, court price 4 475 000, no offer, `coach_fee = 250 000`, `coach_fee_payer` empty. Accepted participants: Sami (row 40), Kid A (shadow, row 41), Maya (row 42), Omar (row 43). Coach commission 10%, club 10%.
+**Same booking, court fee split.** Rana (row 20) booked with `court_fee_split` and invited Ali (21), Maya (22) and Omar (23). All four accepted; Omar did not come. Attendees: Rana, Ali, Maya, so `n = 3`, `u = 0.01`.
 
-- Sami checks in. Court fee: payer Sami, payee Hoops, **4 475 000**, platform fee 447 500.
-- Coach fee payers (Sami excluded): rows 41, 42, 43, so `n = 3`, `u = 1`.
-  `250 000 ÷ 3 = 83 333.33…` → share **83 333**; remainder 250 000 − 249 999 = **1**.
-  Kid A **83 334**, Maya **83 333**, Omar **83 333**.
-- Platform fees: 83 334 × 10% = 8 333.4 → **8 333**; 83 333 × 10% = 8 333.3 → **8 333** (twice).
+- 113.90 ÷ 3 = 37.9666… → share **37.96**; remainder 113.90 − 113.88 = **0.02**.
+- Rana **37.98**, Ali **37.96**, Maya **37.96**. Omar owes nothing.
+- Platform fees: 3.798 → **3.80**; 3.796 → **3.80** (twice).
 
-Same split in USD with `coach_fee = 100.00`: 100 ÷ 3 = 33.333… → 33.33, remainder 0.01: **33.34, 33.33, 33.33**.
+**Team training, coach fee split.** Coach Sami books the U12 team at Hoops in **LBP**, court price 4 475 000, no offer, court fee paid in full (`court_fee_split` false), `coach_fee = 250 000` split (`coach_fee_payer` empty). Accepted participants: Sami (row 40), Kid A (shadow, row 41), Maya (row 42), Omar (row 43). Coach commission 10%, club 10%. Sami checks in himself, Kid A and Maya; Omar does not come.
+
+- Court fee: payer Sami, payee Hoops, **4 475 000**, platform fee 447 500.
+- Coach fee payers (Sami excluded, Omar a no-show): rows 41 and 42, so `n = 2`, `u = 1`: Kid A **125 000**, Maya **125 000**; platform fee 12 500 each.
+
+Had Omar come too: `n = 3`, 250 000 ÷ 3 = 83 333.33… → share **83 333**, remainder **1**: Kid A **83 334**, Maya **83 333**, Omar **83 333**; platform fees 8 333.4 → **8 333** and 8 333.3 → **8 333**.
+
+Same three-way split in USD with `coach_fee = 100.00`: 100 ÷ 3 = 33.333… → 33.33, remainder 0.01: **33.34, 33.33, 33.33**.
 
 ## Edge cases
 
-- **Booker checks in twice, or two devices at once:** one set of rows (PAY-4 step 2, PAY-10 lock).
-- **A member accepted, then left the team before check-in:** not a payer (PAY-12 checks membership at check-in).
-- **The booker is the coach and also an accepted participant:** owes the court fee, never a share of their own fee.
+- **Two devices check the same row in at once:** one check-in (PAY-4 step 2). **Two ticks bill at once:** one set of rows (PAY-10, `billed_at` under the lock).
+- **A member accepted, left the team, and still came:** pays a split share; attendance decides (PAY-12).
+- **The booker is the coach and also a participant:** owes the court fee when it is paid in full, never a share of their own coach fee or of a split court fee.
+- **Split court fee, only the coach attended:** the booker pays the court in full (PAY-11).
+- **Nobody attended:** no payments; the club and the coach get nothing (BOOK-51).
 - **Session currency LBP:** shares and fees are whole pounds (GEN-15).
-- **Discount removed after check-in:** impossible; DSC-12 forbids changing the discount once payments exist.
+- **Discount changed after someone checked in:** impossible (PAY-8).

@@ -4,7 +4,7 @@
 
 **RPT-1.** **Schedule.** Who may: the club side. For one court or all the club's courts, the sessions that overlap the period and are not cancelled, ordered by `starts_at`, each with: court, sport, kind, status as shown (BOOK-55), `starts_at`, `ends_at`, booker (`id`, `full_name`), session coach, group name, accepted participant count, rentals with status. Plus the court closures occurring in the period (AVL-8) as `starts_at`/`ends_at`/`reason`. Not paginated.
 
-**RPT-2.** **Due list.** Who may: the club side. The club's payments with `paid_at` empty: session, payer (`id`, `full_name`), amount, currency, created_at; and totals per currency. No period filter.
+**RPT-2.** **Due list.** Who may: the club side. The club's payments still due (`paid_at` and `waived_at` empty): session, payer (`id`, `full_name`), amount, currency, created_at; and totals per currency. No period filter.
 
 **RPT-3.** **Revenue.** Who may: the club owner. Payments to the club with `paid_at` inside the period, grouped by currency: `gross = Σ amount`, `fees = Σ platform_fee`, `net = gross − fees`. Plus, per currency, `owed_to_platform` = Σ `platform_fee` over all the club's paid payments with `settled_at` empty (any date). Due payments are not revenue.
 
@@ -12,11 +12,11 @@
 
 **RPT-5.** **Repeat-customer rate** for the same period: customers with 2 or more such sessions ÷ customers × 100, rounded half-up to 2 decimals. No customers: `null`.
 
-**RPT-6.** **Attendance.** Who may: the club side for sessions on its courts; the session coach for sessions they coached. Per session: accepted participants, how many checked in, the no-shows (accepted, not checked in, session ended). Before `ends_at`, nobody is a no-show yet.
+**RPT-6.** **Attendance.** Who may: the club side for sessions on its courts; the session coach for sessions they coached. Per session: accepted participants, how many checked in, the no-shows (PAY-6: accepted, not checked in, check-in closed). Before `ends_at + 24 hours`, nobody is a no-show yet (PAY-7).
 
 **RPT-7.** **Coach earnings.** Who may: a coach, for themselves. Same as RPT-3 for payments where `coach` is the caller, plus their own due list as in RPT-2.
 
-**RPT-8.** **Coach player history.** Who may: a coach. For one of the coach's players (ACC-1): the sessions they coached that the player took part in, with `checked_in_at`, `rpe`, `rpe_minutes`, and training load `rpe × rpe_minutes` (empty when RPE was not logged). Ordered by `starts_at`, newest first; paginated.
+**RPT-8.** **Coach player history.** Who may: a coach. For a player: the sessions the caller coached (`sessions.coach`) that the player took part in, even after the player stopped being one of the coach's players (*review 2026-11-17*: a former team coach keeps the sessions they ran), with `checked_in_at`, `rpe`, `rpe_minutes`, and training load `rpe × rpe_minutes` (empty when RPE was not logged). Ordered by `starts_at`, newest first; paginated.
 
 **RPT-9.** *Decided during build (2026-11-16):* RPT-6 is read per session. RPT-7's period is in the coach's own timezone (GEN-8). RPT-8 lists the player's `accepted` rows in `confirmed` sessions the caller coached. Due lists and the customer list are not paginated. The repeat rate is a decimal string with 2 places (`"66.67"`) or `null`. A currency with only `owed_to_platform` still appears in revenue, with zero gross, fees and net.
 
