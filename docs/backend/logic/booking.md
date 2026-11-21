@@ -12,7 +12,7 @@
 | (new) | `requested` | player | a training request (BOOK-20) |
 | `requested` | `confirmed` | the session coach | accepts the request (BOOK-21) |
 | `requested` | `cancelled` | the session coach (declines) or the booker (withdraws) | before `starts_at` |
-| `confirmed` | `cancelled` | see BOOK-50 | before the booker checks in and before `ends_at` |
+| `confirmed` | `cancelled` | see BOOK-50 | before anyone checks in (PAY-8) and before `ends_at` |
 
 No other change is allowed. `completed` is never written (BOOK-55).
 

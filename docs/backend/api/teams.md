@@ -1,28 +1,28 @@
 # API: teams (play groups, teams, finding people)
 
-**Status: built and tested.** Code: [views](../../../backend/teams/views.py), [serializers](../../../backend/teams/serializers.py), [services](../../../backend/teams/services.py), [tests](../../../backend/teams/tests.py); group chat upkeep in [chat/services.py](../../../backend/chat/services.py). Rules: [teams-and-coaching](../logic/teams-and-coaching.md) (TEAM-20 to TEAM-31), [access-and-roles](../logic/access-and-roles.md) (ACC-1, ACC-20 to ACC-23), [chat](../logic/chat.md) (CHAT-4). Same conventions as [accounts](accounts.md).
+**Status: built and tested.** Code: [views](../../../backend/teams/views.py), [serializers](../../../backend/teams/serializers.py), [services](../../../backend/teams/services.py), [tests](../../../backend/teams/tests.py); group chat upkeep in [chat/services.py](../../../backend/chat/services.py). Rules: [teams-and-coaching](../logic/teams-and-coaching.md) (TEAM-20 to TEAM-35), [access-and-roles](../logic/access-and-roles.md) (ACC-1, ACC-20 to ACC-23), [chat](../logic/chat.md) (CHAT-4). Same conventions as [accounts](accounts.md).
 
 ## Who may call
 
-Every call needs a token. Every group is visible by id to every user (TEAM-21), so an action the caller may not do is `403`, never `404`. The member list is the exception: it is hidden (`404`) from anyone who is not an active member or a group manager. A group manager is the owner, and for a team also its coach (ACC-1).
+Every call needs a token. Every group is visible by id to every user (TEAM-21), so an action the caller may not do is `403`, never `404`. The member list is the exception: it is hidden (`404`) from anyone who is not an active member or a group manager. A group manager is the creator of a play group, or the coach of a team (the **team coach**); a team's creator has no rights once they are not its coach, and a team without a coach has no manager until a platform admin sets one (ACC-1, TEAM-34).
 
 ## Endpoints
 
 | Method | Path | Who | Body / notes | Success |
 |---|---|---|---|---|
 | POST | `/api/groups/` | any user; a team needs a coach | `name` (1-255), `type` (`play_group`, `team`), optional `sport` (id). `400 not_a_coach` for a team by a non-coach (TEAM-20) | `201` group |
-| GET | `/api/me/groups/` | any user | groups where the caller has a member row, each `{id, name, type, sport, owner, coach, member_count, my_status}`; optional `?status=invited\|requested\|active` (`400` otherwise); by name then id; paged (TEAM-32) | `200` page |
-| GET | `/api/groups/<id>/` | any user | `{id, name, type, sport, owner, coach, member_count}`; `owner` and `coach` are `{id, full_name, is_coach}` (TEAM-21) | `200` |
-| PATCH | `/api/groups/<id>/` | owner | `name`, `sport` (null clears) (TEAM-30) | `200` |
-| DELETE | `/api/groups/<id>/` | owner | members go; the chat stays with no group and no members (TEAM-30) | `204` |
+| GET | `/api/me/groups/` | any user | groups where the caller has a member row, each `{id, name, type, sport, created_by, coach, member_count, my_status}`; optional `?status=invited\|requested\|active` (`400` otherwise); by name then id; paged (TEAM-32) | `200` page |
+| GET | `/api/groups/<id>/` | any user | `{id, name, type, sport, created_by, coach, member_count}`; `created_by` and `coach` are `{id, full_name, is_coach}` or `null` (TEAM-21) | `200` |
+| PATCH | `/api/groups/<id>/` | manager | `name`, `sport` (null clears) (TEAM-30) | `200` |
+| DELETE | `/api/groups/<id>/` | manager | members go; the chat stays with no group and no members (TEAM-30) | `204` |
 | GET | `/api/groups/<id>/members/` | active members, managers | page of `{id, user, status, created_at}`; others `404` (TEAM-21) | `200` |
 | POST | `/api/groups/<id>/members/` | manager | invite: `user` (id). Play groups: friends only. `400 cannot_invite` (not a friend, or blocked pair). A `requested` row becomes `active` (TEAM-22) | `201` new, `200` otherwise |
 | POST | `/api/groups/<id>/accept/` | the invitee | accept an invite; `404` if not invited (TEAM-23) | `200` (also on repeat) |
-| POST | `/api/groups/<id>/join/` | any user | ask to join; managers get a push. `400 cannot_join` if blocked by the owner or the coach. An `invited` row becomes `active` (TEAM-24) | `201` new, `200` otherwise |
+| POST | `/api/groups/<id>/join/` | any user | ask to join; managers get a push. `400 cannot_join` in a blocked pair with a group manager. An `invited` row becomes `active` (TEAM-24) | `201` new, `200` otherwise |
 | POST | `/api/groups/<id>/members/<user_id>/accept/` | manager | accept a join request; `404` if the user has not asked (TEAM-25) | `200` (also on repeat) |
-| DELETE | `/api/groups/<id>/members/<user_id>/` | the member themself, or a manager | leave, decline an invite, remove, reject a request. Others `403`. The owner's row: `400 owner_cannot_leave` (TEAM-26, TEAM-31) | `204` |
-| POST | `/api/groups/<id>/shadow-players/` | manager of a team | `player` (shadow player id). `400 not_your_player` unless the caller manages them; `400 not_a_team` on a play group (TEAM-27) | `201` new, `200` if already in |
-| POST | `/api/groups/<id>/coach/` | owner of a team | `coach` (user id). `400 not_a_coach`; `400 not_a_team` (TEAM-29) | `200` group |
+| DELETE | `/api/groups/<id>/members/<user_id>/` | the member themself, or a manager | leave, decline an invite, remove, reject a request. Others `403`. A manager's own row: `400 manager_cannot_leave` (TEAM-26, TEAM-31) | `204` |
+| POST | `/api/groups/<id>/shadow-players/` | the team coach | `player` (shadow player id). `400 not_your_player` unless the caller manages them; `400 not_a_team` on a play group (TEAM-27) | `201` new, `200` if already in |
+| POST | `/api/groups/<id>/coach/` | the team coach | hand the team over: `coach` (user id). The new coach joins the team and its chat, the previous coach leaves both, and the team's upcoming team training passes to the new coach (who also becomes its booker). `400 not_a_coach`; `400 not_a_team` on a play group (TEAM-29, TEAM-35) | `200` group, also to the current coach |
 | GET | `/api/users/?q=` | any user | `q` at least 2 characters (`400` otherwise). Name contains, or exact email. Public profiles (ACC-20) | `200` page |
 | GET | `/api/users/<id>/` | any user | public profile; shadow, inactive or blocked-pair users `404` (ACC-23) | `200` |
 | GET | `/api/coaches/` | any user | optional `q` (name), `club` (id of a club the caller can see; otherwise an empty list). Sorted by name (ACC-22) | `200` page |

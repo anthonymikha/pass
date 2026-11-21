@@ -11,6 +11,8 @@ payments [icon: dollar-sign, color: red] {
   platform_fee decimal(12,3)
   method varchar
   paid_at timestamp null
+  payer_marked_at timestamp null
+  waived_at timestamp null
   settled_at timestamp null
   created_at timestamp
 }

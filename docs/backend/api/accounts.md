@@ -5,7 +5,7 @@
 ## Conventions for the whole API
 
 - Base path `/api/`. JSON in, JSON out.
-- Every call needs `Authorization: Token <token>`, except register and login.
+- Every call needs `Authorization: Token <token>`, except register, login and password reset.
 - Validation errors return `400` with a body keyed by field name, or `non_field_errors`.
 - Missing or dead token returns `401`.
 
@@ -15,9 +15,11 @@
 |---|---|---|---|---|
 | POST | `/api/auth/register/` | none | `email`, `password`, `full_name` | `201` `{token, user}` |
 | POST | `/api/auth/login/` | none | `email`, `password` | `200` `{token, user}` |
-| POST | `/api/auth/logout/` | token | none | `204` (also deletes the caller's devices, NOTE-3) |
+| POST | `/api/auth/logout/` | token | optional `device_token` | `204`: deletes that device of the caller, if any; the token keeps working, so the user's other devices stay signed in (ACC-31, NOTE-3) |
+| POST | `/api/auth/password-reset/` | none | `email` | `200` with the same body for any email (`400` only for a malformed one). An active account gets an email with a link to `https://PASS_HOST/account/reset/<uid>/<token>/`, Django's page, valid 1 hour and once; setting a new password there deletes the token (ACC-32) |
 | GET | `/api/me/` | token | none | `200` user |
 | PATCH | `/api/me/` | token | any editable field | `200` user |
+| DELETE | `/api/me/` | token | `password` | `204`: the account is deleted, i.e. deactivated and scrubbed (ACC-33). `400` on `password` when missing or wrong, then `400 owns_club` for a club owner |
 | POST | `/api/me/avatar/form/` | token | `file_name` (`.jpg`, `.jpeg`, `.png`, `.webp`, case-insensitive), `size_bytes` (1 to 5 MiB) | `200` `{url, fields, storage_key}`: a signed POST form, valid 1 hour, limited to 1..`size_bytes` bytes (REC-30). `400` per field |
 | POST | `/api/me/avatar/` | token | `storage_key` from the form | `200` the profile: sets `avatar` to a signed link and deletes the old object (REC-30). `400 bad_key` (not `avatars/<your id>/<uuid>.<ext>`), `400 not_uploaded`. Repeating the current key is `200` and changes nothing |
 | POST | `/api/devices/` | token | `token`, `platform` (`ios`, `android`, `web`) | `201` device; `200` if the caller already has it or it moved to the caller (NOTE-2) |
@@ -78,8 +80,9 @@ A device is a phone registered for pushes: `{id, token, platform, created_at}`. 
 - **`coach_currency`** must be three uppercase letters. **`coach_rate`** cannot be negative.
 - **Login** fails with the same `400` for a wrong password, an unknown email and a deactivated account.
 - **Shadow players** cannot log in: they have no email and no usable password.
-- **Rate limit:** register and login share a limit of 10 requests per minute per IP, then `429`.
-- **Tokens:** one per user, no expiry. Logging in again returns the same token. Logout deletes it, which signs the user out everywhere.
+- **Rate limit:** register, login and password reset share a limit of 10 requests per minute per IP, then `429`. The counters live in the database cache, so every gunicorn worker counts together.
+- **Tokens:** one per user, no expiry. Logging in again returns the same token. Logout keeps it; a password reset or deleting the account deletes it, which signs the user out everywhere (ACC-30).
+- **Deleting the account** (ACC-33, ACC-34): upcoming sessions the user books or coaches (nobody checked in yet) are cancelled or declined with the usual pushes, and their own row in other upcoming sessions is declined; play groups they created are deleted, teams they coach lose their coach, their other memberships go; personal data (devices, connections, block-outs, sleep and soreness logs, exercises assigned to them, achievements, chat and club memberships, the avatar) is deleted; the row becomes "Deleted user" (`deleted-<id>@invalid`), inactive, with an unusable password. Sessions, payments both ways, recordings, tags and messages stay. The email can register again as a new account.
 
 ### Example
 

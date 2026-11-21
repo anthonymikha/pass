@@ -163,7 +163,7 @@ groups [icon: users, color: orange] {
   id bigint pk
   type varchar
   name varchar
-  owner_id bigint
+  created_by_id bigint null
   coach_id bigint null
   sport_id bigint null
   created_at timestamp
@@ -194,6 +194,8 @@ sessions [icon: calendar, color: purple] {
   coach_fee_payer_id bigint null
   discount_id bigint null
   discount_amount decimal(12,3)
+  court_fee_split boolean
+  billed_at timestamp null
   created_at timestamp
 }
 
@@ -257,6 +259,8 @@ payments [icon: dollar-sign, color: red] {
   platform_fee decimal(12,3)
   method varchar
   paid_at timestamp null
+  payer_marked_at timestamp null
+  waived_at timestamp null
   settled_at timestamp null
   created_at timestamp
 }
@@ -380,7 +384,7 @@ price_overrides.equipment_id > equipment.id
 discounts.club_id > clubs.id
 discounts.court_id > courts.id
 discounts.user_id > users.id
-groups.owner_id > users.id
+groups.created_by_id > users.id
 groups.coach_id > users.id
 groups.sport_id > sports.id
 group_members.group_id > groups.id

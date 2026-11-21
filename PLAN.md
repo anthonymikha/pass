@@ -8,9 +8,16 @@ Last updated: 2026-11-21. Written so a new session can continue with no other co
 
 Paste this into a new session opened in the repo root:
 
-> Read PLAN.md in the repo root in full (start with "Status on 2026-11-21 (latest)"), then `docs/backend/logic/README.md` and every page it lists, `docs/deployment.md`, then `git log --oneline` and `backend/*/models.py`. The logic pages are the approved specification. Steps 2 to 10 are done; the next work is finishing the backend (T14 to T19 below), then step 11 (Flutter), within the standing permissions in "Working agreements".
+> Read PLAN.md in the repo root in full (start with "Status on 2026-11-21 (latest)"), then `docs/backend/logic/README.md` and every page it lists, `docs/deployment.md`, then `git log --oneline` and `backend/*/models.py`. The logic pages are the approved specification. Steps 2 to 10 and T14 to T19 are done (the backend is finished); the next work is step 11 (Flutter) and the first deployment, within the standing permissions in "Working agreements".
 
-## Status on 2026-11-21 (latest)
+## Status on 2026-11-21 (latest, after the overnight build)
+
+- **T14 to T19 are built**, committed and pushed to `origin/main` (built in a separate worktree, `build/t14-t19`, pushed as `main`). 121 tests, green on SQLite and on Postgres in Docker from an empty `./data`; every task was also exercised with curl against the running stack. Every rule of the reviews of 2026-11-17 and 2026-11-20 is marked built on its logic page; rules added during the build carry *decided during build (2026-11-21)*: PAY-10 (the `billed_at` migration), PAY-28, PAY-29, TEAM-35, RPT-9, ACC-36, ACC-37, BOOK-1's table (now says "before anyone checks in"), and the deployment page's own list.
+- **Uncommitted work found in the main checkout** (`/home/amikhael/pass`): an earlier, never-committed build of the 2026-11-17 audit (an `attendance` column, CLUB-34 blocks reach the club side, CLUB-35 admins confirm clubs, chat `display_name`, and two large test files `backend/test_e2e.py` and `backend/test_locks.py`), left half-merged by an autostash. The committed spec superseded it, so it was not built. It is kept on the local branch `wip/local-2026-11-17-audit` (commit `af62bc0`, not pushed) and in `stash@{0}`; the main checkout itself was left untouched (conflicts and all). The owner decides whether CLUB-34, CLUB-35 or the e2e and lock tests come back (they would need a spec and an update to the new billing).
+- Deployment is ready but not deployed: the owner must create the DNS records, the Brevo account and the Firebase project, and fill `.env` on the server ([deployment](docs/deployment.md#dns-and-accounts-the-owner-sets-up)).
+- A local stack on plain http needs `HTTPS=0` (and `PASS_HOST=localhost:<port>`) in `.env`; `.env.example` defaults to production values.
+
+## Status on 2026-11-21 (before the build)
 
 - **Finishing the backend** was agreed with the owner in a question round on 2026-11-20/21. Every decision is now in the spec, marked *review 2026-11-17* or *review 2026-11-20*, status planned. Once the owner approves the spec commit, T14 to T19 are built without further questions.
 - Decisions of 2026-11-20: payments get two ticks (the payer's **declared paid**, `payments.payer_marked_at`; the payee's **received**, `paid_at`, which alone makes a payment paid), `payment_due` push at billing, `payment_marked` push to the payee side; logout keeps the token and unregisters only that device; password reset through Django's built-in pages and Brevo SMTP; account deletion = deactivate and scrub (ACC-33, blocked while the user owns a club); deployment behind the owner's existing Traefik or with Caddy, hosts from `.env`, 3 gunicorn workers with `DatabaseCache` for the rate limit, nightly `pg_dump` kept 7 days, no video backup, scheduler waits for a healthy backend.
@@ -21,7 +28,7 @@ Paste this into a new session opened in the repo root:
 
 - **Roadmap steps 2 to 10 are built** (backend only). 111 tests, green on SQLite and on Postgres in Docker; every step was also exercised with curl against the running stack. Everything is committed and pushed to `origin/main`.
 - Owner review done (2026-11-16): note 18 reading (DSC-10 to DSC-14), `rpe_reminded_at` (NOTE-9) and late club-side check-in (PAY-7) approved; every other open item took its recommended default. Rules added or changed during the build are marked *decided during build* on their logic page (search for that phrase).
-- Known weakness: on a first start from an empty database the scheduler's first `tick` can run before the backend has applied migrations; it logs a traceback and succeeds a minute later (NOTE-30 allows skipped runs).
+- Known weakness (fixed 2026-11-21, NOTE-30: the scheduler waits for a healthy backend): on a first start from an empty database the scheduler's first `tick` can run before the backend has applied migrations; it logs a traceback and succeeds a minute later (NOTE-30 allows skipped runs).
 - Not done, on purpose: the recovery level and suggested times (deferred to the sports expert), a real Firebase push (no Firebase project yet; the sender is tested with mocks), CORS on the bucket for Flutter web, the Flutter app (step 11).
 - Docker on this machine: host port 8000 is taken by another project, so `.env` sets `BACKEND_PORT=8001`.
 - `docs/backend/logic/` is the only record of rules; the rule summaries that used to be in this file were removed.
@@ -33,12 +40,12 @@ Same rules as steps 2 to 10: Sonnet subagents implement, the lead reviews every 
 
 | # | Task | Rules | Status |
 |---|---|---|---|
-| T14 | The 2026-11-17 review: four migrations (`court_fee_split`, `billed_at`, `waived_at`, `owner` → `created_by`), check-in by others and late check-in, billing in `tick`, splits by attendance, waive, team hand-over | PAY-2 to PAY-16, PAY-21, PAY-25, BOOK-7, BOOK-8, BOOK-20 to BOOK-34, BOOK-40, BOOK-50 to BOOK-52, TEAM-20 to TEAM-34, ACC-1, ACC-6, ACC-7, ACC-12, DSC-12, RPT-8, NOTE-33 | planned |
-| T15 | Declared paid and received, `payment_due` and `payment_marked` pushes (after T14) | PAY-20, PAY-21, PAY-23, PAY-25 to PAY-27, RPT-2, NOTE-20, NOTE-33 | planned |
-| T16 | Delete account (after T14) | ACC-33, ACC-34, TEAM-34 | planned |
-| T17 | Logout keeps the token, password reset, email settings (parallel to T15 and T16) | ACC-30 to ACC-32, NOTE-3 | planned |
-| T18 | Deployment: production settings, Traefik and Caddy overrides, bucket CORS, backups, healthcheck, 3 workers and `DatabaseCache` | [deployment](docs/deployment.md), NOTE-30 | planned |
-| T19 | Full pass: both databases from an empty `./data`, API pages, flows, Eraser, PLAN | all | planned |
+| T14 | The 2026-11-17 review: four migrations (`court_fee_split`, `billed_at`, `waived_at`, `owner` → `created_by`), check-in by others and late check-in, billing in `tick`, splits by attendance, waive, team hand-over | PAY-2 to PAY-16, PAY-21, PAY-25, BOOK-7, BOOK-8, BOOK-20 to BOOK-34, BOOK-40, BOOK-50 to BOOK-52, TEAM-20 to TEAM-34, ACC-1, ACC-6, ACC-7, ACC-12, DSC-12, RPT-8, NOTE-33 | done 2026-11-21 |
+| T15 | Declared paid and received, `payment_due` and `payment_marked` pushes (after T14) | PAY-20, PAY-21, PAY-23, PAY-25 to PAY-27, RPT-2, NOTE-20, NOTE-33 | done 2026-11-21 |
+| T16 | Delete account (after T14) | ACC-33, ACC-34, TEAM-34 | done 2026-11-21 |
+| T17 | Logout keeps the token, password reset, email settings (parallel to T15 and T16) | ACC-30 to ACC-32, NOTE-3 | done 2026-11-21 |
+| T18 | Deployment: production settings, Traefik and Caddy overrides, bucket CORS, backups, healthcheck, 3 workers and `DatabaseCache` | [deployment](docs/deployment.md), NOTE-30 | done 2026-11-21 |
+| T19 | Full pass: both databases from an empty `./data`, API pages, flows, Eraser, PLAN | all | done 2026-11-21 |
 
 ## Build plan (steps 2 to 10)
 
@@ -73,8 +80,8 @@ Run in this order; tasks on one line run in parallel in separate worktrees.
 
 - Repo: branch `main`, committed and pushed to `origin` (`https://github.com/anthonymikha/pass.git`, private). Not in git: `.env` (secrets; recreate from `.env.example` with fresh random values).
 - Stack: Python 3.13, Django 6.1.3, djangorestframework 3.18.3, drf-spectacular 0.30.0, boto3 1.44.3, google-auth 2.62.2, requests 2.34.2, psycopg 3.3.9, gunicorn 27.0.1, whitenoise 6.12.0, Postgres 18, SeaweedFS 4.52 (S3 storage). All pinned in `backend/requirements.txt` and `docker-compose.yml`.
-- Tests: 111 (schema constraints in `backend/tests.py`, workflow tests in each app's `tests.py`), green on SQLite and Postgres.
-- Migrations: `0001_initial` per app plus `accounts/0002` (devices), `chat/0002` (`club_last_read_at`), `bookings/0002` (`rpe_reminded_at`).
+- Tests: 121 (schema constraints, the `billed_at` migration and deployment checks in `backend/tests.py`, workflow tests in each app's `tests.py`), green on SQLite and Postgres.
+- Migrations: `0001_initial` per app plus `accounts/0002` (devices), `chat/0002` (`club_last_read_at`), `bookings/0002` (`rpe_reminded_at`), `bookings/0003` (`court_fee_split`), `bookings/0004` (`billed_at`, marks sessions billed under the old rule), `billing/0002` (`waived_at`), `billing/0003` (`payer_marked_at`), `teams/0002` (`owner` → `created_by`). Plus Django's `cache` table (`createcachetable`).
 - API: one page per app in `docs/backend/api/`; OpenAPI schema at `GET /api/schema/` (no warnings).
 - Documentation lives in `docs/` (tracked): logic pages (the specification), model pages, flows, API pages, Eraser code. Keep it in step with the code.
 
@@ -87,7 +94,8 @@ backend/            Django project
   tests.py          schema constraint tests
   requirements.txt  Dockerfile  .dockerignore  manage.py
 frontend/           README placeholder; one Flutter project later (web, iOS, Android)
-docker-compose.yml  db (Postgres), storage + storage-init (SeaweedFS S3), backend, scheduler (tick every 60 s); commented stub for the future `web` service
+docker-compose.yml  db (Postgres), storage + storage-init (SeaweedFS S3), backend (healthcheck), scheduler (tick every 60 s), backup (nightly pg_dump); commented stub for the future `web` service
+docker-compose.traefik.yml / docker-compose.caddy.yml   production overrides (docs/deployment.md)
 data/               created by Docker, gitignored, root-owned
 .env.example        copy to .env
 ```
@@ -96,7 +104,7 @@ data/               created by Docker, gitignored, root-owned
 
 ```sh
 cd backend && DEBUG=1 .venv/bin/python manage.py test        # SQLite
-cp .env.example .env && docker compose up --build -d          # full stack on :8000 (BACKEND_PORT), storage on :9000
+cp .env.example .env && docker compose up --build -d          # set fresh secrets, HTTPS=0, PASS_HOST=localhost:8000 first; stack on :8000 (BACKEND_PORT), storage on :9000
 docker compose exec -T backend python manage.py seed          # sports, default commission, placeholder exercises
 docker compose exec -T backend python manage.py test          # same tests on Postgres
 docker compose down
@@ -113,7 +121,7 @@ Seven apps in this order: `accounts`, `venues`, `teams`, `bookings`, `billing`, 
 - **Models hold data and constraints only.** Every model sets `Meta.db_table` to the plain table name. Value sets are `TextChoices`.
 - **Business logic goes in one `services.py` per app** as plain functions. Views and serializers stay thin.
 - Later apps may read earlier apps' data.
-- **Deliberate "downward" calls:** booker check-in calls `billing.services.record_payments()`; session confirmed calls `chat.services.post_session_card()`; group changes call `chat.services` to keep the group chat in step. Push sending lives in `accounts`. Full list: `docs/backend/README.md`. Explicit calls inside the same transaction, no Django signals.
+- **Deliberate "downward" calls:** the scheduler tick calls `billing.services.bill_ended_sessions()`; session confirmed calls `chat.services.post_session_card()`; group changes call `chat.services` to keep the group chat in step; a hand-over calls `bookings.services.hand_over_training()`; deleting an account calls one forget function per later app. Push sending lives in `accounts`. Full list: `docs/backend/README.md`. Explicit calls inside the same transaction, no Django signals.
 - **Back office is the Django admin** (sports, exercise catalogue, commission schedules, marking payments settled).
 - Types: money `Decimal(12,3)`; currency 3-letter ISO code; exchange rate `Decimal(18,6)`; percent `Decimal(5,2)`.
 - Future front end: a reverse proxy serves the Flutter web build at `/` and forwards `/api/`, `/admin/` and `/static/` to Django on the same origin, so there is no CORS setup.
@@ -150,7 +158,8 @@ v5 plus three columns or tables approved at review: `devices` (NOTE-1), `chats.c
 
 | Topic | Status |
 |---|---|
-| Sign-in | **Decided:** email + password, DRF token (one non-expiring token per user). |
+| Sign-in | **Built:** email + password, DRF token (one non-expiring token per user; logout keeps it, a password reset or account deletion deletes it). Password reset through Django's pages and SMTP (Brevo at launch). |
+| Deployment | **Built, not deployed:** behind the owner's Traefik or with Caddy, hosts from `.env`, 3 gunicorn workers sharing a `DatabaseCache`, nightly `pg_dump` kept 7 days ([deployment](docs/deployment.md)). |
 | Chat delivery | **Decided:** polling first, WebSockets later. |
 | Sleep import | **Decided:** Apple Health / Google Health Connect are read on the phone by Flutter; backend only receives logs. |
 | Recovery level formula | **Deferred** until the owner meets their partner, a sports expert. Do not invent one. Suggested session times depend on it and are deferred too. |
@@ -188,6 +197,8 @@ Open questions to ask first:
 - Consider adding an OpenAPI schema (e.g. drf-spectacular) here so the Flutter client can be generated later; decide with the owner.
 
 ### Step 4: booking and money (done 2026-11-16: `backend/bookings/`, `backend/billing/`)
+
+*Superseded in part by the review of 2026-11-17 (T14): check-in creates no payments; the scheduler tick bills each session a day after it ends, from the attendees. The text below is the original plan.*
 
 `bookings/services.py`:
 - **Free slots** for a court and date: take that weekday's rate windows in the club's timezone, cut into `slot_minutes` slots, remove any overlapping a `court_blockouts` occurrence on that date (`occurs_on`) or a session whose status is not `cancelled`.
@@ -263,7 +274,7 @@ One project in `frontend/` for web, iOS and Android; add the `web` service and r
 
 ### Later
 
-Recovery score and suggested times, WebSockets for chat, a payment gateway (`payments` gains status and a gateway reference), commission tiers, email verification, per-device expiring tokens ("sign out everywhere"), club hand-over (needed before a club owner can delete their account), a preview of what billing will create, off-server backups, storing heart rate / HRV / steps.
+Recovery score and suggested times, WebSockets for chat, a payment gateway (`payments` gains status and a gateway reference), commission tiers, email verification, per-device expiring tokens ("sign out everywhere"), club hand-over (needed before a club owner can delete their account), a preview of what billing will create, off-server backups (and any video backup), storing heart rate / HRV / steps.
 
 ## Eraser diagrams
 

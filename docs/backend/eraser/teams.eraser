@@ -4,7 +4,7 @@ groups [icon: users, color: orange] {
   id bigint pk
   type varchar
   name varchar
-  owner_id bigint
+  created_by_id bigint null
   coach_id bigint null
   sport_id bigint null
   created_at timestamp
@@ -18,7 +18,7 @@ group_members [icon: users, color: orange] {
   created_at timestamp
 }
 
-groups.owner_id > users.id
+groups.created_by_id > users.id
 groups.coach_id > users.id
 groups.sport_id > sports.id
 group_members.group_id > groups.id
