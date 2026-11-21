@@ -4,7 +4,7 @@
 
 **RPT-1.** **Schedule.** Who may: the club side. For one court or all the club's courts, the sessions that overlap the period and are not cancelled, ordered by `starts_at`, each with: court, sport, kind, status as shown (BOOK-55), `starts_at`, `ends_at`, booker (`id`, `full_name`), session coach, group name, accepted participant count, rentals with status. Plus the court closures occurring in the period (AVL-8) as `starts_at`/`ends_at`/`reason`. Not paginated.
 
-**RPT-2.** **Due list.** Who may: the club side. The club's payments still due (`paid_at` and `waived_at` empty): session, payer (`id`, `full_name`), amount, currency, created_at; and totals per currency. No period filter.
+**RPT-2.** **Due list.** Who may: the club side. The club's payments still due (`paid_at` and `waived_at` empty): session, payer (`id`, `full_name`), amount, currency, created_at, `payer_marked_at` (the payer's "I paid", PAY-26, *review 2026-11-20*); and totals per currency. A declared payment is still due and still in the totals. No period filter.
 
 **RPT-3.** **Revenue.** Who may: the club owner. Payments to the club with `paid_at` inside the period, grouped by currency: `gross = Σ amount`, `fees = Σ platform_fee`, `net = gross − fees`. Plus, per currency, `owed_to_platform` = Σ `platform_fee` over all the club's paid payments with `settled_at` empty (any date). Due payments are not revenue.
 

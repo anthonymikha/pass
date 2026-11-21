@@ -33,6 +33,13 @@ A coached group of players, run by its team coach.
 Whoever runs a group: the creator of a play group, or the team coach of a team.
 _Avoid_: owner, admin
 
+**Deleted user**:
+An account its owner deleted: deactivated, personal data scrubbed, kept only so sessions, payments and messages others share still make sense. Shown as "Deleted user".
+_Avoid_: removed user
+
+**Deactivated account**:
+An account a platform admin switched off. Nothing is removed and it can be switched back on. Not the same as a deleted user.
+
 **Coach's players**:
 The players a coach may follow: those with an accepted coaching link to the coach, members of teams the coach currently coaches, and the shadow players the coach looks after.
 
@@ -82,3 +89,11 @@ _Avoid_: cancel, forgive, refund
 **Payment**:
 What one person owes for one session to one payee (a club or a coach).
 _Avoid_: invoice, bill
+
+**Declared paid**:
+The payer's tick on a payment: "I paid". A claim only; the payment stays due until it is received.
+_Avoid_: confirmed, settled
+
+**Received**:
+The payee's tick on a payment: the money arrived. Only a received payment is **paid**, counts as revenue and carries a platform fee owed.
+_Avoid_: confirmed, settled (settled is the platform's cut, done in the admin)

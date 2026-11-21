@@ -22,7 +22,7 @@ Discount ──┘                                   │
 | 5. Rentals | The club side approves or declines, with a stock check | [BOOK-40 to BOOK-42](../logic/booking.md#rentals) |
 | 6. Check in | From 30 minutes before start; the booker, coach or club side can check others in; the first check-in freezes the session | [PAY-1 to PAY-8](../logic/check-in-and-payments.md) |
 | 7. Billing | A day after the end: court fee and coach fee rows, paid in full or split among attendees, due, with the platform fee | [PAY-9 to PAY-16](../logic/check-in-and-payments.md#creating-payments), [COM-1](../logic/commission.md) |
-| 8. Mark paid | The payee side ticks each row off | [PAY-20 to PAY-23](../logic/check-in-and-payments.md#marking-paid) |
+| 8. Tick off | The payer may tick "I paid" (declared paid, a claim); the payee side ticks each row received, which alone makes it paid. Both see both ticks (*planned, review 2026-11-20*) | [PAY-20 to PAY-27](../logic/check-in-and-payments.md#marking-paid) |
 | 9. Afterwards | RPE reminder, video unlock, owner reports | [NOTE-31](../logic/notifications.md), [WEL-1](../logic/wellness.md), [REC-20](../logic/recordings.md), [RPT-1 to RPT-6](../logic/owner-reports.md) |
 
 Cancelling: [BOOK-50, BOOK-51](../logic/booking.md#cancelling). A one-off discount on one session: [DSC-10 to DSC-14](../logic/discounts.md#one-off-session-discount).

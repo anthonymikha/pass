@@ -52,3 +52,13 @@ Four more from the owner's review of 2026-11-17, **planned**:
 | `sessions` | New column `billed_at` (nullable): when the session was billed, so it is billed once | PAY-10, NOTE-33 |
 | `payments` | New column `waived_at` (nullable): the payee gave the payment up | PAY-25 |
 | `groups` | `owner` renamed `created_by`, now nullable (emptied if that account is deleted); history only, gives no rights | ACC-1, TEAM-20, TEAM-29 |
+
+One more from the owner's review of 2026-11-20, **planned**:
+
+| Table | Change | Rule |
+|---|---|---|
+| `payments` | New column `payer_marked_at` (nullable): the payer said "I paid"; a claim only, the payee's `paid_at` decides | PAY-26, PAY-27 |
+
+The same review adds Django's cache table (`manage.py createcachetable`, not a model) for the shared login rate limit ([deployment](../../deployment.md#production-settings)).
+
+The 2026-11-20 review also adds rules without schema changes: logout keeps the token, password reset, account deletion (ACC-30 to ACC-35), `payment_due` and `payment_marked` pushes (NOTE-20, NOTE-33). Deployment is on its own page, [deployment.md](../../deployment.md).

@@ -38,7 +38,7 @@ User.objects.create_user(full_name="Kid", managed_by=coach)
 Rules:
 - Always create users with `create_user()` so the password is hashed, or left unusable when there is no email.
 - `save()` lowercases the email and turns a blank one into NULL. Any number of shadow players can therefore coexist.
-- A user with sessions or payments cannot be deleted. Deactivate with `is_active = False` instead.
+- A user with sessions or payments cannot be deleted as a row. Deleting an account (planned, review 2026-11-20, [ACC-33](../logic/access-and-roles.md#your-account)) deactivates it and scrubs its personal data instead: `full_name` "Deleted user", `email` `deleted-<id>@invalid`, `is_active = False`. An admin setting `is_active = False` alone is a reversible deactivation (ACC-35).
 - If a coach is deleted, their shadow players stay, with `managed_by` emptied.
 
 ## Connection (`connections`)

@@ -76,7 +76,7 @@
 
 **TEAM-31.** A group manager cannot leave (`400 manager_cannot_leave`, *review 2026-11-17*): the team coach hands the team over (TEAM-29) or deletes it; a play group's creator deletes it. A play group cannot be handed over in this version.
 
-**TEAM-34.** **Team without a coach** (*review 2026-11-17*). If the team coach's account is deleted, `coach` becomes empty and the team has no group manager: nobody can invite, answer requests, add shadow players, rename it or book team training for it. Members may still leave and use the chat. Only a platform admin (Django admin) can set a new coach or delete the team (ACC-7).
+**TEAM-34.** **Team without a coach** (*review 2026-11-17*). If the team coach deletes their account (ACC-33, *review 2026-11-20*), `coach` becomes empty and the team has no group manager: nobody can invite, answer requests, add shadow players, rename it or book team training for it. Members may still leave and use the chat. Only a platform admin (Django admin) can set a new coach or delete the team (ACC-7).
 
 **TEAM-32.** **My groups.** A user lists the groups where they have a member row, any status, each with the group summary of TEAM-21 and the caller's own status (`invited`, `requested`, `active`); optional filter `status`; sorted by name; paginated. *Decided during build (2026-11-16): the app needs it to show a user's groups and pending invites.*
 

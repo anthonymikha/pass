@@ -1,6 +1,6 @@
 # Access and roles (ACC)
 
-**Status: built, except the changes from the owner's review of 2026-11-17, which are planned** (marked *review 2026-11-17*: ACC-1 group manager and coach's players, ACC-6, ACC-7, ACC-12). ACC-10 to ACC-13 in `backend/accounts/`, ACC-20 to ACC-23 in `backend/teams/` (avatar links arrive with REC-30). The names and default rules are applied by every endpoint. Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
+**Status: built, except the changes from the owner's review of 2026-11-17, which are planned** (marked *review 2026-11-17*: ACC-1 group manager and coach's players, ACC-6, ACC-7, ACC-12), and the account rules from the review of 2026-11-20, also planned (ACC-30 to ACC-35). ACC-10 to ACC-13 in `backend/accounts/`, ACC-20 to ACC-23 in `backend/teams/` (avatar links arrive with REC-30). The names and default rules are applied by every endpoint. Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
 
 ## Names used on every page
 
@@ -58,3 +58,31 @@
 **ACC-22.** **Coach search**: coaches only (`is_coach = true`, active, not shadow), optional `q` on name, optional `club` (affiliated coaches of that club). Sorted by `full_name`. Same public profile. Users in a blocked pair with the caller are left out, as in ACC-20 (*decided during build, 2026-11-16*: their profile is 404 by ACC-23). `club` must be a club the caller can see; otherwise the list is empty.
 
 **ACC-23.** Any user may read any other non-shadow active user's public profile by id. A blocked pair gets `404`.
+
+## Your account
+
+*Review 2026-11-20, planned.* Register, login and the profile are described on the [accounts API page](../api/accounts.md); these rules add sign-out, password reset and account deletion.
+
+**ACC-30.** **Tokens.** One token per user, with no expiry; logging in again returns the same token. Only a password reset (ACC-32) or deleting the account (ACC-33) deletes it, which signs the user out on every device.
+
+**ACC-31.** **Logout.** `POST /api/auth/logout/` with an optional `device_token`. It deletes that device of the caller, if it exists (NOTE-3), and nothing else: the token is kept, so the user's other devices stay signed in. The app forgets the token on its side. Answers `204`, also when the device is unknown. *Before: logout deleted the token and every device, signing the user out everywhere.*
+
+**ACC-32.** **Password reset.**
+1. `POST /api/auth/password-reset/` with `email`. Always answers `200` with the same body, so it never tells whether an account exists. It counts against the same limit as register and login (10 requests a minute per IP).
+2. If the email belongs to an active user who is not a shadow player, an email is sent with a link to `https://<PASS_HOST>/account/reset/<uid>/<token>/`, Django's built-in reset-confirm page and token generator. The link is valid for 1 hour and works once (Django's token stops working once the password changes).
+3. The new password passes the same strength checks as at register. On success the user's token is deleted (ACC-30); devices are kept.
+
+Email goes out through the SMTP server named in the settings (`EMAIL_HOST` and the rest, from `.env`; Brevo at launch). With `EMAIL_HOST` empty, emails are written to the log instead (development and tests).
+
+**ACC-33.** **Delete account.** `DELETE /api/me/` with `password`. A wrong password: `400` on `password`. A user who owns any club: `400 owns_club` (club hand-over is not in this version). Otherwise, in one transaction:
+1. **Upcoming sessions.** Every session that has not started, where nobody has checked in, and where the user is the booker or the session coach: a `requested` one is cancelled as in BOOK-22, a `confirmed` one as in BOOK-50 (rentals still `requested` become `declined`; participants are notified). In any other session that has not started, the user's own participant row becomes `declined`.
+2. **Groups.** Play groups the user created are deleted with their chat (TEAM-30). Teams the user coaches lose their coach (TEAM-34). The user's member rows in every other group are deleted, which also removes them from the group chats (TEAM-28).
+3. **Shadow players** the user manages get `managed_by` emptied. They stay on their teams, and nobody can edit them any more except a platform admin.
+4. **Deleted:** the token, devices, connections (both directions), block-outs, sleep and soreness logs, exercise assignments made to the user, achievements, chat memberships and club memberships.
+5. **Scrubbed on the user row:** `full_name` = "Deleted user"; `email` = `deleted-<id>@invalid` (it cannot be empty: no email means shadow player, ACC-1); `phone`, `date_of_birth`, `sex`, `height_cm`, `weight_kg`, `nationality`, `dominant_hand`, `coach_bio`, `coach_rate` and `coach_currency` emptied; `is_coach` = false; `timezone` = `UTC`; password made unusable; `is_active` = false. After commit the avatar file is deleted from storage and `avatar` emptied.
+
+**Kept**, pointing at the "Deleted user" row, because they are money or other people's history: sessions, participant rows in past sessions (with RPE), payments in both directions, commission rows, recordings the user uploaded, recording tags, messages the user sent, and exercise assignments the user made to others. Answers `204`. Nothing can undo it; registering again with the same email creates a new account.
+
+**ACC-34.** **After deletion.** The user shows as "Deleted user" wherever they appear, and is never found by search or by profile id (ACC-20, ACC-23: inactive). Payments they owe stay due; the payee may still receive or waive them (PAY-20, PAY-25). Payments owed to them as a coach stay due, and nobody can mark them any more; paid ones can still be settled by a platform admin (COM-10).
+
+**ACC-35.** A platform admin setting `is_active = false` in the Django admin is **deactivation**, not deletion: nothing is scrubbed or removed, sign-in stops (login answers like a wrong password), and setting it back restores the account. Only ACC-33 deletes an account.

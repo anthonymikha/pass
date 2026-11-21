@@ -2,15 +2,22 @@
 
 PASS (Performance Analytics and Sports Solutions) helps players, coaches, and court/club owners stay organised: court booking, teams, coaching, wellness tracking, session video, chat.
 
-Last updated: 2026-11-16. Written so a new session can continue with no other context.
+Last updated: 2026-11-21. Written so a new session can continue with no other context.
 
 ## Prompt to resume
 
 Paste this into a new session opened in the repo root:
 
-> Read PLAN.md in the repo root in full (start with "Status on 2026-11-16 (latest)"), then `docs/backend/logic/README.md` and every page it lists, then `git log --oneline` and `backend/*/models.py`. The logic pages are the approved specification. Steps 2 to 10 are done; the next piece of work is step 11 (Flutter) or whatever the owner asks, within the standing permissions in "Working agreements".
+> Read PLAN.md in the repo root in full (start with "Status on 2026-11-21 (latest)"), then `docs/backend/logic/README.md` and every page it lists, `docs/deployment.md`, then `git log --oneline` and `backend/*/models.py`. The logic pages are the approved specification. Steps 2 to 10 are done; the next work is finishing the backend (T14 to T19 below), then step 11 (Flutter), within the standing permissions in "Working agreements".
 
-## Status on 2026-11-16 (latest)
+## Status on 2026-11-21 (latest)
+
+- **Finishing the backend** was agreed with the owner in a question round on 2026-11-20/21. Every decision is now in the spec, marked *review 2026-11-17* or *review 2026-11-20*, status planned. Once the owner approves the spec commit, T14 to T19 are built without further questions.
+- Decisions of 2026-11-20: payments get two ticks (the payer's **declared paid**, `payments.payer_marked_at`; the payee's **received**, `paid_at`, which alone makes a payment paid), `payment_due` push at billing, `payment_marked` push to the payee side; logout keeps the token and unregisters only that device; password reset through Django's built-in pages and Brevo SMTP; account deletion = deactivate and scrub (ACC-33, blocked while the user owns a club); deployment behind the owner's existing Traefik or with Caddy, hosts from `.env`, 3 gunicorn workers with `DatabaseCache` for the rate limit, nightly `pg_dump` kept 7 days, no video backup, scheduler waits for a healthy backend.
+- Firebase is for push only (it cannot host Django). The domain is at GoDaddy; its name stays out of the repo (`PASS_HOST`, `FILES_HOST`).
+- `backend/.venv` was found broken on 2026-11-20 (`drf_spectacular` missing): reinstall from `requirements.txt` before T14.
+
+## Status on 2026-11-16
 
 - **Roadmap steps 2 to 10 are built** (backend only). 111 tests, green on SQLite and on Postgres in Docker; every step was also exercised with curl against the running stack. Everything is committed and pushed to `origin/main`.
 - Owner review done (2026-11-16): note 18 reading (DSC-10 to DSC-14), `rpe_reminded_at` (NOTE-9) and late club-side check-in (PAY-7) approved; every other open item took its recommended default. Rules added or changed during the build are marked *decided during build* on their logic page (search for that phrase).
@@ -19,6 +26,19 @@ Paste this into a new session opened in the repo root:
 - Docker on this machine: host port 8000 is taken by another project, so `.env` sets `BACKEND_PORT=8001`.
 - `docs/backend/logic/` is the only record of rules; the rule summaries that used to be in this file were removed.
 - Next: step 11 (Flutter app), and the sports expert's input for the recovery level and the exercise catalogue.
+
+## Build plan: finishing the backend (T14 to T19)
+
+Same rules as steps 2 to 10: Sonnet subagents implement, the lead reviews every diff and runs the checks on SQLite and Postgres, commit and push after each.
+
+| # | Task | Rules | Status |
+|---|---|---|---|
+| T14 | The 2026-11-17 review: four migrations (`court_fee_split`, `billed_at`, `waived_at`, `owner` → `created_by`), check-in by others and late check-in, billing in `tick`, splits by attendance, waive, team hand-over | PAY-2 to PAY-16, PAY-21, PAY-25, BOOK-7, BOOK-8, BOOK-20 to BOOK-34, BOOK-40, BOOK-50 to BOOK-52, TEAM-20 to TEAM-34, ACC-1, ACC-6, ACC-7, ACC-12, DSC-12, RPT-8, NOTE-33 | planned |
+| T15 | Declared paid and received, `payment_due` and `payment_marked` pushes (after T14) | PAY-20, PAY-21, PAY-23, PAY-25 to PAY-27, RPT-2, NOTE-20, NOTE-33 | planned |
+| T16 | Delete account (after T14) | ACC-33, ACC-34, TEAM-34 | planned |
+| T17 | Logout keeps the token, password reset, email settings (parallel to T15 and T16) | ACC-30 to ACC-32, NOTE-3 | planned |
+| T18 | Deployment: production settings, Traefik and Caddy overrides, bucket CORS, backups, healthcheck, 3 workers and `DatabaseCache` | [deployment](docs/deployment.md), NOTE-30 | planned |
+| T19 | Full pass: both databases from an empty `./data`, API pages, flows, Eraser, PLAN | all | planned |
 
 ## Build plan (steps 2 to 10)
 
@@ -243,7 +263,7 @@ One project in `frontend/` for web, iOS and Android; add the `web` service and r
 
 ### Later
 
-Recovery score and suggested times, WebSockets for chat, a payment gateway (`payments` gains status and a gateway reference), commission tiers, email verification and password reset, per-device expiring tokens, a shared cache for rate limiting.
+Recovery score and suggested times, WebSockets for chat, a payment gateway (`payments` gains status and a gateway reference), commission tiers, email verification, per-device expiring tokens ("sign out everywhere"), club hand-over (needed before a club owner can delete their account), a preview of what billing will create, off-server backups, storing heart rate / HRV / steps.
 
 ## Eraser diagrams
 

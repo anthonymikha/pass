@@ -29,6 +29,7 @@ docs/
     api/                 REST endpoints, one page per app; the OpenAPI schema is served at /api/schema/
       accounts.md venues.md teams.md bookings.md billing.md wellness.md chat.md
     eraser/              diagram code for eraser.io: one file per app plus overview.eraser (generate.py rebuilds them)
+  deployment.md          production: hosts, Traefik or Caddy, settings, backups (planned)
   frontend/
     README.md            Flutter app: status and what it needs from the backend
 ```
@@ -43,6 +44,7 @@ docs/
 | Build a feature that touches several tables | the matching page in [backend/flows/](backend/flows/) |
 | Call the API | [backend/api/](backend/api/) |
 | Work on the app | [frontend/README.md](frontend/README.md) |
+| Run it on a server | [deployment.md](deployment.md) |
 
 ## Status markers
 
