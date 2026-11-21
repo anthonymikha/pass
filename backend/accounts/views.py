@@ -8,10 +8,13 @@ from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 
+from config.api import BusinessError
+
 from . import services
 from .models import Connection, User, UserBlockout
 from .serializers import (
-    AvatarFormSerializer, CoachingRequestSerializer, CoachingSerializer, DeviceSerializer, LoginSerializer, PersonSerializer,
+    AvatarFormSerializer, CoachingRequestSerializer, CoachingSerializer, DeviceSerializer, LoginSerializer, PasswordSerializer,
+    PersonSerializer,
     RegisterSerializer, ShadowPlayerSerializer, StorageKeySerializer, UserBlockoutSerializer, UserSerializer, UserTargetSerializer,
 )
 
@@ -60,10 +63,20 @@ class LogoutView(generics.GenericAPIView):
 
 class MeView(generics.RetrieveUpdateAPIView):
     serializer_class = UserSerializer
-    http_method_names = ["get", "patch", "head", "options"]
+    http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_object(self):
         return self.request.user
+
+    @extend_schema(request=PasswordSerializer, responses={204: None})
+    def delete(self, request):
+        """ACC-33: delete the account (deactivate and scrub). The password first, then `owns_club`."""
+        serializer = PasswordSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        if request.user.owned_clubs.exists():
+            raise BusinessError("owns_club", "You own a club; club hand-over is not available yet.")
+        services.delete_account(request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AvatarFormView(generics.GenericAPIView):

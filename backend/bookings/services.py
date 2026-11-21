@@ -923,3 +923,19 @@ def send_rpe_reminders():
                 notify([p.user], "rpe_reminder", "How hard was it?", "Tell us how the session felt.", {"id": p.session_id})
                 sent += 1
     return sent
+
+
+def leave_upcoming_sessions(user):
+    """ACC-33 step 1: sessions that have not started and where nobody checked in are cancelled when the user is their
+    booker or session coach (a request as BOOK-22, a confirmed session as BOOK-50, with their pushes); in any other
+    session that has not started, the user's own row becomes declined."""
+    upcoming = Session.objects.filter(starts_at__gt=timezone.now(), status__in=[REQUESTED, CONFIRMED])
+    theirs = upcoming.filter(Q(booked_by=user) | Q(coach=user)).exclude(
+        participants__checked_in_at__isnull=False).select_related("court__club")
+    for session in theirs:
+        if session.status == REQUESTED:
+            end_request(session, declining=session.coach_id == user.pk)
+        else:
+            cancel(user, session)
+    SessionParticipant.objects.filter(user=user, session__starts_at__gt=timezone.now()).exclude(
+        session__status=CANCELLED).update(status=DECLINED)

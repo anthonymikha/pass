@@ -219,3 +219,8 @@ def my_clubs(user):
         club.roles = sorted(club_roles, key=["owner", "staff", "coach"].index)
         clubs.append(club)
     return sorted(clubs, key=lambda c: (c.name, c.pk))
+
+
+def forget_user(user):
+    """ACC-33 step 4: a deleted account's club memberships go."""
+    ClubMember.objects.filter(user=user).delete()

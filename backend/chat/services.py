@@ -218,3 +218,8 @@ def send_message(chat, sender, body):
             recipients = club_side_users(chat.club) if chat.club else []
         notify([u for u in recipients if u.pk != sender.pk], "chat_message", sender.full_name, body[:140], {"id": chat.pk})
     return message
+
+
+def forget_user(user):
+    """ACC-33 step 4: the user leaves every chat; the messages they sent stay."""
+    ChatMember.objects.filter(user=user).delete()

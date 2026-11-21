@@ -200,6 +200,17 @@ class RegisterSerializer(serializers.Serializer):
         return data
 
 
+class PasswordSerializer(serializers.Serializer):
+    """ACC-33: the caller's current password."""
+
+    password = serializers.CharField(write_only=True)
+
+    def validate_password(self, value):
+        if not self.context["request"].user.check_password(value):
+            raise serializers.ValidationError("Wrong password.")
+        return value
+
+
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)

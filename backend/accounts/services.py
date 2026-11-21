@@ -10,7 +10,7 @@ from rest_framework.generics import get_object_or_404
 from config.api import BusinessError
 from config.storage import get_storage, is_key, upload_form
 
-from .models import Connection, Device, User
+from .models import Connection, Device, User, UserBlockout
 
 logger = logging.getLogger(__name__)
 
@@ -281,3 +281,42 @@ def set_avatar(user, key):
         if old:
             get_storage().delete(old)
     return user
+
+
+# --- your account (ACC-33) ---
+
+DELETED_NAME = "Deleted user"
+
+
+def delete_account(user):
+    """ACC-33: the view has checked the password and that the user owns no club. One transaction; the avatar file
+    goes after commit. Each later app forgets the user through one function (docs/backend/README.md)."""
+    from bookings.services import leave_upcoming_sessions
+    from chat.services import forget_user as leave_chats
+    from teams.services import leave_all_groups
+    from venues.services import forget_user as leave_clubs
+    from wellness.services import forget_user as forget_wellness
+    from rest_framework.authtoken.models import Token
+
+    with transaction.atomic():
+        user = User.objects.select_for_update().get(pk=user.pk)
+        leave_upcoming_sessions(user)  # step 1
+        leave_all_groups(user)  # step 2
+        User.objects.filter(managed_by=user, email__isnull=True).update(managed_by=None)  # step 3
+        Token.objects.filter(user=user).delete()  # step 4
+        user.devices.all().delete()
+        Connection.objects.filter(Q(user=user) | Q(other_user=user)).delete()
+        UserBlockout.objects.filter(user=user).delete()
+        forget_wellness(user)
+        leave_chats(user)
+        leave_clubs(user)
+        avatar = user.avatar.name
+        user.full_name, user.email = DELETED_NAME, f"deleted-{user.pk}@invalid"  # step 5; never empty (ACC-1)
+        user.phone, user.sex, user.nationality, user.dominant_hand = "", "", "", ""
+        user.date_of_birth = user.height_cm = user.weight_kg = user.coach_rate = None
+        user.coach_bio, user.coach_currency, user.is_coach, user.timezone = "", "", False, "UTC"
+        user.avatar, user.is_active = "", False
+        user.set_unusable_password()
+        user.save()
+        if avatar:
+            transaction.on_commit(lambda: get_storage().delete(avatar))

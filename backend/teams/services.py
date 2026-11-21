@@ -232,3 +232,14 @@ def affiliated_clubs(user):
     rows = user.club_memberships.filter(role=ClubMember.Role.COACH, status=ClubMember.Status.ACTIVE).select_related("club")
     clubs = [m.club for m in rows if m.expires_on is None or m.expires_on >= club_today(m.club)]
     return sorted(clubs, key=lambda c: (c.name, c.pk))
+
+
+def leave_all_groups(user):
+    """ACC-33 step 2: play groups the user created are deleted (TEAM-30); teams they coach lose their coach (TEAM-34);
+    their member rows everywhere else go, with the chat memberships (TEAM-28). Teams they created keep no creator."""
+    for group in Group.objects.filter(type=Group.Type.PLAY_GROUP, created_by=user):
+        delete_group(group)
+    Group.objects.filter(type=TEAM, coach=user).update(coach=None)
+    Group.objects.filter(created_by=user).update(created_by=None)
+    for row in GroupMember.objects.filter(user=user).select_related("group", "user"):
+        _remove(row)

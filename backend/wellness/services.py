@@ -194,3 +194,10 @@ def _check_achievements(user, now):
 def players_of(coach):
     """TEAM-40: the users a coach may read about; an invisible one is a 404 (GEN-3)."""
     return teams.coachs_players(coach) if coach.is_coach else User.objects.none()
+
+
+def forget_user(user):
+    """ACC-33 step 4: the user's own logs, the exercises assigned to them, and their achievements. Assignments they
+    made to others stay."""
+    for model in (SleepLog, SorenessLog, ExerciseAssignment, UserAchievement):
+        model.objects.filter(user=user).delete()
