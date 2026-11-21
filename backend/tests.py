@@ -1,8 +1,10 @@
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
-from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase
+from django.utils.timezone import now as django_now
 
 from accounts.models import Connection, User, UserBlockout
 from wellness.models import SleepLog
@@ -96,3 +98,40 @@ class SchemaTests(TestCase):
         for bad in (0, 11):
             self.assertRejected(SessionParticipant, session=self.session, user=self.coach, rpe=bad)
         SessionParticipant.objects.create(session=self.session, user=self.coach, rpe=10)
+
+
+class BilledAtMigrationTests(TransactionTestCase):
+    """PAY-10 (decided during build, 2026-11-21): `bookings/0004` marks sessions billed under the old rule, so the tick
+    never bills them twice, and closes the ones whose check-in had already closed with nothing owed."""
+
+    def test_old_sessions_are_marked_billed(self):
+        billing = ("billing", "0002_payment_waived_at")
+        before, after = [("bookings", "0003_session_court_fee_split"), billing], [("bookings", "0004_session_billed_at"), billing]
+        executor = MigrationExecutor(connection)
+        executor.migrate(before)
+        apps = executor.loader.project_state(before).apps
+        old_user, old_club = apps.get_model("accounts", "User"), apps.get_model("venues", "Club")
+        old_session, old_payment = apps.get_model("bookings", "Session"), apps.get_model("billing", "Payment")
+        user = old_user.objects.create(email="a@example.com", password="!")
+        club = old_club.objects.create(owner=user, name="Club", timezone="UTC", currency="USD")
+        sport = apps.get_model("venues", "Sport").objects.create(name="Padel")
+        now = django_now()
+
+        def session(ended_hours_ago, status="confirmed"):
+            end = now - timedelta(hours=ended_hours_ago)
+            return old_session.objects.create(sport=sport, booked_by=user, kind="play", status=status, currency="USD",
+                                              price=10, starts_at=end - timedelta(hours=1), ends_at=end).pk
+
+        paid, stale, recent, future, cancelled = session(2), session(25), session(2), session(-5), session(30, "cancelled")
+        first = old_payment.objects.create(session_id=paid, payer=user, club=club, amount=10, currency="USD", platform_fee=1)
+        old_payment.objects.create(session_id=paid, payer=user, club=club, amount=5, currency="USD", platform_fee=0)
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(after)
+        billed = dict(Session.objects.values_list("pk", "billed_at"))
+        self.assertEqual(billed[paid], old_payment.objects.get(pk=first.pk).created_at)  # billed by the booker's check-in
+        self.assertIsNotNone(billed[stale])  # check-in closed with nothing owed: closed without rows
+        self.assertEqual((billed[recent], billed[future], billed[cancelled]), (None, None, None))  # the tick decides
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())

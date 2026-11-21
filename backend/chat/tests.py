@@ -177,7 +177,7 @@ class DirectChatTests(ChatBase):
         self.call("get", f"chats/{cid}/messages/", linked, expect=200)
 
         # a team member is a coach's player too
-        team = Group.objects.create(type="team", name="Tigers", owner=coach, coach=coach)
+        team = Group.objects.create(type="team", name="Tigers", created_by=coach, coach=coach)
         GroupMember.objects.create(group=team, user=player, status="active")
         self.call("post", "chats/direct/", player, {"user": coach.id}, 201)
 

@@ -495,10 +495,10 @@ class ExerciseTests(WellnessBase):
         kid = User.objects.create_user(email=None, full_name="Kid", managed_by=coach)
         other_kid = User.objects.create_user(email=None, full_name="Rival kid", managed_by=rival)
         Connection.objects.create(user=coach, other_user=linked, type="coaching", status="accepted")
-        team = Group.objects.create(type="team", name="Tigers", owner=coach, coach=coach)
+        team = Group.objects.create(type="team", name="Tigers", created_by=coach, coach=coach)
         for u, st in ((coach, "active"), (m1, "active"), (m2, "active"), (kid, "active"), (invited, "invited")):
             GroupMember.objects.create(group=team, user=u, status=st)
-        park = Group.objects.create(type="play_group", name="Park", owner=coach)
+        park = Group.objects.create(type="play_group", name="Park", created_by=coach)
         GroupMember.objects.create(group=park, user=m1, status="active")
         stretch = self.exercise("Quad stretch", ["quads"])
 
@@ -562,7 +562,7 @@ class ExerciseTests(WellnessBase):
         self.assertTrue(ExerciseAssignment.objects.filter(pk=single).exists())
 
         # a team with nobody but the coach: nothing to send, nothing refused
-        solo = Group.objects.create(type="team", name="Solo", owner=coach, coach=coach)
+        solo = Group.objects.create(type="team", name="Solo", created_by=coach, coach=coach)
         GroupMember.objects.create(group=solo, user=coach, status="active")
         self.assertEqual(self.call("post", f"groups/{solo.id}/exercise-assignments/", coach, {"exercise": stretch.id}, 201).data, [])
 
@@ -628,7 +628,7 @@ class CoachReadsTests(WellnessBase):
         linked, member, ex_member, stranger, plain = (self.user(n) for n in ("linked", "member", "ex", "stranger", "plain"))
         kid = User.objects.create_user(email=None, full_name="Kid", managed_by=coach)
         Connection.objects.create(user=coach, other_user=linked, type="coaching", status="accepted")
-        team = Group.objects.create(type="team", name="Tigers", owner=coach, coach=coach)
+        team = Group.objects.create(type="team", name="Tigers", created_by=coach, coach=coach)
         GroupMember.objects.create(group=team, user=member, status="active")
         GroupMember.objects.create(group=team, user=ex_member, status="invited")  # not (yet) a player
         stretch = self.exercise("Quad stretch", ["quads"])

@@ -59,7 +59,7 @@ class PlayGroupTests(TeamsBase):
         # TEAM-20: create. The owner has an active row and is the chat's only member.
         r = self.call("post", "groups/", owner, {"name": "Friday ballers", "type": "play_group", "sport": hoops.id}, 201)
         gid = r.data["id"]
-        self.assertEqual((r.data["type"], r.data["coach"], r.data["owner"]["id"], r.data["member_count"]),
+        self.assertEqual((r.data["type"], r.data["coach"], r.data["created_by"]["id"], r.data["member_count"]),
                          ("play_group", None, owner.id, 1))
         self.assertEqual(GroupMember.objects.get(group_id=gid, user=owner).status, "active")
         self.assertEqual(Chat.objects.get(group_id=gid).type, "group")
@@ -137,11 +137,11 @@ class PlayGroupTests(TeamsBase):
         self.call("delete", f"groups/{gid}/members/{fran.id}/", fran, expect=204)
         self.assertFalse(GroupMember.objects.filter(group_id=gid, user__in=[fran, stranger]).exists())
 
-        # TEAM-31: the owner can neither leave nor be removed
+        # TEAM-31: the creator of a play group (its manager) can neither leave nor be removed
         r = self.call("delete", f"groups/{gid}/members/{owner.id}/", owner, expect=400)
-        self.assertEqual(r.data["code"], "owner_cannot_leave")
+        self.assertEqual(r.data["code"], "manager_cannot_leave")
 
-        # TEAM-30: only the owner renames or deletes; summary stays readable by anyone
+        # TEAM-30: only the group manager renames or deletes; summary stays readable by anyone
         self.call("patch", f"groups/{gid}/", joiner, {"name": "Mine now"}, 403)
         self.call("delete", f"groups/{gid}/", joiner, expect=403)
         r = self.call("patch", f"groups/{gid}/", owner, {"name": "Saturday ballers", "type": "team"}, 200)
@@ -180,7 +180,7 @@ class MyGroupsTests(TeamsBase):
         self.assertEqual([(g["name"], g["my_status"]) for g in r.data["results"]],
                          [("Aardvark", "active"), ("Alpha", "invited"), ("Bravo", "active"), ("Delta", "requested")])
         self.assertEqual(r.data["results"][2]["member_count"], 2)  # the summary of TEAM-21
-        self.assertEqual(r.data["results"][2]["owner"]["id"], owner.id)
+        self.assertEqual(r.data["results"][2]["created_by"]["id"], owner.id)
         for status, names in (("active", ["Aardvark", "Bravo"]), ("invited", ["Alpha"]), ("requested", ["Delta"])):
             r = self.call("get", f"me/groups/?status={status}", me, expect=200)
             self.assertEqual([g["name"] for g in r.data["results"]], names)
@@ -193,7 +193,8 @@ class MyGroupsTests(TeamsBase):
 
 class TeamTests(TeamsBase):
     def test_team_journey(self):
-        """TEAM-20, TEAM-27, TEAM-28, TEAM-29, ACC-10, ACC-12: coach-only creation, shadow players, handing the team over."""
+        """TEAM-20, TEAM-27, TEAM-28, TEAM-29, TEAM-31, ACC-1, ACC-10, ACC-12: coach-only creation, shadow players,
+        handing the team over."""
         coach, other_coach, player, plain = (self.user(n, **kw) for n, kw in (
             ("coach", {"is_coach": True}), ("rival", {"is_coach": True}), ("player", {}), ("plain", {})))
         kid = User.objects.create_user(email=None, full_name="Kid", managed_by=coach)
@@ -205,7 +206,7 @@ class TeamTests(TeamsBase):
         self.assertFalse(Group.objects.exists())
         r = self.call("post", "groups/", coach, {"name": "Tigers", "type": "team"}, 201)
         gid = r.data["id"]
-        self.assertEqual((r.data["coach"]["id"], r.data["owner"]["id"]), (coach.id, coach.id))
+        self.assertEqual((r.data["coach"]["id"], r.data["created_by"]["id"]), (coach.id, coach.id))
         self.assertEqual(self.chat_members(gid), {"Coach"})
 
         # TEAM-27: own shadow player is active at once, with no chat member; repeat is 200
@@ -235,25 +236,35 @@ class TeamTests(TeamsBase):
         self.call("post", f"groups/{gid}/accept/", player, expect=200)
         self.assertEqual(self.chat_members(gid), {"Coach", "Player"})
 
-        # TEAM-29: only the owner changes the coach; the target must be a coach
+        # TEAM-29: only the team coach hands the team over; the target must be a coach
         self.call("post", f"groups/{gid}/coach/", player, {"coach": other_coach.id}, 403)
         r = self.call("post", f"groups/{gid}/coach/", coach, {"coach": plain.id}, 400)
         self.assertEqual(r.data["code"], "not_a_coach")
         self.call("post", f"groups/{gid}/coach/", coach, {"coach": kid.id}, 400)  # shadow: Not found (GEN-18)
         self.assertEqual(Group.objects.get(pk=gid).coach, coach)
+        # TEAM-31: the team coach cannot leave; they hand over or delete
+        r = self.call("delete", f"groups/{gid}/members/{coach.id}/", coach, expect=400)
+        self.assertEqual(r.data["code"], "manager_cannot_leave")
         r = self.call("post", f"groups/{gid}/coach/", coach, {"coach": other_coach.id}, 200)
-        self.assertEqual((r.data["coach"]["id"], r.data["owner"]["id"]), (other_coach.id, coach.id))
+        self.assertEqual((r.data["coach"]["id"], r.data["created_by"]["id"]), (other_coach.id, coach.id))
         self.assertEqual(GroupMember.objects.get(group_id=gid, user=other_coach).status, "active")
-        self.assertEqual(self.chat_members(gid), {"Coach", "Player", "Rival"})  # the previous coach stays
-        self.assertEqual(GroupMember.objects.get(group_id=gid, user=coach).status, "active")
-        # the new coach is now a manager: may invite and add their shadow players; the old one keeps the owner's rights
+        # the previous coach leaves the team and its chat; the kid they manage stays
+        self.assertEqual(self.chat_members(gid), {"Player", "Rival"})
+        self.assertFalse(GroupMember.objects.filter(group_id=gid, user=coach).exists())
+        self.assertTrue(GroupMember.objects.filter(group_id=gid, user=kid, status="active").exists())
+        # ACC-1: the new coach is the only manager; the creator keeps no rights
         self.call("post", f"groups/{gid}/shadow-players/", other_coach, {"player": rivals_kid.id}, 201)
         self.call("post", f"groups/{gid}/members/", other_coach, {"user": plain.id}, 201)
         self.call("delete", f"groups/{gid}/members/{plain.id}/", other_coach, expect=204)
-        r = self.call("delete", f"groups/{gid}/members/{coach.id}/", other_coach, expect=400)  # never the owner's row
-        self.assertEqual(r.data["code"], "owner_cannot_leave")
-        # same coach again: nothing changes
-        self.call("post", f"groups/{gid}/coach/", coach, {"coach": other_coach.id}, 200)
+        self.call("post", f"groups/{gid}/members/", coach, {"user": plain.id}, 403)
+        self.call("patch", f"groups/{gid}/", coach, {"name": "Mine"}, 403)
+        self.call("delete", f"groups/{gid}/", coach, expect=403)
+        self.call("post", f"groups/{gid}/coach/", coach, {"coach": coach.id}, 403)
+        self.assertNotIn(player.pk, services.coachs_players(coach).values_list("pk", flat=True))
+        self.assertIn(player.pk, services.coachs_players(other_coach).values_list("pk", flat=True))
+        # handing over to oneself changes nothing (GEN-5); the new coach renames the team (TEAM-30)
+        self.call("post", f"groups/{gid}/coach/", other_coach, {"coach": other_coach.id}, 200)
+        self.call("patch", f"groups/{gid}/", other_coach, {"name": "Lions"}, 200)
 
         # a play group has no coach to change
         r = self.call("post", f"groups/{own_pg}/coach/", coach, {"coach": other_coach.id}, 400)
@@ -272,7 +283,7 @@ class TeamTests(TeamsBase):
 
         # TEAM-21: the summary is open to anyone; the list only to active members and managers
         r = self.call("get", f"groups/{gid}/", outsider, expect=200)
-        self.assertEqual(set(r.data), {"id", "name", "type", "sport", "owner", "coach", "member_count"})
+        self.assertEqual(set(r.data), {"id", "name", "type", "sport", "created_by", "coach", "member_count"})
         self.call("get", f"groups/{gid}/members/", outsider, expect=404)
         self.call("get", "groups/9999/", outsider, expect=404)
         self.call("get", f"groups/{gid}/members/", member, expect=200)
@@ -404,7 +415,7 @@ class FindingPeopleTests(TeamsBase):
 
 class CoachsPlayersTests(TeamsBase):
     def test_coachs_players(self):
-        """ACC-1: coach's players are accepted coaching links, active team members and own shadow players."""
+        """ACC-1 (review 2026-11-17): group managers; coach's players are accepted coaching links, active team members and own shadow players."""
         coach = self.user("coach", is_coach=True)
         other_coach = self.user("rival", is_coach=True)
         linked, pending_link, member, invited, requested, ex_member, rival_player, stranger = (
@@ -421,20 +432,21 @@ class CoachsPlayersTests(TeamsBase):
         team = self.call("post", "groups/", coach, {"name": "Tigers", "type": "team"}, 201).data["id"]
         for who, status in ((member, "active"), (invited, "invited"), (requested, "requested")):
             GroupMember.objects.create(group_id=team, user=who, status=status)
-        # a team coached by someone else, with the same coach as a second manager
-        shared = Group.objects.create(type="team", name="Shared", owner=coach2, coach=coach)
+        # a team created by someone else and coached by this coach: the coach is its only manager
+        shared = Group.objects.create(type="team", name="Shared", created_by=coach2, coach=coach)
         GroupMember.objects.create(group=shared, user=stranger, status="active")
         # a play group's members are not the coach's players
-        pg = Group.objects.create(type="play_group", name="Park", owner=coach)
+        pg = Group.objects.create(type="play_group", name="Park", created_by=coach)
         GroupMember.objects.create(group=pg, user=ex_member, status="active")
         # the member of a team coached by another coach is not either
-        theirs = Group.objects.create(type="team", name="Theirs", owner=other_coach, coach=other_coach)
+        theirs = Group.objects.create(type="team", name="Theirs", created_by=other_coach, coach=other_coach)
         GroupMember.objects.create(group=theirs, user=rival_player, status="active")
 
         got = set(services.coachs_players(coach).values_list("pk", flat=True))
         self.assertEqual(got, {linked.pk, member.pk, kid.pk, stranger.pk})
         self.assertEqual(services.coachs_players(coach).count(), 4)  # each once even with two reasons
-        self.assertEqual([u.pk for u in services.group_managers(Group.objects.get(pk=shared.pk))], [coach2.pk, coach.pk])
+        self.assertEqual([u.pk for u in services.group_managers(Group.objects.get(pk=shared.pk))], [coach.pk])
+        self.assertFalse(services.is_group_manager(coach2, shared))
         self.assertEqual([u.pk for u in services.group_managers(pg)], [coach.pk])
         self.assertTrue(services.is_group_manager(coach, shared))
         self.assertFalse(services.is_group_manager(other_coach, pg))

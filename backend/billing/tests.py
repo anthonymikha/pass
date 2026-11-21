@@ -27,6 +27,8 @@ class PaymentTests(base.PaymentBase):
         self.check_in(rana, Session.objects.get(pk=court))
         self.clock.return_value = at(MON, 11, 45)
         self.check_in(sami, training)
+        self.clock.return_value = at(base.TUE, 13)
+        self.tick()  # PAY-10
         club_row, coach_row = Payment.objects.get(club=self.club), Payment.objects.get(coach=sami)
         self.assertEqual((club_row.payer, club_row.amount, club_row.platform_fee), (rana, Decimal("50"), Decimal("5")))
         self.assertEqual((coach_row.payer, coach_row.amount, coach_row.platform_fee), (ben, Decimal("40"), Decimal("4")))
@@ -43,11 +45,12 @@ class PaymentTests(base.PaymentBase):
             self.call("get", f"payments/{row.id}/", outsider, expect=404)
         self.call("get", "payments/99999/", rana, expect=404)
 
-        # PAY-20: not the payer (403, they see the row), not another club's staff or a stranger (404)
+        # PAY-20, PAY-25: not the payer (403, they see the row), not another club's staff or a stranger (404)
         for who, row, status in ((rana, club_row, 403), (ben, coach_row, 403), (rival, club_row, 404), (pat, club_row, 404),
                                  (sam, coach_row, 404), (self.owner, coach_row, 404)):
             self.call("post", f"payments/{row.id}/mark-paid/", who, expect=status)
             self.call("post", f"payments/{row.id}/mark-due/", who, expect=status)
+            self.call("post", f"payments/{row.id}/waive/", who, expect=status)
         self.call("post", "payments/99999/mark-paid/", sam, expect=404)
         self.client.force_authenticate(None)
         self.assertEqual(self.client.post(f"/api/payments/{club_row.id}/mark-paid/").status_code, 401)
@@ -57,7 +60,7 @@ class PaymentTests(base.PaymentBase):
         # PAY-20: the club side (staff, owner) and the coach mark paid; a repeat changes nothing (GEN-5)
         self.clock.return_value = at(MON, 14)
         r = self.call("post", f"payments/{club_row.id}/mark-paid/", sam, expect=200)
-        self.assertEqual((r.data["method"], r.data["paid_at"]), ("offline", z(at(MON, 14))))
+        self.assertEqual((r.data["method"], r.data["paid_at"], r.data["waived_at"]), ("offline", z(at(MON, 14)), None))
         self.clock.return_value = at(MON, 15)
         self.assertEqual(self.call("post", f"payments/{club_row.id}/mark-paid/", self.owner, expect=200).data["paid_at"], z(at(MON, 14)))
         self.call("post", f"payments/{coach_row.id}/mark-paid/", sami, expect=200)
@@ -79,6 +82,49 @@ class PaymentTests(base.PaymentBase):
         # PAY-22: nothing here edits or deletes a payment
         self.assertEqual(self.call("patch", f"payments/{club_row.id}/", sam, {"amount": "1"}).status_code, 405)
         self.assertEqual(self.call("delete", f"payments/{club_row.id}/", sam).status_code, 405)
+
+    def test_waive_journey(self):
+        """PAY-25, PAY-20, PAY-21, PAY-12, RPT-2, RPT-3, RPT-7, COM-11, GEN-5: the coach waives the fee of a payer who
+        did not come; a waived payment is not due, not revenue; it cannot be received until moved back to due; a
+        received one cannot be waived."""
+        sami, ben, rana = self.user("sami", is_coach=True), self.user("ben"), self.user("rana")
+        Connection.objects.create(user=sami, other_user=ben, type="coaching", status="accepted")
+        training = self.train(sami, at(MON, 12), at(MON, 13), fee="40", player=ben.id)
+        court = Session.objects.get(pk=self.book(rana, at(MON, 10), at(MON, 11)).data["id"])
+        self.clock.return_value = at(MON, 12)
+        self.check_in(sami, training)  # Ben never comes: the fee paid in full is still owed (PAY-12)
+        self.clock.return_value = at(MON, 10)
+        self.check_in(rana, court)
+        self.clock.return_value = at(base.TUE, 13)
+        self.tick()
+        row, club_row = Payment.objects.get(coach=sami), Payment.objects.get(club=self.club)
+        self.assertEqual((row.payer, row.amount), (ben, Decimal("40")))
+
+        # PAY-25: the coach waives it; a repeat is 200 and keeps the first time (GEN-5)
+        self.clock.return_value = at(base.TUE, 14)
+        r = self.call("post", f"payments/{row.id}/waive/", sami, expect=200)
+        self.assertEqual((r.data["waived_at"], r.data["paid_at"]), (z(at(base.TUE, 14)), None))
+        self.clock.return_value = at(base.TUE, 15)
+        self.assertEqual(self.call("post", f"payments/{row.id}/waive/", sami, expect=200).data["waived_at"], z(at(base.TUE, 14)))
+        # RPT-7, RPT-2: not in the coach's due list, not revenue
+        r = self.call("get", "me/earnings/?from=2027-01-01&to=2027-01-31", sami, expect=200).data
+        self.assertEqual((r["currencies"], r["due"]), ([], {"payments": [], "totals": []}))
+        # PAY-20: a waived payment is not received until it is back to due (PAY-21 empties waived_at)
+        self.code(self.call("post", f"payments/{row.id}/mark-paid/", sami), 400, "already_waived")
+        r = self.call("post", f"payments/{row.id}/mark-due/", sami, expect=200)
+        self.assertEqual((r.data["waived_at"], r.data["paid_at"]), (None, None))
+        self.call("post", f"payments/{row.id}/mark-paid/", sami, expect=200)
+        # PAY-25: a received payment cannot be waived; back to due first, then it can
+        self.code(self.call("post", f"payments/{row.id}/waive/", sami), 400, "already_paid")
+        self.call("post", f"payments/{row.id}/mark-due/", sami, expect=200)
+        self.call("post", f"payments/{row.id}/waive/", sami, expect=200)
+        # the club side waives its own payments too; the due list drops it, revenue never had it (RPT-2, RPT-3)
+        self.call("post", f"payments/{club_row.id}/waive/", self.owner, expect=200)
+        self.assertEqual(self.call("get", f"clubs/{self.club.id}/dues/", self.owner, expect=200).data, {"payments": [], "totals": []})
+        r = self.call("get", f"clubs/{self.club.id}/revenue/?from=2027-01-01&to=2027-01-31", self.owner, expect=200).data
+        self.assertEqual(r, {"currencies": []})
+        # the payer sees the waived row (PAY-23)
+        self.assertEqual(self.call("get", f"payments/{row.id}/", ben, expect=200).data["waived_at"], z(at(base.TUE, 15)))
 
     def test_admin_settles_payments_journey(self):
         """ACC-7, COM-10, PAY-22: a platform admin sets `settled_at` in the Django admin, only on a paid payment; no
@@ -116,16 +162,16 @@ class CommissionTests(base.PaymentBase):
         self.kid = self.user("kid")
 
     def coach_fee(self, coach, instant, club=False):
-        """Check in at `instant` on a session with a 100.00 USD payment to `coach` (or the court of Hoops): the
-        platform fee on it is the percent."""
+        """Bill at `instant` a session with a 100.00 USD payment to `coach` (or the court of Hoops), which ended a day
+        earlier with the coach checked in: the platform fee on it is the percent (PAY-14: the billing date)."""
         session = Session.objects.create(
             sport=self.basketball, booked_by=coach, coach=coach, kind="training", status="confirmed", currency="USD",
-            starts_at=instant + dt.timedelta(minutes=15), ends_at=instant + dt.timedelta(hours=1),
+            starts_at=instant - dt.timedelta(hours=25), ends_at=instant - dt.timedelta(hours=24),
             price=Decimal(100) if club else 0, coach_fee=0 if club else Decimal(100), coach_fee_payer=self.kid,
             court=self.court1 if club else None)
-        SessionParticipant.objects.create(session=session, user=coach, status="accepted")
+        SessionParticipant.objects.create(session=session, user=coach, status="accepted", checked_in_at=session.starts_at)
         self.clock.return_value = instant
-        self.check_in(coach, session)
+        self.tick()
         return session.payments.get(**({"club": self.club} if club else {"coach": coach})).platform_fee
 
     def test_commission_lookup_journey(self):
@@ -133,7 +179,7 @@ class CommissionTests(base.PaymentBase):
         10%), no rows is 0%, own rows win over a newer default, the newest effective_from wins, a club override."""
         sami, cora = self.sami, self.cora
         day = lambda m, d, h=12: dt.datetime(2027, m, d, h, tzinfo=UTC)  # noqa: E731
-        # the example: the date is the UTC date of the check-in
+        # the example: the date is the UTC date of billing (PAY-14)
         CommissionRate.objects.create(applies_to="coach", coach=sami, percent=Decimal("7"), effective_from=dt.date(2027, 3, 1))
         early = self.coach_fee(sami, day(2, 20))
         self.assertEqual(early, Decimal("10.00"))  # not yet in effect
@@ -173,13 +219,14 @@ class CommissionTests(base.PaymentBase):
         self.assertEqual(self.coach_fee(sami, now + dt.timedelta(hours=4)), Decimal("8.00"))  # kid and zed: N = 2
         # club: sessions on its courts started in the 30 days before now, not cancelled
         rana = self.user("rana")
-        for days_ago, status in ((1, "confirmed"), (29, "confirmed"), (31, "confirmed"), (2, "cancelled")):
+        for days_ago, status in ((1, "confirmed"), (31, "confirmed"), (2, "cancelled")):
             start = now - dt.timedelta(days=days_ago)
             self.session(self.court1, start, start + dt.timedelta(hours=1), rana, status=status)
-        self.assertEqual(self.coach_fee(sami, now + dt.timedelta(hours=6), club=True), Decimal("10.00"))  # N = 2
+        # N = 2: the session 1 day ago and the billed session itself (it started 25 hours ago)
+        self.assertEqual(self.coach_fee(sami, now + dt.timedelta(hours=6), club=True), Decimal("10.00"))
         start = now - dt.timedelta(days=3)
         self.session(self.court2, start, start + dt.timedelta(hours=1), rana)
-        self.assertEqual(self.coach_fee(sami, now + dt.timedelta(hours=8), club=True), Decimal("5.00"))  # N = 4: the earlier check-in's session counts too
+        self.assertEqual(self.coach_fee(sami, now + dt.timedelta(hours=8), club=True), Decimal("5.00"))  # N = 4: each billed session counts too
 
 
 class ReportTests(base.PaymentBase):
@@ -215,6 +262,8 @@ class ReportTests(base.PaymentBase):
         club("70", "7")
         club("20", "2", who=sam)
         club("20", "2", "EUR")
+        Payment.objects.create(session=s, payer=rana, club=self.club, amount=5, currency="USD", platform_fee=Decimal("0.5"),
+                               waived_at=utc(2027, 1, 12))  # waived: neither due nor revenue (PAY-25)
         Payment.objects.create(session=s, payer=rana, club=self.club, amount=1, currency="USD", platform_fee=0,
                                method="offline", paid_at=utc(2027, 1, 11, 11))  # a free-fee row: gross only
         other = base.Club.objects.create(owner=bob, name="Elsewhere", timezone="Asia/Beirut", currency="USD")
