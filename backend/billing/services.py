@@ -7,11 +7,13 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 
 from bookings.models import Session, SessionParticipant, SessionRental
+from accounts.services import notify
 from bookings.services import is_club_side
 from config.api import BusinessError
 from config.money import minor_units, round_money
 from teams.services import coachs_players
 from venues.models import Club, ClubMember
+from venues.services import current_members
 
 from .models import CommissionRate, Payment
 
@@ -98,6 +100,14 @@ def bill(session, now):
     return created
 
 
+def _money(payment):
+    return f"{round_money(payment.amount, payment.currency)} {payment.currency}"  # in the currency's minor units
+
+
+def _payee_name(payment):
+    return payment.club.name if payment.club_id else (payment.coach.full_name or "your coach")
+
+
 def bill_ended_sessions():
     """PAY-10, NOTE-33: one transaction per session; `billed_at` is set under the session lock, so overlapping ticks
     bill each session once. Returns how many sessions were billed."""
@@ -111,7 +121,9 @@ def bill_ended_sessions():
                 continue
             session.billed_at = now
             session.save(update_fields=["billed_at"])
-            bill(session, now)
+            for payment in bill(session, now):  # NOTE-33: sent once this session's transaction commits (NOTE-13)
+                notify([payment.payer], "payment_due", "Payment due",
+                       f"You owe {_money(payment)} to {_payee_name(payment)}", {"id": payment.id})
         billed += 1
     return billed
 
@@ -169,6 +181,37 @@ def waive(payment):
             raise BusinessError("already_paid", "This payment was received; move it back to due first.")
         payment.waived_at = timezone.now()
         payment.save(update_fields=["waived_at"])
+    return payment
+
+
+# ---- the payer's tick (PAY-26, PAY-27) ----
+
+def payee_side(payment):
+    """NOTE-20 payment_marked: the coach, or the club owner and the club's active staff."""
+    if payment.coach_id:
+        return [payment.coach]
+    staff = current_members(payment.club).filter(role=ClubMember.Role.STAFF).select_related("user")
+    return [payment.club.owner, *(m.user for m in staff)]
+
+
+def declare_paid(payment, declared):
+    """PAY-26 (declare) and PAY-27 (undo). The view has checked the caller is the payer. A repeat changes nothing and
+    sends nothing (GEN-5)."""
+    with transaction.atomic():
+        payment = _locked(payment)
+        if payment.paid_at is not None:
+            raise BusinessError("already_paid", "The payee has already received this payment.")
+        if declared == (payment.payer_marked_at is not None):
+            return payment
+        if declared and payment.waived_at is not None:
+            raise BusinessError("already_waived", "The payee gave this payment up; nothing is owed.")
+        payment.payer_marked_at = timezone.now() if declared else None
+        payment.save(update_fields=["payer_marked_at"])
+        if declared:
+            people = [u for u in payee_side(payment) if u.pk != payment.payer_id]  # never about one's own action
+            notify(people, "payment_marked", "Payment declared",
+                   f"{payment.payer.full_name or 'Someone'} says they paid {_money(payment)}",
+                   {"id": payment.id})
     return payment
 
 

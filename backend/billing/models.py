@@ -23,6 +23,7 @@ class Payment(models.Model):
     # A row records that money is owed; method and paid_at are filled when it is actually paid.
     method = models.CharField(max_length=20, choices=Method.choices, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)  # received (PAY-20); null and not waived = still due
+    payer_marked_at = models.DateTimeField(null=True, blank=True)  # PAY-26: the payer's "I paid", a claim only
     waived_at = models.DateTimeField(null=True, blank=True)  # PAY-25: the payee gave it up
     settled_at = models.DateTimeField(null=True, blank=True)  # platform's cut settled with the payee
     created_at = models.DateTimeField(auto_now_add=True)

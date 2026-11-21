@@ -49,6 +49,21 @@ class PayeeTickView(generics.GenericAPIView):
         return Response(self.get_serializer(payment).data)
 
 
+class PayerTickView(generics.GenericAPIView):
+    """PAY-26 declare paid (`declare-paid/`), PAY-27 undo (`undo-declare/`): the payer only (PAY-29); `200` also on a
+    repeat (GEN-5)."""
+
+    serializer_class = PaymentSerializer
+    declared = True
+
+    @extend_schema(request=None)
+    def post(self, request, pk):
+        payment = get_object_or_404(services.visible_payments(request.user), pk=pk)
+        if payment.payer_id != request.user.pk:  # the payee side sees the row but may not tick for the payer
+            raise PermissionDenied("Only the payer can declare a payment paid.")
+        return Response(self.get_serializer(services.declare_paid(payment, self.declared)).data)
+
+
 def period(request, tz):
     params = PeriodSerializer(data=request.query_params)
     params.is_valid(raise_exception=True)

@@ -16,8 +16,8 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Payment
-        fields = ["id", "session", "payer", "club", "coach", "amount", "currency", "platform_fee", "method", "paid_at",
-                  "waived_at", "settled_at", "created_at"]
+        fields = ["id", "session", "payer", "club", "coach", "amount", "currency", "platform_fee", "method", "payer_marked_at",
+                  "paid_at", "waived_at", "settled_at", "created_at"]
 
     def get_club(self, payment) -> dict | None:
         return payment.club and {"id": payment.club_id, "name": payment.club.name}
@@ -30,7 +30,7 @@ class DueSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Payment
-        fields = ["id", "session", "payer", "amount", "currency", "created_at"]
+        fields = ["id", "session", "payer", "amount", "currency", "created_at", "payer_marked_at"]
 
 
 class TotalSerializer(serializers.Serializer):

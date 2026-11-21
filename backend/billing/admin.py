@@ -23,10 +23,10 @@ class PaymentAdmin(admin.ModelAdmin):
     form = PaymentForm
     list_display = ("paid_at", "payer", "club", "coach", "amount", "currency", "method", "settled_at")
     list_filter = ("currency", "settled_at")
-    fields = ("session", "payer", "club", "coach", "amount", "currency", "platform_fee", "method", "paid_at", "waived_at",
-              "created_at", "settled_at")
-    readonly_fields = ("session", "payer", "club", "coach", "amount", "currency", "platform_fee", "method", "paid_at",
-                       "waived_at", "created_at")
+    fields = ("session", "payer", "club", "coach", "amount", "currency", "platform_fee", "method", "payer_marked_at", "paid_at",
+              "waived_at", "created_at", "settled_at")
+    readonly_fields = ("session", "payer", "club", "coach", "amount", "currency", "platform_fee", "method", "payer_marked_at",
+                       "paid_at", "waived_at", "created_at")
 
     def has_add_permission(self, request):
         return False
