@@ -1,6 +1,6 @@
 # Deployment
 
-**Status: planned** (owner's review of 2026-11-20, build step T18). How the compose stack runs in production. Nothing on this page is built yet; until it is, the stack runs only locally.
+**Status: built** (owner's review of 2026-11-20, build step T18, 2026-11-21; not yet deployed to a server). How the compose stack runs in production. Files: `docker-compose.yml`, `docker-compose.traefik.yml`, `docker-compose.caddy.yml`, `backend/Dockerfile`, `backend/config/settings.py`, `.env.example`.
 
 ## Hosts
 
@@ -62,6 +62,18 @@ A `backup` service in compose runs `pg_dump` once a night into `./data/backups`,
 ## Start order
 
 `backend` gets a healthcheck (an HTTP request to itself that succeeds once migrations are applied and gunicorn answers). `scheduler` waits for `service_healthy`, so its first tick never runs before migrations (NOTE-30).
+
+## Decided during build (2026-11-21)
+
+What the page above leaves open:
+
+- **`HTTPS`** in `.env` (default `1` when `DEBUG` is off): the proxy header, secure cookies and HSTS (one year, `includeSubDomains`, `preload`; the preload flag only matters if the owner submits the domain to the browsers' list). `HTTPS=0` is only for a local stack on plain http. Django does not redirect http to https itself (`security.W008` is silenced): Traefik and Caddy already do, and a second redirect would catch the healthcheck. `check --deploy` then reports nothing.
+- `ALLOWED_HOSTS` defaults to `PASS_HOST` without its port; it can still be set in `.env`.
+- The healthcheck requests the public club search (`GET /api/clubs/`, CLUB-30) with `Host: PASS_HOST`; it reads the database, so it passes only after `migrate`.
+- The bucket's CORS rule is written at every backend start by `manage.py storage_cors` (S3 `PutBucketCors`), so it follows `PASS_HOST` in `.env`.
+- Backups: the `backup` service (the `postgres:18` image) checks every hour and makes the day's dump once (`./data/backups/pass-YYYY-MM-DD.dump`, UTC date, `pg_dump -Fc`, so it is compressed); a night the server was down is caught up when it comes back. Restore with `pg_restore --clean -d pass <file>` inside the `db` container. Dumps are written as `.part` and renamed when complete.
+- Every long-running service has `restart: unless-stopped`, so the stack comes back after a reboot.
+- Caddy is `caddy:2.10`, its Caddyfile is inline in `docker-compose.caddy.yml`; both proxies keep the `Host` header, which signed storage links depend on.
 
 ## DNS and accounts the owner sets up
 
