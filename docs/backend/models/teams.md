@@ -14,7 +14,7 @@ A named set of users. Two kinds share one table because they behave the same.
 | Field | Meaning |
 |---|---|
 | `name` | |
-| `created_by` | Who created it (renamed from `owner`, planned, review 2026-11-17). Manages a play group; for a team it is history only and gives no rights |
+| `created_by` | Who created it (renamed from `owner` at review 2026-11-17). Manages a play group; for a team it is history only and gives no rights |
 | `coach` | The **team coach**, the team's only manager. Empty for play groups. Starts as the creator |
 | `sport` | Optional |
 

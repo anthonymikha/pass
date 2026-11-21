@@ -1,6 +1,6 @@
 # Friends, coaching links, play groups and teams (TEAM)
 
-**Status: built, except the changes from the owner's review of 2026-11-17, which are planned** (marked *review 2026-11-17*: TEAM-20, TEAM-21, TEAM-24, TEAM-26, TEAM-27, TEAM-29 to TEAM-31, TEAM-33, TEAM-34). TEAM-1 to TEAM-15 in `backend/accounts/` ([API](../api/accounts.md)), TEAM-20 to TEAM-33 in `backend/teams/` ([API](../api/teams.md)). TEAM-40 is the summary of read rights built with each feature (RPT-8, WEL, AVL-22).
+**Status: built** (the changes from the owner's review of 2026-11-17, marked *review 2026-11-17*: TEAM-20, TEAM-21, TEAM-24, TEAM-26, TEAM-27, TEAM-29 to TEAM-31, TEAM-33, TEAM-34, built 2026-11-21; TEAM-34 happens once account deletion, ACC-33, is built). TEAM-1 to TEAM-15 in `backend/accounts/` ([API](../api/accounts.md)), TEAM-20 to TEAM-33 in `backend/teams/` ([API](../api/teams.md)). TEAM-40 is the summary of read rights built with each feature (RPT-8, WEL, AVL-22).
 
 ## Friends
 
@@ -77,6 +77,8 @@
 **TEAM-31.** A group manager cannot leave (`400 manager_cannot_leave`, *review 2026-11-17*): the team coach hands the team over (TEAM-29) or deletes it; a play group's creator deletes it. A play group cannot be handed over in this version.
 
 **TEAM-34.** **Team without a coach** (*review 2026-11-17*). If the team coach deletes their account (ACC-33, *review 2026-11-20*), `coach` becomes empty and the team has no group manager: nobody can invite, answer requests, add shadow players, rename it or book team training for it. Members may still leave and use the chat. Only a platform admin (Django admin) can set a new coach or delete the team (ACC-7).
+
+**TEAM-35.** *Decided during build (2026-11-21), what TEAM-29 and TEAM-34 leave open:* handing a team over to its current coach returns `200` and changes nothing (GEN-5); the answer is the group summary although the caller is no longer a manager. On a play group, its creator gets `400 not_a_team` and anyone else `403`. A participant row that passes to the new coach keeps its `checked_in_at` (a coach never pays a share, PAY-11, PAY-12). When a platform admin sets a team's coach in the Django admin (TEAM-34), the new coach also gets an active member row and the chat membership, as on a hand-over (TEAM-28); no sessions move, since there is no previous coach. Deleting a group in the Django admin works as TEAM-30 (the chat stays, emptied of members).
 
 **TEAM-32.** **My groups.** A user lists the groups where they have a member row, any status, each with the group summary of TEAM-21 and the caller's own status (`invited`, `requested`, `active`); optional filter `status`; sorted by name; paginated. *Decided during build (2026-11-16): the app needs it to show a user's groups and pending invites.*
 

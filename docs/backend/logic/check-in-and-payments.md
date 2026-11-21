@@ -1,6 +1,6 @@
 # Check-in and payments (PAY)
 
-**Status: built, except the changes from the owner's review of 2026-11-17, which are planned** (marked *review 2026-11-17*: PAY-2, PAY-4, PAY-6 to PAY-16, PAY-21, PAY-25; and *review 2026-11-20*: PAY-20, PAY-21, PAY-23 to PAY-27). Check-in in `backend/bookings/`, payments in `backend/billing/`; API pages [bookings](../api/bookings.md), [billing](../api/billing.md). Attendance, how each fee is paid, and the payment rows that record money owed. There is no payment gateway: money changes hands at the court, and the payee ticks it off.
+**Status: built, except the changes from the owner's review of 2026-11-20, which are planned** (marked *review 2026-11-20*: PAY-20, PAY-21, PAY-23 to PAY-27). The changes from the review of 2026-11-17 (marked *review 2026-11-17*: PAY-2, PAY-4, PAY-6 to PAY-16, PAY-21, PAY-25) are built (2026-11-21). Check-in in `backend/bookings/`, payments in `backend/billing/`; API pages [bookings](../api/bookings.md), [billing](../api/billing.md). Attendance, how each fee is paid, and the payment rows that record money owed. There is no payment gateway: money changes hands at the court, and the payee ticks it off.
 
 ## Check-in
 
@@ -39,7 +39,7 @@ Checking in creates no payments; billing does, after the session (PAY-10). *Revi
 
 ## Billing (creating payments)
 
-**PAY-10.** **Billing** (*review 2026-11-17*). Each scheduler tick (NOTE-33) bills every session that is `confirmed`, has `ends_at + 24 hours ≤ now` (check-in has closed, PAY-7) and has `billed_at` empty. Per session, in one transaction: lock the session row; if `billed_at` is now set, stop; set `billed_at` = now; if the session has at least one attendee, create the rows of PAY-11 and PAY-12, each with `currency` = the session currency, `platform_fee` from PAY-14, `method` empty, `paid_at` empty, `settled_at` empty. A session with no attendee is billed with no rows: nothing is owed (there are no no-show fees, BOOK-51). Payments therefore appear in the due list a day after the session ends. After the transaction commits, each payer is notified of each row they owe (`payment_due`, NOTE-33, *review 2026-11-20*).
+**PAY-10.** **Billing** (*review 2026-11-17*). Each scheduler tick (NOTE-33) bills every session that is `confirmed`, has `ends_at + 24 hours ≤ now` (check-in has closed, PAY-7) and has `billed_at` empty. Per session, in one transaction: lock the session row; if `billed_at` is now set, stop; set `billed_at` = now; if the session has at least one attendee, create the rows of PAY-11 and PAY-12, each with `currency` = the session currency, `platform_fee` from PAY-14, `method` empty, `paid_at` empty, `settled_at` empty. A session with no attendee is billed with no rows: nothing is owed (there are no no-show fees, BOOK-51). Payments therefore appear in the due list a day after the session ends. *Decided during build (2026-11-21), so the switch from the old rule bills nothing twice and nothing late:* the migration that adds `billed_at` sets it, for a session that already has payments (billed at the booker's check-in), to its first payment's `created_at`; and for a `confirmed` session with no payments whose `ends_at + 24 hours` had already passed (nothing was owed under the old rule) to the migration time, creating no rows. Sessions still inside the window are billed by the tick under this rule. After the transaction commits, each payer is notified of each row they owe (`payment_due`, NOTE-33, *review 2026-11-20*).
 
 **PAY-11.** **Court fee** (only if the session has a court). Amount = `price − discount_amount + sum of approved rental prices`.
 - Paid in full: one row, payer = booker, payee = the court's club.
@@ -79,6 +79,8 @@ The booker's row is created first, so a booker who is a payer takes the remainde
 **PAY-26.** **Declare paid** (the payer's tick, *review 2026-11-20*). Who may: the payment's payer. Not for a shadow player's rows: they never sign in, and the payee simply receives (PAY-20). Allowed while `paid_at` and `waived_at` are empty; received: `400 already_paid`; waived: `400 already_waived`. Effect: `payer_marked_at` = now. Notifies the payee side (`payment_marked`, NOTE-20): for a club payment the club owner and the club's active staff, for a coach payment the coach. Already declared: no change and no second push (GEN-5). A declared payment is still **due**: it is a claim, not a receipt.
 
 **PAY-27.** **Undo declare.** Who may: the payer. Allowed while `paid_at` is empty; received: `400 already_paid`. Effect: `payer_marked_at` emptied. Not declared: no change (GEN-5).
+
+**PAY-28.** *Decided during build (2026-11-21), codes PAY-25 leaves open:* waiving answers like marking received (PAY-24): the payer gets `403` (they can see the row), anyone else `404`; a repeat returns `200` with the first `waived_at`. The ticks are `POST /api/payments/<id>/mark-paid/` (received), `mark-due/` (back to due) and `waive/`.
 
 State of a payment row:
 

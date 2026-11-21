@@ -1,6 +1,6 @@
 # Access and roles (ACC)
 
-**Status: built, except the changes from the owner's review of 2026-11-17, which are planned** (marked *review 2026-11-17*: ACC-1 group manager and coach's players, ACC-6, ACC-7, ACC-12), and the account rules from the review of 2026-11-20, also planned (ACC-30 to ACC-35). ACC-10 to ACC-13 in `backend/accounts/`, ACC-20 to ACC-23 in `backend/teams/` (avatar links arrive with REC-30). The names and default rules are applied by every endpoint. Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
+**Status: built, except the account rules from the owner's review of 2026-11-20, which are planned** (ACC-30 to ACC-35). The changes from the review of 2026-11-17 (marked *review 2026-11-17*: ACC-1 group manager and coach's players, ACC-6, ACC-7, ACC-12) are built (2026-11-21). ACC-10 to ACC-13 in `backend/accounts/`, ACC-20 to ACC-23 in `backend/teams/` (avatar links arrive with REC-30). The names and default rules are applied by every endpoint. Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
 
 ## Names used on every page
 

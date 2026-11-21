@@ -18,7 +18,7 @@
 
 **RPT-8.** **Coach player history.** Who may: a coach. For a player: the sessions the caller coached (`sessions.coach`) that the player took part in, even after the player stopped being one of the coach's players (*review 2026-11-17*: a former team coach keeps the sessions they ran), with `checked_in_at`, `rpe`, `rpe_minutes`, and training load `rpe × rpe_minutes` (empty when RPE was not logged). Ordered by `starts_at`, newest first; paginated.
 
-**RPT-9.** *Decided during build (2026-11-16):* RPT-6 is read per session. RPT-7's period is in the coach's own timezone (GEN-8). RPT-8 lists the player's `accepted` rows in `confirmed` sessions the caller coached. Due lists and the customer list are not paginated. The repeat rate is a decimal string with 2 places (`"66.67"`) or `null`. A currency with only `owed_to_platform` still appears in revenue, with zero gross, fees and net.
+**RPT-9.** *Decided during build (2026-11-16):* RPT-6 is read per session. RPT-7's period is in the coach's own timezone (GEN-8). RPT-8 lists the player's `accepted` rows in `confirmed` sessions the caller coached; a player id is `404` unless that user is one of the caller's players or has a row in a session the caller coached (*decided during build, 2026-11-21*: RPT-8 no longer requires a current coach's player, and other users' ids must stay unprobeable, GEN-3). Due lists and the customer list are not paginated. The repeat rate is a decimal string with 2 places (`"66.67"`) or `null`. A currency with only `owed_to_platform` still appears in revenue, with zero gross, fees and net.
 
 ## Example
 

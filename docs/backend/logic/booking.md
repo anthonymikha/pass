@@ -1,6 +1,6 @@
 # Booking (BOOK)
 
-**Status: built, except the changes from the owner's review of 2026-11-17, which are planned** (marked *review 2026-11-17*: BOOK-7, BOOK-8, BOOK-20, BOOK-21, BOOK-23, BOOK-30, BOOK-33, BOOK-34, BOOK-40, BOOK-50 to BOOK-52). `backend/bookings/`, [API](../api/bookings.md). Booking a court, training requests, coach-booked training, invites, rentals, cancelling, session cards.
+**Status: built** (the changes from the owner's review of 2026-11-17, marked *review 2026-11-17*: BOOK-7, BOOK-8, BOOK-20, BOOK-21, BOOK-23, BOOK-30, BOOK-33, BOOK-34, BOOK-40, BOOK-50 to BOOK-52, built 2026-11-21). `backend/bookings/`, [API](../api/bookings.md). Booking a court, training requests, coach-booked training, invites, rentals, cancelling, session cards.
 
 ## Sessions in general
 

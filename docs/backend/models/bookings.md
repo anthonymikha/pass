@@ -20,8 +20,8 @@ The centre of the system: one booked block of time.
 | `price` | Court price for the whole session, in `currency`, **before** discount |
 | `coach_fee` | Coach's fee in `currency`, 0 if none |
 | `coach_fee_payer` | Empty = fee split among the attendees. Set = that user pays all of it |
-| `court_fee_split` | False = the booker pays the court fee in full. True = split among the attendees (planned, review 2026-11-17) |
-| `billed_at` | When the payments were created, a day after the session ends; empty = not billed yet (planned, [PAY-10](../logic/check-in-and-payments.md#billing-creating-payments)) |
+| `court_fee_split` | False = the booker pays the court fee in full. True = split among the attendees ([PAY-9](../logic/check-in-and-payments.md#how-each-fee-is-paid)) |
+| `billed_at` | When the payments were created, a day after the session ends; empty = not billed yet ([PAY-10](../logic/check-in-and-payments.md#billing-creating-payments)) |
 | `discount`, `discount_amount` | The offer used and the amount taken off, copied at booking time |
 
 `price`, `currency`, `coach_fee` and `discount_amount` are snapshots. Later changes to rates, exchange rates or offers never alter an existing session.

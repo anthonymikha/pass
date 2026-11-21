@@ -44,7 +44,7 @@ Three changes to schema v5, all approved by the owner on 2026-11-16, all built (
 
 `rpe_reminded_at` was added at review instead of a stateless reminder, which would miss sessions while the scheduler is down.
 
-Four more from the owner's review of 2026-11-17, **planned**:
+Four more from the owner's review of 2026-11-17, **built** (2026-11-21: migrations `bookings/0003`, `bookings/0004`, `billing/0002`, `teams/0002`):
 
 | Table | Change | Rule |
 |---|---|---|

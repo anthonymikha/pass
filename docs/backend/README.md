@@ -39,15 +39,15 @@ Later apps may read earlier apps' data freely (for example `wellness` reads RPE 
 
 An event in an earlier app sometimes has a consequence owned by a later app. These calls are allowed, made explicitly inside the same database transaction:
 
-1. Booker checks in → `billing.services.record_payments(session)` (PAY-4)
+1. The scheduler tick (`bookings/management/commands/tick.py`) → `billing.services.bill_ended_sessions()` (PAY-10, NOTE-33). *Before review 2026-11-17: the booker's check-in called `billing.services.record_payments(session)`.*
 2. Group session confirmed → `chat.services.post_session_card(session)` (BOOK-60)
 3. Group created, membership changed, coach changed or group deleted (TEAM-20, TEAM-28 to TEAM-30) → `chat.services` functions that keep the group chat in step. *Decided during build (2026-11-16): the logic pages require it and `teams` comes before `chat`.*
+4. Team handed over (TEAM-29) → `bookings.services.hand_over_training(team, previous, new_coach)` moves the team's upcoming team training. *Decided during build (2026-11-21): TEAM-29 requires it in the same transaction and `teams` comes before `bookings`.*
 
 A few reads the other way are allowed, through reverse relations only, never writes. *Decided during build (2026-11-16): the logic pages require them.*
 
 | Earlier app | Reads | For |
 |---|---|---|
-| `bookings` | whether a session already has payments (`session.payments`) | DSC-12, BOOK-40, BOOK-50 |
 | `venues` | a court's sessions (`court.sessions`) | CLUB-10 (court in use), CLUB-16 (closure conflicts) |
 | `venues` | an item's rentals (`equipment.rentals`) | CLUB-19 (equipment in use) |
 
