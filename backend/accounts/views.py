@@ -1,3 +1,6 @@
+from django.conf import settings
+from django.contrib.auth.forms import PasswordResetForm
+from django.contrib.auth.views import PasswordResetConfirmView
 from django.db import transaction
 from django.db.models import Q
 from drf_spectacular.types import OpenApiTypes
@@ -13,8 +16,8 @@ from config.api import BusinessError
 from . import services
 from .models import Connection, User, UserBlockout
 from .serializers import (
-    AvatarFormSerializer, CoachingRequestSerializer, CoachingSerializer, DeviceSerializer, LoginSerializer, PasswordSerializer,
-    PersonSerializer,
+    AvatarFormSerializer, CoachingRequestSerializer, CoachingSerializer, DeviceSerializer, LoginSerializer, LogoutSerializer,
+    PasswordResetSerializer, PasswordSerializer, PersonSerializer,
     RegisterSerializer, ShadowPlayerSerializer, StorageKeySerializer, UserBlockoutSerializer, UserSerializer, UserTargetSerializer,
 )
 
@@ -53,12 +56,43 @@ class LoginView(PublicAuthView):
 
 
 class LogoutView(generics.GenericAPIView):
-    @extend_schema(request=None, responses={204: None})
+    serializer_class = LogoutSerializer
+
+    @extend_schema(responses={204: None})
     def post(self, request):
-        with transaction.atomic():
-            Token.objects.filter(user=request.user).delete()
-            request.user.devices.all().delete()  # NOTE-3
+        """ACC-31, NOTE-3: forgets only the device token sent, if it is the caller's; the API token stays, so the
+        user's other devices stay signed in. `204` also for an unknown device."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if serializer.validated_data.get("device_token"):
+            request.user.devices.filter(token=serializer.validated_data["device_token"]).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PasswordResetView(PublicAuthView):
+    serializer_class = PasswordResetSerializer
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def post(self, request):
+        """ACC-32 step 1: the same `200` whether or not the email has an account; throttled with register and login."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        form = PasswordResetForm({"email": serializer.validated_data["email"]})
+        form.is_valid()
+        # step 2: active users with a usable password only (never a shadow player or a deleted account)
+        form.save(domain_override=settings.PASS_HOST, use_https=not settings.DEBUG)
+        return Response({"detail": "If an account exists for this email, a reset link is on its way."})
+
+
+class ResetConfirmView(PasswordResetConfirmView):
+    """ACC-32 steps 2 and 3: Django's page; on success the user's API token is deleted (ACC-30), devices stay."""
+
+    template_name = "accounts/password_reset_confirm.html"
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        Token.objects.filter(user=form.user).delete()
+        return response
 
 
 class MeView(generics.RetrieveUpdateAPIView):

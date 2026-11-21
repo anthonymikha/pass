@@ -78,8 +78,8 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 REST_FRAMEWORK = {
-    # ponytail: one non-expiring token per user (logout signs out every device);
-    # move to per-device expiring tokens when multi-device sessions matter.
+    # ponytail: one non-expiring token per user (ACC-30: logout keeps it; a password reset or deleting the account
+    # signs out every device); move to per-device expiring tokens when "sign out everywhere" matters.
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.TokenAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
@@ -114,6 +114,20 @@ SPECTACULAR_SETTINGS = {
         "ChatTypeEnum": "chat.models.Chat.Type",
     },
 }
+
+# ACC-32: the host the password reset link points at (https://PASS_HOST/account/reset/...); the link is valid 1 hour.
+PASS_HOST = os.environ.get("PASS_HOST", "localhost:8000")
+PASSWORD_RESET_TIMEOUT = 3600
+
+# Email (ACC-32): SMTP from .env (Brevo at launch). EMAIL_HOST empty = emails are written to the log (stdout).
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_BACKEND = ("django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST
+                 else "django.core.mail.backends.console.EmailBackend")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"  # STARTTLS on 587
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "PASS <no-reply@localhost>")
 
 # NOTE-11: path to the Firebase service-account file. Empty = fake sender (logs and records in memory).
 FCM_CREDENTIALS_FILE = os.environ.get("FCM_CREDENTIALS_FILE", "")

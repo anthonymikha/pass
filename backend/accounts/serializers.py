@@ -200,6 +200,14 @@ class RegisterSerializer(serializers.Serializer):
         return data
 
 
+class LogoutSerializer(serializers.Serializer):
+    device_token = serializers.CharField(required=False, allow_blank=True, max_length=4096)  # ACC-31
+
+
+class PasswordResetSerializer(serializers.Serializer):
+    email = serializers.EmailField()  # ACC-32
+
+
 class PasswordSerializer(serializers.Serializer):
     """ACC-33: the caller's current password."""
 
