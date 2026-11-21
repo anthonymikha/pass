@@ -43,6 +43,7 @@ An event in an earlier app sometimes has a consequence owned by a later app. The
 2. Group session confirmed → `chat.services.post_session_card(session)` (BOOK-60)
 3. Group created, membership changed, coach changed or group deleted (TEAM-20, TEAM-28 to TEAM-30) → `chat.services` functions that keep the group chat in step. *Decided during build (2026-11-16): the logic pages require it and `teams` comes before `chat`.*
 4. Team handed over (TEAM-29) → `bookings.services.hand_over_training(team, previous, new_coach)` moves the team's upcoming team training. *Decided during build (2026-11-21): TEAM-29 requires it in the same transaction and `teams` comes before `bookings`.*
+5. Account deleted (ACC-33) → `accounts.services.delete_account` calls one function per later app, in the order of its steps: `bookings.services.leave_upcoming_sessions`, `teams.services.leave_all_groups`, then `wellness.services.forget_user`, `chat.services.forget_user` and `venues.services.forget_user`. *Decided during build (2026-11-21): one account touches every app, and `accounts` comes first.*
 
 A few reads the other way are allowed, through reverse relations only, never writes. *Decided during build (2026-11-16): the logic pages require them.*
 
