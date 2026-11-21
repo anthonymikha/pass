@@ -1,14 +1,17 @@
+from io import StringIO
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
-from django.test import TestCase, TransactionTestCase
+from django.core.management import call_command
+from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from django.utils.timezone import now as django_now
 
 from accounts.models import Connection, User, UserBlockout
 from wellness.models import SleepLog
 from billing.models import Payment
+from config.storage import get_storage
 from bookings.models import Session, SessionParticipant
 from venues.models import Club, ClubMember, Court, CourtBlockout, CourtRate, Equipment, PriceOverride, Sport
 
@@ -135,3 +138,13 @@ class BilledAtMigrationTests(TransactionTestCase):
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
         executor.migrate(executor.loader.graph.leaf_nodes())
+
+
+class DeploymentTests(SimpleTestCase):
+    @override_settings(STORAGE_ENDPOINT="", PASS_HOST="pass.example.com", DEBUG=False)
+    def test_bucket_cors_is_the_app_origin(self):
+        """Deployment (Storage): `storage_cors` sets the bucket's CORS rule to https://PASS_HOST at every start."""
+        get_storage.cache_clear()
+        self.addCleanup(get_storage.cache_clear)
+        call_command("storage_cors", stdout=StringIO())
+        self.assertEqual(get_storage().cors, "https://pass.example.com")

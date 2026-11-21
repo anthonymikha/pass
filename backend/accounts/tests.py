@@ -102,6 +102,7 @@ class AccountsApiTests(APITestCase):
         self.assertEqual(self.post("auth/login/", attempt).status_code, 429)
         self.assertEqual(self.post("auth/password-reset/", {"email": "a@example.com"}).status_code, 429)
 
+    @override_settings(PASS_HOST="pass.example.com")
     def test_password_reset_journey(self):
         """ACC-32, ACC-30: the same answer for any email; a link to Django's page on PASS_HOST for an active account
         only; the new password passes the strength checks; success deletes the token (devices stay); the link works
@@ -116,7 +117,7 @@ class AccountsApiTests(APITestCase):
         self.assertEqual({(r.status_code, r.data["detail"]) for r in answers}, {(200, answers[0].data["detail"])})
         self.assertIn("email", self.post("auth/password-reset/", {"email": "not-an-email"}).data)
         self.assertEqual([m.to for m in mail.outbox], [["pat@example.com"]])  # nobody else gets mail
-        link = re.search(r"https://localhost:8000(/account/reset/\S+/\S+/)", mail.outbox[0].body).group(1)
+        link = re.search(r"https://pass\.example\.com(/account/reset/\S+/\S+/)", mail.outbox[0].body).group(1)
 
         # Django's page: weak passwords are refused (the register checks), a good one is set
         page = self.client.get(link, follow=True)
@@ -139,7 +140,7 @@ class AccountsApiTests(APITestCase):
         cache.clear()
         mail.outbox.clear()
         self.post("auth/password-reset/", {"email": "pat@example.com"})
-        link = re.search(r"https://localhost:8000(/account/reset/\S+/\S+/)", mail.outbox[0].body).group(1)
+        link = re.search(r"https://pass\.example\.com(/account/reset/\S+/\S+/)", mail.outbox[0].body).group(1)
         later = datetime.datetime.now() + datetime.timedelta(seconds=3601)
         with mock.patch("django.contrib.auth.tokens.PasswordResetTokenGenerator._now", return_value=later):
             self.assertFalse(self.client.get(link, follow=True).context["validlink"])
