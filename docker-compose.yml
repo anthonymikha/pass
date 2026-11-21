@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:18
+    restart: unless-stopped  # back after a reboot or a crash
     env_file: .env
     volumes:
       - ./data/postgres:/var/lib/postgresql
@@ -14,6 +15,7 @@ services:
   # The access keys come from .env; the S3 identity file is written at start so no secret is committed.
   storage:
     image: chrislusf/seaweedfs:4.52
+    restart: unless-stopped  # back after a reboot or a crash
     env_file: .env
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -39,6 +41,7 @@ services:
 
   backend:
     build: ./backend
+    restart: unless-stopped  # back after a reboot or a crash
     env_file: .env
     environment:
       POSTGRES_HOST: db
@@ -49,10 +52,20 @@ services:
         condition: service_completed_successfully
     ports:
       - "${BACKEND_PORT:-8000}:8000"  # host port; set BACKEND_PORT in .env if 8000 is taken
+    # Healthy once migrations ran and gunicorn answers: the public club search reads the database. Host is PASS_HOST,
+    # which ALLOWED_HOSTS accepts.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.request as u; u.urlopen(u.Request('http://localhost:8000/api/clubs/', headers={'Host': os.environ.get('PASS_HOST', 'localhost')}), timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
 
-  # NOTE-30: one `manage.py tick` a minute (RPE reminders). Same image as the backend; never migrates (the backend does).
+  # NOTE-30: one `manage.py tick` a minute (billing, RPE reminders). Same image as the backend; never migrates (the
+  # backend does), so it starts only once the backend is healthy.
   scheduler:
     build: ./backend
+    restart: unless-stopped  # back after a reboot or a crash
     env_file: .env
     environment:
       POSTGRES_HOST: db
@@ -60,8 +73,30 @@ services:
       db:
         condition: service_healthy
       backend:
-        condition: service_started
+        condition: service_healthy
     command: ["sh", "-c", "while true; do python manage.py tick; sleep 60; done"]
+
+  # Nightly database backup (docs/deployment.md): checks every hour and makes today's dump (UTC date) once, so a night
+  # the server was down is caught up at the next start. Dumps older than 7 days are removed. Video is not backed up.
+  backup:
+    image: postgres:18
+    restart: unless-stopped  # back after a reboot or a crash
+    env_file: .env
+    environment:
+      PGHOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - while true; do
+          f=/backups/pass-$$(date -u +%F).dump;
+          [ -f "$$f" ] || { PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -U "$$POSTGRES_USER" -Fc -f "$$f.part" "$$POSTGRES_DB" && mv "$$f.part" "$$f"; };
+          find /backups -name 'pass-*.dump' -mtime +6 -delete;
+          sleep 3600;
+        done
+    volumes:
+      - ./data/backups:/backups
 
   # Flutter web build goes here later: a reverse proxy serving the web build at /
   # and forwarding /api/, /admin/ and /static/ to backend:8000 (same origin, no CORS).

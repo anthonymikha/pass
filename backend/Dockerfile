@@ -13,4 +13,5 @@ RUN SECRET_KEY=collectstatic-only python manage.py collectstatic --noinput \
 
 USER app
 EXPOSE 8000
-CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi --bind 0.0.0.0:8000"]
+# Deployment: migrations, the shared rate-limit cache table and the bucket's CORS rule first, then 3 workers.
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable && python manage.py storage_cors && exec gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 3"]

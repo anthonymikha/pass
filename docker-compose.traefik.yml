@@ -1,0 +1,30 @@
+# Production behind an existing Traefik (docs/deployment.md):
+#   docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
+# Traefik ends HTTPS for PASS_HOST (backend) and FILES_HOST (storage); neither publishes a host port.
+services:
+  backend:
+    ports: !reset []
+    networks: [default, traefik]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.pass-backend.rule=Host(`${PASS_HOST}`)
+      - traefik.http.routers.pass-backend.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.pass-backend.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.pass-backend.loadbalancer.server.port=8000
+
+  storage:
+    ports: !reset []
+    networks: [default, traefik]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.pass-files.rule=Host(`${FILES_HOST}`)
+      - traefik.http.routers.pass-files.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.pass-files.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.pass-files.loadbalancer.server.port=8333
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

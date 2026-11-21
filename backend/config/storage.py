@@ -45,6 +45,11 @@ class S3Storage:
     def delete(self, key):
         self.internal.delete_object(Bucket=self.bucket, Key=key)
 
+    def set_cors(self, origin):
+        """Deployment: the browser (Flutter web) may upload and play from `origin` only; phones need no CORS."""
+        self.internal.put_bucket_cors(Bucket=self.bucket, CORSConfiguration={"CORSRules": [
+            {"AllowedOrigins": [origin], "AllowedMethods": ["GET", "POST", "HEAD"], "AllowedHeaders": ["*"]}]})
+
 
 class FakeStorage:
     """REC-3: remembers which keys were "uploaded" and what each form allowed. Tests call `put(key)` for the upload."""
@@ -67,6 +72,9 @@ class FakeStorage:
 
     def delete(self, key):
         self.keys.discard(key)
+
+    def set_cors(self, origin):
+        self.cors = origin
 
 
 @lru_cache

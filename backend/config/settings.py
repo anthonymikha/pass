@@ -6,7 +6,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get("DEBUG") == "1"
 # No usable default in production: a missing SECRET_KEY fails at startup unless DEBUG=1.
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-insecure-key") if DEBUG else os.environ["SECRET_KEY"]
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+# Deployment: the public host name of the API (also ACC-32's reset links). Set in .env; the domain is never in the repo.
+PASS_HOST = os.environ.get("PASS_HOST", "localhost:8000")
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", PASS_HOST.split(":")[0]).split(",")
+CSRF_TRUSTED_ORIGINS = [f"https://{PASS_HOST}"]  # the admin and the password reset pages post forms
+
+# On a server the reverse proxy (Traefik or Caddy) ends HTTPS, redirects plain http to https, and says so in
+# X-Forwarded-Proto. HTTPS=0 only for a local stack on plain http (secure cookies would never come back).
+HTTPS = os.environ.get("HTTPS", "0" if DEBUG else "1") == "1"
+# The proxy already redirects http to https; a second redirect here would also catch the healthcheck and the test client.
+SILENCED_SYSTEM_CHECKS = ["security.W008"]
+if HTTPS:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True  # only takes effect if the owner submits the domain to the preload list
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -83,9 +98,8 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.TokenAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
-    # Only views that set throttle_scope are throttled (register/login).
-    # ponytail: counters live in per-process memory, so the real limit is rate x gunicorn workers;
-    # point CACHES at a shared cache when that matters.
+    # Only views that set throttle_scope are throttled (register, login, password reset). The counters live in the
+    # shared DatabaseCache below, so the gunicorn workers count together.
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
     "DEFAULT_THROTTLE_RATES": {"auth": "10/min"},
     "EXCEPTION_HANDLER": "config.api.exception_handler",  # GEN-1
@@ -93,6 +107,10 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 50,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
+
+# Deployment: one table (`manage.py createcachetable`, run at start next to `migrate`) shared by the gunicorn workers.
+# ponytail: a database round-trip per throttled request; move to Redis if login traffic ever matters.
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "cache"}}
 
 # The Flutter client is generated from this schema (GET /api/schema/).
 SPECTACULAR_SETTINGS = {
@@ -115,8 +133,7 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
-# ACC-32: the host the password reset link points at (https://PASS_HOST/account/reset/...); the link is valid 1 hour.
-PASS_HOST = os.environ.get("PASS_HOST", "localhost:8000")
+# ACC-32: the reset link (https://PASS_HOST/account/reset/...) is valid 1 hour.
 PASSWORD_RESET_TIMEOUT = 3600
 
 # Email (ACC-32): SMTP from .env (Brevo at launch). EMAIL_HOST empty = emails are written to the log (stdout).
