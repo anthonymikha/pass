@@ -1,7 +1,9 @@
 import datetime
+import re
 from decimal import Decimal
 from unittest import mock
 
+from django.core import mail
 from django.core.cache import cache
 from django.db import transaction
 from django.test import SimpleTestCase, override_settings
@@ -65,7 +67,8 @@ class AccountsApiTests(APITestCase):
         self.assertEqual(self.client.put("/api/me/", {}, format="json").status_code, 405)
 
         self.assertEqual(self.post("auth/logout/").status_code, 204)
-        self.assertEqual(self.client.get("/api/me/").status_code, 401)  # old token is dead
+        self.assertEqual(self.client.get("/api/me/").status_code, 200)  # ACC-30, ACC-31: the token stays
+        self.assertEqual(self.post("auth/login/", {"email": "player@example.com", "password": PASSWORD}).data["token"], token)
 
     def test_rejections(self):
         r = self.post("auth/register/", {"email": "a@example.com", "password": "12345678", "full_name": "A"})
@@ -91,10 +94,56 @@ class AccountsApiTests(APITestCase):
         self.assertEqual(self.post("auth/login/", {"email": "", "password": ""}).status_code, 400)
 
     def test_login_is_throttled(self):
+        """ACC-32: password reset counts against the same limit as register and login, 10 a minute per IP."""
         attempt = {"email": "a@example.com", "password": "wrong"}
-        for _ in range(10):
+        for _ in range(9):
             self.assertEqual(self.post("auth/login/", attempt).status_code, 400)
+        self.assertEqual(self.post("auth/password-reset/", {"email": "a@example.com"}).status_code, 200)
         self.assertEqual(self.post("auth/login/", attempt).status_code, 429)
+        self.assertEqual(self.post("auth/password-reset/", {"email": "a@example.com"}).status_code, 429)
+
+    def test_password_reset_journey(self):
+        """ACC-32, ACC-30: the same answer for any email; a link to Django's page on PASS_HOST for an active account
+        only; the new password passes the strength checks; success deletes the token (devices stay); the link works
+        once and for one hour."""
+        pat = User.objects.create_user("pat@example.com", PASSWORD, full_name="Pat")
+        token = Token.objects.create(user=pat).key
+        Device.objects.create(user=pat, token="phone", platform="ios")
+        User.objects.create_user("gone@example.com", PASSWORD, is_active=False)
+        User.objects.create_user(email=None, full_name="Kid", managed_by=pat)
+
+        answers = [self.post("auth/password-reset/", {"email": e}) for e in ("nobody@example.com", "gone@example.com", "PAT@example.com")]
+        self.assertEqual({(r.status_code, r.data["detail"]) for r in answers}, {(200, answers[0].data["detail"])})
+        self.assertIn("email", self.post("auth/password-reset/", {"email": "not-an-email"}).data)
+        self.assertEqual([m.to for m in mail.outbox], [["pat@example.com"]])  # nobody else gets mail
+        link = re.search(r"https://localhost:8000(/account/reset/\S+/\S+/)", mail.outbox[0].body).group(1)
+
+        # Django's page: weak passwords are refused (the register checks), a good one is set
+        page = self.client.get(link, follow=True)
+        self.assertTrue(page.context["validlink"])
+        form_url = page.redirect_chain[-1][0]
+        r = self.client.post(form_url, {"new_password1": "12345678", "new_password2": "12345678"})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.context["form"].errors)
+        r = self.client.post(form_url, {"new_password1": "new-court-side-43", "new_password2": "new-court-side-43"}, follow=True)
+        self.assertContains(r, "Go back to the PASS app")
+        # ACC-30: signed out everywhere (the token is gone), devices kept; the old password no longer works
+        self.assertFalse(Token.objects.filter(key=token).exists())
+        self.assertTrue(Device.objects.filter(user=pat).exists())
+        self.assertEqual(self.post("auth/login/", {"email": "pat@example.com", "password": PASSWORD}).status_code, 400)
+        self.assertEqual(self.post("auth/login/", {"email": "pat@example.com", "password": "new-court-side-43"}).status_code, 200)
+        # once only
+        self.assertFalse(self.client.get(link, follow=True).context["validlink"])
+
+        # one hour: a fresh link is dead 3601 seconds later
+        cache.clear()
+        mail.outbox.clear()
+        self.post("auth/password-reset/", {"email": "pat@example.com"})
+        link = re.search(r"https://localhost:8000(/account/reset/\S+/\S+/)", mail.outbox[0].body).group(1)
+        later = datetime.datetime.now() + datetime.timedelta(seconds=3601)
+        with mock.patch("django.contrib.auth.tokens.PasswordResetTokenGenerator._now", return_value=later):
+            self.assertFalse(self.client.get(link, follow=True).context["validlink"])
+        self.assertTrue(self.client.get(link, follow=True).context["validlink"])
 
 
 class DeviceTests(APITestCase):
@@ -110,7 +159,7 @@ class DeviceTests(APITestCase):
         return self.client.post("/api/devices/", {"token": token, "platform": platform}, format="json")
 
     def test_device_journey(self):
-        """NOTE-1, NOTE-2, NOTE-3, GEN-5: register, repeat, move to another user, unregister, logout."""
+        """NOTE-1, NOTE-2, NOTE-3, ACC-31, GEN-5: register, repeat, move to another user, unregister, logout."""
         self.as_user(self.pat)
         r = self.register()
         self.assertEqual(r.status_code, 201, r.data)
@@ -139,8 +188,13 @@ class DeviceTests(APITestCase):
         self.register("tok-3", "web")
         self.register("tok-4", "web")
         self.as_user(self.sam)
-        self.assertEqual(self.client.post("/api/auth/logout/").status_code, 204)  # NOTE-3
-        self.assertEqual(Device.objects.filter(user=self.sam).count(), 0)
+        self.register("tok-5", "ios")
+        # ACC-31, NOTE-3: logout forgets only the device it names, and only the caller's; unknown or none is still 204
+        logout = lambda body: self.client.post("/api/auth/logout/", body, format="json").status_code  # noqa: E731
+        self.assertEqual(logout({"device_token": "tok-5"}), 204)
+        self.assertEqual(logout({"device_token": "tok-3"}), 204)  # Pat's: untouched
+        self.assertEqual((logout({"device_token": "nope"}), logout({})), (204, 204))
+        self.assertEqual(list(Device.objects.filter(user=self.sam).values_list("token", flat=True)), ["tok-1"])
         self.assertEqual(Device.objects.filter(user=self.pat).count(), 2)  # others keep theirs
 
         self.client.force_authenticate(None)
