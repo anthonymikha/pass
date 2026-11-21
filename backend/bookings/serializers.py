@@ -48,6 +48,7 @@ class BookingSerializer(serializers.Serializer):
     rentals = RentalInputSerializer(many=True, required=False)
     group = serializers.IntegerField(required=False)
     invitees = serializers.ListField(child=serializers.IntegerField(), required=False)
+    court_fee_split = serializers.BooleanField(default=False)  # PAY-9
 
 
 ACTIVE_COURTS = Court.objects.filter(is_active=True).select_related("club")
@@ -60,6 +61,8 @@ class TrainingRequestSerializer(serializers.Serializer):
     sport = VisibleRelatedField(queryset=Sport.objects.all())
     starts_at = serializers.DateTimeField()
     ends_at = serializers.DateTimeField()
+    court_fee_split = serializers.BooleanField(default=False)  # PAY-9
+    coach_fee_split = serializers.BooleanField(default=False)
 
     def validate(self, data):
         if data["starts_at"] <= timezone.now():
@@ -92,6 +95,7 @@ class TrainingBookingSerializer(TrainingConfirmSerializer):
     group = VisibleRelatedField(queryset=Group.objects.all(), required=False)
     player = serializers.IntegerField(required=False)  # checked against the coach's players in the service (BOOK-31)
     coach_fee_payer = serializers.IntegerField(required=False, allow_null=True)  # BOOK-32, checked in the service
+    court_fee_split = serializers.BooleanField(default=False)  # PAY-9
 
     def validate(self, data):
         if ("group" in data) == ("player" in data):
@@ -201,8 +205,8 @@ class SessionSerializer(serializers.ModelSerializer):
         model = Session
         fields = [
             "id", "kind", "status", "court", "sport", "booked_by", "coach", "group", "starts_at", "ends_at", "currency",
-            "price", "coach_fee", "coach_fee_payer", "discount", "discount_amount", "participants", "rentals",
-            "created_at",
+            "price", "coach_fee", "coach_fee_payer", "court_fee_split", "discount", "discount_amount", "billed_at",
+            "participants", "rentals", "created_at",
         ]
 
     def get_status(self, session) -> str:

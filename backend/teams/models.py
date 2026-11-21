@@ -11,8 +11,11 @@ class Group(models.Model):
 
     type = models.CharField(max_length=20, choices=Type.choices)
     name = models.CharField(max_length=255)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="owned_groups")
-    # Who runs training. Starts as the owner for teams; change this to hand the team to another coach.
+    # ACC-1: manages a play group; for a team, history only. Emptied if that account is deleted (ACC-33).
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="created_groups"
+    )
+    # The team coach, a team's only manager (ACC-1). Starts as the creator; hand-over changes it (TEAM-29).
     coach = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="coached_groups"
     )

@@ -14,13 +14,13 @@ from .models import Group, GroupMember
 class GroupSerializer(serializers.ModelSerializer):
     """TEAM-21: what anyone may read about a group. The view annotates `member_count` (active rows)."""
 
-    owner = PersonSerializer(read_only=True)
+    created_by = PersonSerializer(read_only=True)
     coach = PersonSerializer(read_only=True)
     member_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Group
-        fields = ["id", "name", "type", "sport", "owner", "coach", "member_count"]
+        fields = ["id", "name", "type", "sport", "created_by", "coach", "member_count"]
 
 
 class MyGroupSerializer(GroupSerializer):

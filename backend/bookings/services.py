@@ -36,7 +36,7 @@ INVITED, ACCEPTED, DECLINED = (SessionParticipant.Status.INVITED, SessionPartici
                                SessionParticipant.Status.DECLINED)
 APPROVED = SessionRental.Status.APPROVED
 CHECK_IN_OPENS = datetime.timedelta(minutes=30)  # PAY-1: before starts_at
-LATE_CHECK_IN = datetime.timedelta(hours=24)  # PAY-7: after ends_at, club side only
+LATE_CHECK_IN = datetime.timedelta(hours=24)  # PAY-7: after ends_at, for the people running the session
 MAX_PERIOD_DAYS = 366  # owner-reports intro
 RECORDING_TYPES = ("mp4", "mov")  # REC-11
 RECORDING_MAX_BYTES = 2 * 1024 ** 3  # REC-11
@@ -320,7 +320,7 @@ def book_court(user, data):
         session = Session.objects.create(  # step 3
             court=court, sport=data["sport"], booked_by=user, kind=Session.Kind.PLAY, status=CONFIRMED,
             starts_at=starts_at, ends_at=ends_at, group=group, currency=data["currency"], price=plan["price"],
-            discount=offer, discount_amount=discount)
+            discount=offer, discount_amount=discount, court_fee_split=data.get("court_fee_split", False))  # PAY-9
         SessionParticipant.objects.create(session=session, user=user, status=ACCEPTED)  # step 4
         for equipment, quantity, price in plan["rentals"]:  # step 5
             SessionRental.objects.create(session=session, equipment=equipment, quantity=quantity, price=price)
@@ -445,6 +445,11 @@ def remove_participant(user, session, row):
     row.delete()
 
 
+def has_check_in(session):
+    """PAY-8: the first check-in freezes the session."""
+    return session.participants.filter(checked_in_at__isnull=False).exists()
+
+
 # ---- rentals (BOOK-40, BOOK-41) ----
 
 def decide_rental(rental, status):
@@ -454,8 +459,8 @@ def decide_rental(rental, status):
         return rental
     if session.status == CANCELLED:
         raise BusinessError("session_cancelled", "This session was cancelled.")
-    if session.payments.exists():  # BOOK-40: frozen once the booker has checked in
-        raise BusinessError("already_payable", "The session has payments; rentals are frozen.")
+    if has_check_in(session):  # BOOK-40, PAY-8
+        raise BusinessError("already_payable", "Someone has checked in; rentals are frozen.")
     with transaction.atomic():
         equipment = Equipment.objects.select_for_update().get(pk=rental.equipment_id)  # BOOK-41: lock the item
         if status == APPROVED:
@@ -486,8 +491,8 @@ def cancel(user, session):
             raise BusinessError("invalid_status", "Only a confirmed session can be cancelled here.")
         if session.ends_at <= timezone.now():
             raise BusinessError("session_closed", "This session has ended.")
-        if session.payments.exists():
-            raise BusinessError("already_payable", "The session has payments and can no longer be cancelled.")
+        if has_check_in(session):  # BOOK-51, PAY-8
+            raise BusinessError("already_payable", "Someone has checked in; the session can no longer be cancelled.")
         session.status = CANCELLED
         session.save(update_fields=["status"])
         session.rentals.filter(status=SessionRental.Status.REQUESTED).update(status=SessionRental.Status.DECLINED)
@@ -515,9 +520,11 @@ def request_training(user, data):
     if not coach.is_coach:
         raise BusinessError("not_a_coach", "This user is not a coach.")
     with transaction.atomic():
-        session = Session.objects.create(  # no court, no currency, nothing owed yet; the requester pays the coach fee
+        session = Session.objects.create(  # no court, no currency, nothing owed yet; PAY-9: each fee as the requester chose
             sport=data["sport"], booked_by=user, coach=coach, kind=Session.Kind.TRAINING, status=REQUESTED,
-            starts_at=data["starts_at"], ends_at=data["ends_at"], currency="", price=0, coach_fee=0, coach_fee_payer=user)
+            starts_at=data["starts_at"], ends_at=data["ends_at"], currency="", price=0, coach_fee=0,
+            court_fee_split=data.get("court_fee_split", False),
+            coach_fee_payer=None if data.get("coach_fee_split") else user)
         SessionParticipant.objects.create(session=session, user=user, status=ACCEPTED)
         notify([coach], "training_request", "Training request",
                f"{_name(user)} asked you for training on {_when(session)}", {"id": session.id})  # NOTE-20
@@ -549,7 +556,7 @@ def confirm_training(session, data):
         session.court, session.starts_at, session.ends_at = data.get("court"), data["starts_at"], data["ends_at"]
         session.currency, session.price, session.coach_fee = data["currency"], plan["price"], data["coach_fee"]
         session.discount, session.discount_amount, session.status = offer, discount, CONFIRMED
-        session.save()  # coach_fee_payer stays the requester; a request has no group, so no card (BOOK-60)
+        session.save()  # the fee choices stay as the requester made them; a request has no group, so no card (BOOK-60)
         notify([session.booked_by], "training_confirmed", "Training confirmed",
                f"{_name(session.coach)} confirmed your training on {_when(session)}", {"id": session.id})
     return session
@@ -586,8 +593,8 @@ def book_training(coach, data):
     if group:  # BOOK-30
         if group.type != Group.Type.TEAM:
             raise BusinessError("not_a_team", "Training is booked for a team.")
-        if not is_group_manager(coach, group):
-            raise PermissionDenied("Only the team's coach or owner can book training for it.")
+        if not is_group_manager(coach, group):  # ACC-1: the team coach only
+            raise PermissionDenied("Only the team coach can book training for it.")
         members = list(GroupMember.objects.filter(group=group, status=GroupMember.Status.ACTIVE).exclude(
             user=coach).select_related("user"))
         payers = {m.user_id: m.user for m in members}
@@ -610,12 +617,24 @@ def book_training(coach, data):
             court=data.get("court"), sport=data["sport"], booked_by=coach, coach=coach, group=group,
             kind=Session.Kind.TRAINING, status=CONFIRMED, starts_at=data["starts_at"], ends_at=data["ends_at"],
             currency=data["currency"], price=plan["price"], coach_fee=data["coach_fee"], coach_fee_payer=payer,
-            discount=offer, discount_amount=discount)
+            court_fee_split=data.get("court_fee_split", False), discount=offer, discount_amount=discount)  # PAY-9
         invited = _add_participants(session, {coach: ACCEPTED, **people})
         if group:
             chat.post_session_card(session)  # BOOK-60
         _notify_invited(coach, session, invited)
     return session
+
+
+def hand_over_training(team, previous, new_coach):
+    """TEAM-29, called by teams.services.hand_over inside its transaction: the team's upcoming team training passes to
+    the new coach, who also becomes its booker and takes over the previous coach's participant row (the first row,
+    PAY-13). Sessions that have started keep their coach."""
+    sessions = Session.objects.filter(kind=Session.Kind.TRAINING, group=team, coach=previous, status=CONFIRMED,
+                                      starts_at__gt=timezone.now())
+    for session in sessions.select_for_update():
+        session.participants.filter(user=new_coach).delete()
+        session.participants.filter(user=previous).update(user=new_coach)
+    sessions.update(coach=new_coach, booked_by=new_coach)
 
 
 # ---- personal and group availability (AVL-20 to AVL-25) ----
@@ -668,12 +687,11 @@ def free_intervals(users, start, end, min_minutes):
 
 def check_in(user, session, row):
     """PAY-4. The caller can see `session` and `row` is one of its participant rows. Returns the row.
-    The session row lock (step 1) is what makes two simultaneous booker check-ins create the payments once (PAY-10)."""
-    booker_row = row.user_id == session.booked_by_id
-    club_side = bool(booker_row and session.court_id and is_club_side(user, session.court.club))  # PAY-3
-    if not (row.user_id == user.pk  # PAY-2
-            or (is_shadow_player(row.user) and user.pk in (session.coach_id, row.user.managed_by_id))
-            or club_side):
+    Checking in creates no payments: billing does, after the session (PAY-10)."""
+    runs_it = (user.pk in (session.booked_by_id, session.coach_id)  # PAY-2: any accepted row
+               or (session.court_id is not None and is_club_side(user, session.court.club))  # PAY-3
+               or (is_shadow_player(row.user) and row.user.managed_by_id == user.pk))  # a shadow player's coach
+    if row.user_id != user.pk and not runs_it:
         raise PermissionDenied("You cannot check this person in.")
     with transaction.atomic():
         session = Session.objects.select_for_update().get(pk=session.pk)  # step 1: no select_related (nullable court)
@@ -685,14 +703,11 @@ def check_in(user, session, row):
         if row.status != ACCEPTED:
             raise BusinessError("not_accepted", "This participant has not accepted the session.")
         now = timezone.now()
-        closes = session.ends_at + (LATE_CHECK_IN if club_side else datetime.timedelta(0))  # PAY-7
+        closes = session.ends_at + (LATE_CHECK_IN if runs_it else datetime.timedelta(0))  # PAY-7
         if not session.starts_at - CHECK_IN_OPENS <= now <= closes:  # PAY-1
             raise BusinessError("checkin_closed", "Check-in is not open now.")
         row.checked_in_at = now  # step 3
         row.save(update_fields=["checked_in_at"])
-        if booker_row:  # step 4: the downward call allowed by docs/backend/README.md
-            from billing.services import record_payments  # here, not at the top: billing.services imports this module
-            record_payments(session)
     return row
 
 
@@ -708,8 +723,8 @@ def set_session_discount(session, amount):
         raise _field_error("amount", "Must not be more than the session price.")
     with transaction.atomic():
         session = Session.objects.select_for_update().get(pk=session.pk)
-        if session.payments.exists():  # DSC-12, DSC-14
-            raise BusinessError("already_payable", "The session has payments; its price can no longer change.")
+        if has_check_in(session):  # DSC-12, DSC-14, PAY-8
+            raise BusinessError("already_payable", "Someone has checked in; the price can no longer change.")
         if session.status not in (REQUESTED, CONFIRMED):
             raise BusinessError("session_cancelled", "This session was cancelled.")
         session.discount, session.discount_amount = None, amount  # replaces any offer, never re-applied
@@ -765,9 +780,9 @@ def customers(club, first, last):
 
 
 def attendance(session, now=None):
-    """RPT-6: the accepted rows, and the no-shows (accepted, not checked in, session over). PAY-6."""
+    """RPT-6: the accepted rows, and the no-shows (accepted, not checked in, check-in closed). PAY-6, PAY-7."""
     rows = list(session.participants.filter(status=ACCEPTED).select_related("user").order_by("id"))
-    over = (now or timezone.now()) > session.ends_at
+    over = (now or timezone.now()) > session.ends_at + LATE_CHECK_IN
     return rows, [r.user for r in rows if over and r.checked_in_at is None]
 
 

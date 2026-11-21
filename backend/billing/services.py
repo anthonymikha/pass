@@ -10,7 +10,6 @@ from bookings.models import Session, SessionParticipant, SessionRental
 from bookings.services import is_club_side
 from config.api import BusinessError
 from config.money import minor_units, round_money
-from teams.models import GroupMember
 from teams.services import coachs_players
 from venues.models import Club, ClubMember
 
@@ -45,41 +44,48 @@ def commission_percent(applies_to, payee, day, now=None):
     return max(pool, key=lambda r: (r.effective_from, r.min_count)).percent  # step 3
 
 
-# ---- creating payments (PAY-10 to PAY-16) ----
+# ---- billing (PAY-9 to PAY-16, NOTE-33) ----
 
-def _coach_fee_rows(session):
-    """PAY-12, PAY-13: [(payer, amount)] for the coach fee."""
-    if session.coach_fee <= 0:
-        return []
-    if session.coach_fee_payer_id:  # PAY-13
-        return [(session.coach_fee_payer, session.coach_fee)]
-    rows = SessionParticipant.objects.filter(session=session, status=SessionParticipant.Status.ACCEPTED).exclude(
-        user=session.coach_id).select_related("user").order_by("id")
-    if session.group_id:  # PAY-12: only active members of the group now
-        rows = rows.filter(user__in=GroupMember.objects.filter(group_id=session.group_id, status="active").values("user"))
-    payers = [r.user for r in rows]
-    if not payers:
-        return []
-    unit = Decimal(1).scaleb(-minor_units(session.currency))
-    share = (session.coach_fee / len(payers)).quantize(unit, rounding=ROUND_DOWN)
-    remainder = session.coach_fee - share * len(payers)
+BILL_AFTER = datetime.timedelta(hours=24)  # PAY-10: check-in has closed (PAY-7)
+
+
+def split(amount, payers, currency):
+    """PAY-13: equal shares rounded down to the minor unit; the first payer also pays the remainder."""
+    unit = Decimal(1).scaleb(-minor_units(currency))
+    share = (amount / len(payers)).quantize(unit, rounding=ROUND_DOWN)
+    remainder = amount - share * len(payers)
     return [(user, share + (remainder if i == 0 else 0)) for i, user in enumerate(payers)]
 
 
-def record_payments(session):
-    """PAY-10: the caller is the booker's check-in and holds the session row lock (select_for_update), so the check
-    below and the writes run alone. Returns the rows created (empty when the session already has payments)."""
-    if session.payments.exists():
-        return []
-    now = timezone.now()
-    today = now.astimezone(UTC).date()  # PAY-14
-    wanted = []  # (payer, club, coach, amount)
+def _fees(session):
+    """PAY-11, PAY-12: [(payer, club, coach, amount)] for a session with at least one attendee."""
+    attendees = SessionParticipant.objects.filter(  # ordered by row id, so the booker's row comes first (PAY-13)
+        session=session, status=SessionParticipant.Status.ACCEPTED, checked_in_at__isnull=False).select_related("user")
+    payers = [row.user for row in attendees.order_by("id") if row.user_id != session.coach_id]  # never the session coach
+    wanted = []
     if session.court_id:  # PAY-11
         rentals = session.rentals.filter(status=SessionRental.Status.APPROVED).aggregate(n=Sum("price"))["n"] or 0
-        wanted.append((session.booked_by, session.court.club, None, session.price - session.discount_amount + rentals))
-    wanted += [(payer, None, session.coach, amount) for payer, amount in _coach_fee_rows(session)]
+        amount, club = session.price - session.discount_amount + rentals, session.court.club
+        if session.court_fee_split and payers:
+            wanted += [(payer, club, None, share) for payer, share in split(amount, payers, session.currency)]
+        else:  # paid in full, or split with only the session coach attending: the booker pays it
+            wanted.append((session.booked_by, club, None, amount))
+    if session.coach_fee > 0:  # PAY-12
+        if session.coach_fee_payer_id:  # paid in full, attended or not
+            wanted.append((session.coach_fee_payer, None, session.coach, session.coach_fee))
+        elif payers:  # split; no payers, no row
+            wanted += [(payer, None, session.coach, share) for payer, share in split(session.coach_fee, payers, session.currency)]
+    return wanted
+
+
+def bill(session, now):
+    """PAY-10 for one session whose row the caller has locked and marked billed. Returns the rows created; none when
+    nobody attended (no no-show fees, BOOK-51)."""
+    if not session.participants.filter(status=SessionParticipant.Status.ACCEPTED, checked_in_at__isnull=False).exists():
+        return []
+    today = now.astimezone(UTC).date()  # PAY-14: the billing date
     percents, created = {}, []
-    for payer, club, coach, amount in wanted:
+    for payer, club, coach, amount in _fees(session):
         if amount <= 0:  # PAY-15
             continue
         payee = club or coach
@@ -90,6 +96,24 @@ def record_payments(session):
             session=session, payer=payer, club=club, coach=coach, amount=amount, currency=session.currency,
             platform_fee=round_money(amount * percents[key] / 100, session.currency)))  # PAY-14
     return created
+
+
+def bill_ended_sessions():
+    """PAY-10, NOTE-33: one transaction per session; `billed_at` is set under the session lock, so overlapping ticks
+    bill each session once. Returns how many sessions were billed."""
+    now = timezone.now()
+    due = Session.objects.filter(status=Session.Status.CONFIRMED, billed_at__isnull=True, ends_at__lte=now - BILL_AFTER)
+    billed = 0
+    for pk in due.values_list("pk", flat=True):
+        with transaction.atomic():
+            session = Session.objects.select_for_update().get(pk=pk)  # no select_related: nullable court (Postgres)
+            if session.billed_at:
+                continue
+            session.billed_at = now
+            session.save(update_fields=["billed_at"])
+            bill(session, now)
+        billed += 1
+    return billed
 
 
 # ---- who sees what (PAY-23) ----
@@ -108,31 +132,51 @@ def visible_payments(user):
         "payer", "club", "coach").order_by("-id")
 
 
-# ---- marking paid (PAY-20, PAY-21) ----
+# ---- the payee's ticks (PAY-20, PAY-21, PAY-25) ----
+
+def _locked(payment):
+    return Payment.objects.select_for_update(of=("self",)).select_related("payer", "club", "coach").get(pk=payment.pk)
+
 
 def set_paid(payment, paid):
-    """The view has checked the caller is the payee side. A repeat changes nothing (GEN-5)."""
+    """PAY-20 (received) and PAY-21 (back to due). The view has checked the caller is the payee side. A repeat
+    changes nothing (GEN-5)."""
     with transaction.atomic():
-        payment = Payment.objects.select_for_update(of=("self",)).select_related("payer", "club", "coach").get(pk=payment.pk)
+        payment = _locked(payment)
         if paid:
             if payment.paid_at is not None:
                 return payment
+            if payment.waived_at is not None:
+                raise BusinessError("already_waived", "This payment was waived; move it back to due first.")
             payment.method, payment.paid_at = Payment.Method.OFFLINE, timezone.now()
         else:
             if payment.settled_at:
                 raise BusinessError("already_settled", "The platform's cut of this payment is settled; it cannot go back to due.")
-            if payment.paid_at is None:
+            if payment.paid_at is None and payment.waived_at is None:
                 return payment
-            payment.method, payment.paid_at = "", None
-        payment.save(update_fields=["method", "paid_at"])
+            payment.method, payment.paid_at, payment.waived_at = "", None, None  # PAY-21: also un-waives (PAY-25)
+        payment.save(update_fields=["method", "paid_at", "waived_at"])
+    return payment
+
+
+def waive(payment):
+    """PAY-25: the payee side gives up a due payment. A repeat changes nothing (GEN-5)."""
+    with transaction.atomic():
+        payment = _locked(payment)
+        if payment.waived_at is not None:
+            return payment
+        if payment.paid_at is not None:
+            raise BusinessError("already_paid", "This payment was received; move it back to due first.")
+        payment.waived_at = timezone.now()
+        payment.save(update_fields=["waived_at"])
     return payment
 
 
 # ---- reports (RPT-2, RPT-3, RPT-7) ----
 
 def due_list(payments):
-    """RPT-2: the payments of `payments` not yet paid, and the totals per currency."""
-    rows = payments.filter(paid_at__isnull=True).select_related("payer").order_by("created_at", "id")
+    """RPT-2: the payments of `payments` still due (not received, not waived), and the totals per currency."""
+    rows = payments.filter(paid_at__isnull=True, waived_at__isnull=True).select_related("payer").order_by("created_at", "id")
     totals = rows.order_by().values("currency").annotate(total=Sum("amount")).order_by("currency")
     return {"payments": rows, "totals": list(totals)}
 

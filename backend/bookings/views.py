@@ -5,6 +5,9 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
+from django.db.models import Q
+
+from accounts.models import User
 from teams.services import coachs_players
 from venues.models import Court
 
@@ -246,7 +249,7 @@ class CheckInView(generics.GenericAPIView):
     serializer_class = ParticipantSerializer
 
     def post(self, request, pk, user_id):
-        """PAY-1 to PAY-7: check a participant in; `200` also on a repeat (GEN-5). The booker's check-in creates the payments."""
+        """PAY-1 to PAY-7: check a participant in; `200` also on a repeat (GEN-5). Creates no payments (PAY-10)."""
         session, row = seen_row(request.user, pk, user_id)
         return Response(self.get_serializer(services.check_in(request.user, session, row)).data)
 
@@ -317,11 +320,14 @@ class PlayerHistoryView(generics.ListAPIView):
     serializer_class = PlayerSessionSerializer
 
     def get_queryset(self):
-        """RPT-8: a coach, for one of the coach's players (ACC-1); anyone else's id is a 404."""
+        """RPT-8: a coach, for one of the coach's players (ACC-1) or a player of a session the caller coached (a former
+        team coach keeps the sessions they ran); anyone else's id is a 404 (RPT-9)."""
         coach = self.request.user
         if not coach.is_coach:
             raise PermissionDenied("Only coaches can read player history.")
-        player = get_object_or_404(coachs_players(coach), pk=self.kwargs["user_id"])
+        player = get_object_or_404(User.objects.filter(
+            Q(pk__in=coachs_players(coach).values("pk")) | Q(session_participations__session__coach=coach)).distinct(),
+            pk=self.kwargs["user_id"])
         return services.player_history(coach, player)
 
 

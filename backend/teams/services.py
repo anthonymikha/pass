@@ -22,18 +22,20 @@ def _name(user):
 # --- ACC-1 names (later tasks import these) ---
 
 def group_managers(group):
-    """ACC-1: the owner, and also the coach when the group is a team."""
-    return [u for u in (group.owner, group.coach if group.type == TEAM else None) if u]
+    """ACC-1: a play group's creator; a team's coach only (the creator of a team has no rights). TEAM-34: a team
+    without a coach has none."""
+    manager = group.coach if group.type == TEAM else group.created_by
+    return [manager] if manager else []
 
 
 def is_group_manager(user, group):
-    return user.pk in (group.owner_id, group.coach_id if group.type == TEAM else None)
+    return user.pk == (group.coach_id if group.type == TEAM else group.created_by_id)
 
 
 def coachs_players(coach):
-    """ACC-1: accepted coaching connections from `coach`, active members of teams the coach manages,
+    """ACC-1: accepted coaching connections from `coach`, active members of teams where `coach` is the team coach,
     and shadow players managed by the coach. Never the coach themself."""
-    teams = Group.objects.filter(type=TEAM).filter(Q(owner=coach) | Q(coach=coach))
+    teams = Group.objects.filter(type=TEAM, coach=coach)
     accepted = Connection.objects.filter(user=coach, type=Connection.Type.COACHING, status=Connection.Status.ACCEPTED)
     return User.objects.filter(
         Q(pk__in=accepted.values("other_user"))
@@ -75,7 +77,7 @@ def create_group(user, name, type, sport=None):
         if type == TEAM and not user.is_coach:
             raise BusinessError("not_a_coach", "Only coaches can create teams.")
         group = Group.objects.create(
-            type=type, name=name, sport=sport, owner=user, coach=user if type == TEAM else None)
+            type=type, name=name, sport=sport, created_by=user, coach=user if type == TEAM else None)
         GroupMember.objects.create(group=group, user=user, status=ACTIVE)
         chat.create_group_chat(group, user)
         return group
@@ -134,12 +136,13 @@ def accept_request(group, user_id):
 
 
 def remove_member(group, caller, user_id):
-    """TEAM-26, TEAM-31: leave or decline (own row), remove or reject (a manager, never the owner's row)."""
+    """TEAM-26, TEAM-31: leave or decline (own row), remove or reject (a manager, never a manager's own row)."""
     with transaction.atomic():
         if user_id != caller.pk and not is_group_manager(caller, group):
             raise PermissionDenied("Only a group manager can remove other members.")
-        if user_id == group.owner_id:
-            raise BusinessError("owner_cannot_leave", "The owner cannot leave or be removed; delete the group instead.")
+        if any(m.pk == user_id for m in group_managers(group)):  # TEAM-31
+            raise BusinessError("manager_cannot_leave",
+                                "A group manager cannot leave; hand the team over or delete the group instead.")
         row = _row(group, user_id)
         if not row:
             raise NotFound()
@@ -159,20 +162,34 @@ def add_shadow_player(group, manager, player):
         return row, created
 
 
-def change_coach(group, new_coach):
-    """TEAM-29: `new_coach` is already known to be an active non-shadow user."""
+def seat_coach(group):
+    """TEAM-29, TEAM-35: the team coach gets an active member row and the chat membership (TEAM-28)."""
+    row, _ = GroupMember.objects.select_related("group", "user").get_or_create(
+        group=group, user=group.coach, defaults={"status": ACTIVE})
+    if row.status != ACTIVE:
+        _activate(row)
+    else:
+        chat.add_chat_member(group, group.coach)
+
+
+def hand_over(group, new_coach):
+    """TEAM-29: the view checked the caller is the team coach; `new_coach` is an active non-shadow user."""
     with transaction.atomic():
         if group.type != TEAM:
             raise BusinessError("not_a_team", "Only teams have a coach.")
         if not new_coach.is_coach:
             raise BusinessError("not_a_coach", "This user is not a coach.")
-        group.coach = new_coach
+        previous = group.coach
+        if previous.pk == new_coach.pk:  # GEN-5
+            return group
+        group.coach = new_coach  # created_by stays and gives no rights (ACC-1)
         group.save(update_fields=["coach"])
-        row, _ = GroupMember.objects.get_or_create(group=group, user=new_coach, defaults={"status": ACTIVE})
-        if row.status != ACTIVE:
-            _activate(row)
-        else:
-            chat.add_chat_member(group, new_coach)
+        seat_coach(group)
+        old = _row(group, previous.pk)
+        if old:
+            _remove(old)  # the previous coach leaves the team and its chat (TEAM-28)
+        from bookings.services import hand_over_training  # downward call (docs/backend/README.md); lazy: it imports us
+        hand_over_training(group, previous, new_coach)
         return group
 
 

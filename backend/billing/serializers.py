@@ -17,7 +17,7 @@ class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
         fields = ["id", "session", "payer", "club", "coach", "amount", "currency", "platform_fee", "method", "paid_at",
-                  "settled_at", "created_at"]
+                  "waived_at", "settled_at", "created_at"]
 
     def get_club(self, payment) -> dict | None:
         return payment.club and {"id": payment.club_id, "name": payment.club.name}

@@ -30,12 +30,14 @@ class Session(models.Model):
     currency = models.CharField(max_length=3)
     price = models.DecimalField(max_digits=12, decimal_places=3)
     coach_fee = models.DecimalField(max_digits=12, decimal_places=3, default=0)
-    # null = coach fee split equally between team members; set = this user is billed the whole fee
+    # null = coach fee split among the attendees; set = this user pays all of it (PAY-9)
     coach_fee_payer = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="coach_fees_billed"
     )
     discount = models.ForeignKey(Discount, null=True, blank=True, on_delete=models.SET_NULL, related_name="sessions")
     discount_amount = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    court_fee_split = models.BooleanField(default=False)  # PAY-9: false = the booker pays the court fee in full
+    billed_at = models.DateTimeField(null=True, blank=True)  # PAY-10: set once, when the payments were created
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

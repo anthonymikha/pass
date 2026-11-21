@@ -17,7 +17,7 @@ from .serializers import (
 
 
 def groups():
-    return Group.objects.select_related("owner", "coach").annotate(
+    return Group.objects.select_related("created_by", "coach").annotate(
         member_count=Count("members", filter=Q(members__status=GroupMember.Status.ACTIVE)))
 
 
@@ -26,16 +26,13 @@ def member_response(row, created):
 
 
 class GroupBaseView(generics.GenericAPIView):
-    """Every group is visible by id (TEAM-21); `manager_only` / `owner_only` turn it into a 403 for others."""
+    """Every group is visible by id (TEAM-21); `manager_only` turns it into a 403 for others."""
 
     serializer_class = GroupSerializer
     manager_only = False
-    owner_only = False
 
     def get_group(self, pk):
         group = get_object_or_404(groups(), pk=pk)
-        if self.owner_only and group.owner_id != self.request.user.pk:
-            raise PermissionDenied("Only the group owner can do this.")
         if self.manager_only and not services.is_group_manager(self.request.user, group):
             raise PermissionDenied("Only a group manager can do this.")
         return group
@@ -60,16 +57,16 @@ class GroupDetailView(GroupBaseView):
 
     @extend_schema(request=GroupRenameSerializer)
     def patch(self, request, pk):
-        """TEAM-30: the owner renames."""
-        self.owner_only = True
+        """TEAM-30: a group manager renames."""
+        self.manager_only = True
         serializer = GroupRenameSerializer(self.get_group(pk), data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(self.get_serializer(self.get_group(pk)).data)
 
     def delete(self, request, pk):
-        """TEAM-30: the owner."""
-        self.owner_only = True
+        """TEAM-30: a group manager."""
+        self.manager_only = True
         services.delete_group(self.get_group(pk))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -148,16 +145,16 @@ class GroupShadowPlayersView(GroupBaseView):
 
 class GroupCoachView(GroupBaseView):
     serializer_class = CoachSerializer
-    owner_only = True
+    manager_only = True  # TEAM-29: the team coach; for a play group the creator gets not_a_team
 
     @extend_schema(responses=GroupSerializer)
     def post(self, request, pk):
-        """TEAM-29."""
+        """TEAM-29: hand the team over."""
         group = self.get_group(pk)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        services.change_coach(group, serializer.validated_data["coach"])
-        return Response(GroupSerializer(self.get_group(pk)).data)
+        services.hand_over(group, serializer.validated_data["coach"])
+        return Response(GroupSerializer(groups().get(pk=pk)).data)  # the caller may no longer be a manager
 
 
 class UserSearchView(generics.ListAPIView):

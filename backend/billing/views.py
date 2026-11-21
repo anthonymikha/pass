@@ -30,17 +30,23 @@ class PaymentView(generics.RetrieveAPIView):
         return services.visible_payments(self.request.user)  # GEN-3, PAY-23: anyone else gets a 404
 
 
-class PaymentPaidView(generics.GenericAPIView):
-    """PAY-20, PAY-21: the payee side only. `paid` is set by `as_view(paid=...)`; `200` also on a repeat (GEN-5)."""
+class PayeeTickView(generics.GenericAPIView):
+    """PAY-20 received (`mark-paid/`), PAY-21 back to due (`mark-due/`), PAY-25 waive (`waive/`): the payee side only.
+    `action` is set by `as_view(action=...)`; `200` also on a repeat (GEN-5)."""
 
     serializer_class = PaymentSerializer
-    paid = True
+    action = "paid"
 
+    @extend_schema(request=None)
     def post(self, request, pk):
         payment = get_object_or_404(services.visible_payments(request.user), pk=pk)
-        if not services.is_payee_side(request.user, payment):  # the payer sees the row but may not tick it
+        if not services.is_payee_side(request.user, payment):  # the payer sees the row but may not tick it (PAY-24)
             raise PermissionDenied("Only the payee can mark a payment.")
-        return Response(self.get_serializer(services.set_paid(payment, self.paid)).data)
+        if self.action == "waive":
+            payment = services.waive(payment)
+        else:
+            payment = services.set_paid(payment, self.action == "paid")
+        return Response(self.get_serializer(payment).data)
 
 
 def period(request, tz):
