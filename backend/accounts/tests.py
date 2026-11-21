@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.test import SimpleTestCase, override_settings
 from rest_framework import exceptions, serializers
+from rest_framework.authtoken.models import Token
 from rest_framework.settings import api_settings
 from rest_framework.test import APITestCase
 
@@ -13,8 +14,11 @@ from config.api import BusinessError, VisibleRelatedField, exception_handler
 from config.storage import UUID, get_storage
 from config.money import minor_units, round_money, validate_currency, validate_typed_money
 
+from bookings import tests as bookings_tests
+
 from . import services
 from .models import Connection, Device, User, UserBlockout
+from .services import outbox as accounts_outbox
 from .serializers import BlockoutSerializer
 
 PASSWORD = "court-side-42"
@@ -756,3 +760,169 @@ class ConventionTests(SimpleTestCase):
         s = S(stored, data={"start_time": "18:00"}, partial=True)
         self.assertFalse(s.is_valid())
         self.assertIn("end_time", s.errors)
+
+
+@override_settings(STORAGE_ENDPOINT="")  # REC-3: the in-memory fake
+class DeleteAccountTests(bookings_tests.PaymentBase):
+    def setUp(self):
+        super().setUp()
+        get_storage.cache_clear()
+        self.addCleanup(get_storage.cache_clear)
+
+    def delete_me(self, user, password=PASSWORD, expect=204, push=False):
+        return self.call("delete", "me/", user, {"password": password}, expect, push)
+
+    def test_delete_account_journey(self):
+        """ACC-33, ACC-34, ACC-20, ACC-23, TEAM-34, TEAM-35, TEAM-28, TEAM-30, BOOK-22, BOOK-50, PAY-20, PAY-25, NOTE-20:
+        the password first, a club owner cannot; then upcoming sessions are cancelled or declined, groups left, data
+        deleted, the row scrubbed and deactivated; money and other people's history stay; nobody manages the team
+        until an admin gives it a coach."""
+        from chat.models import Chat, ChatMember, Message
+        from teams.models import Group, GroupMember
+        from venues.models import ClubMember
+        from wellness.models import Exercise, ExerciseAssignment, SleepLog, SorenessLog, UserAchievement
+        Session, SessionParticipant, Payment = bookings_tests.Session, bookings_tests.SessionParticipant, bookings_tests.Payment
+        at, MON, TUE = bookings_tests.at, bookings_tests.MON, bookings_tests.TUE
+        pat, ann, ben, cora, zed = (self.user(n) for n in ("pat", "ann", "ben", "cora", "zed"))
+        for coach in (pat, cora):
+            coach.is_coach = True
+            coach.save()
+        kid = self.shadow("Kid", pat)
+        storage = get_storage()
+        pat.avatar = f"avatars/{pat.id}/face.jpg"
+        pat.phone, pat.coach_bio, pat.nationality, pat.date_of_birth = "555", "Ex-pro", "LB", datetime.date(1990, 1, 1)
+        pat.save()
+        storage.put(pat.avatar.name)
+        self.befriend(pat, ann)
+        Connection.objects.create(user=pat, other_user=zed, type="friend", status="blocked")
+        Connection.objects.create(user=pat, other_user=ben, type="coaching", status="accepted")
+        UserBlockout.objects.create(user=pat, starts_on=MON, start_time=datetime.time(8), end_time=datetime.time(9))
+        ClubMember.objects.create(club=self.club, user=pat, role="coach", status="active")
+
+        # sessions: Pat's upcoming booking (Ann accepted), a request to Pat, Ann's booking with Pat, a past one with RPE
+        booked = Session.objects.get(pk=self.book(pat, at(MON, 10), at(MON, 11), invitees=[ann.id]).data["id"])
+        self.accept(ann, booked)
+        asked = Session.objects.get(pk=self.call("post", "training-requests/", ben, {
+            "coach": pat.id, "sport": self.basketball.id, "starts_at": bookings_tests.z(at(MON, 12)),
+            "ends_at": bookings_tests.z(at(MON, 13))}, 201).data["id"])
+        anns = Session.objects.get(pk=self.book(ann, at(MON, 14), at(MON, 15), invitees=[pat.id]).data["id"])
+        self.accept(pat, anns)
+        past = self.session(self.court1, at(datetime.date(2026, 12, 7), 10), at(datetime.date(2026, 12, 7), 11), ann)
+        SessionParticipant.objects.create(session=past, user=pat, status="accepted", checked_in_at=past.starts_at, rpe=7)
+        owes = Payment.objects.create(session=past, payer=pat, club=self.club, amount=50, currency="USD", platform_fee=5)
+        owed = Payment.objects.create(session=past, payer=ann, coach=pat, amount=40, currency="USD", platform_fee=4)
+        # groups: Pat's play group, Pat's team (Ann, Kid), Cora's team with Pat in it
+        park = self.call("post", "groups/", pat, {"name": "Park", "type": "play_group"}, 201).data["id"]
+        self.call("post", f"groups/{park}/members/", pat, {"user": ann.id}, 201)
+        self.call("post", f"groups/{park}/accept/", ann, expect=200)
+        team = self.call("post", "groups/", pat, {"name": "Tigers", "type": "team"}, 201).data["id"]
+        self.call("post", f"groups/{team}/members/", pat, {"user": ann.id}, 201)
+        self.call("post", f"groups/{team}/accept/", ann, expect=200)
+        self.call("post", f"groups/{team}/shadow-players/", pat, {"player": kid.id}, 201)
+        coras = self.call("post", "groups/", cora, {"name": "Lions", "type": "team"}, 201).data["id"]
+        self.call("post", f"groups/{coras}/members/", cora, {"user": pat.id}, 201)
+        self.call("post", f"groups/{coras}/accept/", pat, expect=200)
+        # wellness and chat
+        exercise = Exercise.objects.create(name="Stretch", kind="stretch", min_soreness=0, max_soreness=10)
+        ExerciseAssignment.objects.create(exercise=exercise, user=pat, assigned_by=cora)
+        given = ExerciseAssignment.objects.create(exercise=exercise, user=ann, assigned_by=pat)
+        SleepLog.objects.create(user=pat, sleep_start=at(MON, 0), sleep_end=at(MON, 7), source="manual")
+        SorenessLog.objects.create(user=pat, logged_on=MON, period="morning", body_area="neck", level=3)
+        UserAchievement.objects.create(user=pat, achievement_code="first", earned_at=at(MON, 9))
+        direct = self.call("post", "chats/direct/", pat, {"user": ann.id}, 201).data["id"]
+        self.call("post", f"chats/{direct}/messages/", pat, {"body": "See you"}, 201)
+        token = Token.objects.get_or_create(user=pat)[0].key
+
+        # ACC-33: the password is checked first, then owning a club
+        self.assertIn("password", self.call("delete", "me/", pat, {}, 400).data)
+        self.assertIn("password", self.delete_me(pat, "wrong", 400).data)
+        self.code(self.delete_me(self.owner, expect=400), 400, "owns_club")
+        self.assertTrue(User.objects.get(pk=pat.pk).is_active)
+
+        accounts_outbox.clear()
+        self.delete_me(pat, push=True)
+
+        # step 1: Pat's booking cancelled (Ann told), the request declined (Ben told), Pat declined in Ann's; the past stays
+        for s in (booked, asked, anns):
+            s.refresh_from_db()
+        self.assertEqual((booked.status, asked.status, anns.status), ("cancelled", "cancelled", "confirmed"))
+        self.assertEqual([len(self.pushed(u, kind)) for u, kind in ((ann, "session_cancelled"), (ben, "training_declined"))], [1, 1])
+        self.assertEqual(anns.participants.get(user=pat).status, "declined")
+        self.assertEqual(SessionParticipant.objects.get(session=past, user=pat).rpe, 7)
+        # step 2: the play group is gone, its chat kept without members; the team has no coach and no creator;
+        # Pat left Cora's team and its chat
+        self.assertFalse(Group.objects.filter(pk=park).exists())
+        tigers = Group.objects.get(pk=team)
+        self.assertEqual((tigers.coach, tigers.created_by), (None, None))
+        self.assertFalse(GroupMember.objects.filter(user=pat).exists())
+        self.assertEqual(set(GroupMember.objects.filter(group=tigers).values_list("user", flat=True)), {ann.pk, kid.pk})
+        self.assertFalse(ChatMember.objects.filter(user=pat).exists())
+        self.assertTrue(ChatMember.objects.filter(chat__group=tigers, user=ann).exists())
+        # step 3: Kid is nobody's now, still on the team
+        kid.refresh_from_db()
+        self.assertIsNone(kid.managed_by)
+        # step 4: deleted
+        self.assertFalse(Token.objects.filter(user=pat).exists() or Device.objects.filter(user=pat).exists())
+        self.assertFalse(Connection.objects.filter(user=pat).exists() or Connection.objects.filter(other_user=pat).exists())
+        self.assertFalse(UserBlockout.objects.filter(user=pat).exists() or ClubMember.objects.filter(user=pat).exists())
+        for model in (SleepLog, SorenessLog, ExerciseAssignment, UserAchievement):
+            self.assertFalse(model.objects.filter(user=pat).exists(), model)
+        # step 5: scrubbed and deactivated; the avatar file is gone after commit
+        pat.refresh_from_db()
+        self.assertEqual((pat.full_name, pat.email, pat.phone, pat.coach_bio, pat.nationality, pat.date_of_birth, pat.is_coach,
+                          pat.timezone, pat.avatar.name, pat.is_active, pat.has_usable_password()),
+                         ("Deleted user", f"deleted-{pat.id}@invalid", "", "", "", None, False, "UTC", "", False, False))
+        self.assertNotIn(f"avatars/{pat.id}/face.jpg", storage.keys)
+        # kept: payments both ways, the assignment Pat made, Pat's message, the chat for Ann
+        self.assertTrue(ExerciseAssignment.objects.filter(pk=given.pk).exists())
+        self.assertEqual(Message.objects.get(chat_id=direct).sender_id, pat.id)
+        self.assertTrue(Chat.objects.filter(pk=direct).exists())
+        self.assertEqual(Payment.objects.filter(pk__in=[owes.pk, owed.pk]).count(), 2)
+
+        # ACC-34: signed out everywhere, cannot log in, never found; shown as "Deleted user"; the email is free again
+        self.client.force_authenticate(None)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+        self.assertEqual(self.client.get("/api/me/").status_code, 401)
+        self.client.credentials()
+        self.assertEqual(self.client.post("/api/auth/login/", {"email": "pat@example.com", "password": PASSWORD}).status_code, 400)
+        self.call("get", f"users/{pat.id}/", ann, expect=404)
+        self.assertEqual(self.call("get", "users/?q=Deleted", ann, expect=200).data["count"], 0)
+        r = self.call("get", f"payments/{owes.id}/", self.owner, expect=200).data
+        self.assertEqual(r["payer"]["full_name"], "Deleted user")
+        self.assertEqual(self.client.post("/api/auth/register/", {"email": "pat@example.com", "password": PASSWORD, "full_name": "Pat"}).status_code, 201)
+        # ACC-34: the club may still receive or waive what Pat owes; what is owed to Pat nobody can mark
+        self.call("post", f"payments/{owes.id}/waive/", self.owner, expect=200)
+        self.call("post", f"payments/{owed.id}/mark-paid/", ann, expect=403)
+
+        # TEAM-34: the team has no manager: nobody can invite, rename or hand it over; members may still leave
+        for who in (ann, cora):
+            self.call("post", f"groups/{team}/members/", who, {"user": ben.id}, 403)
+            self.call("patch", f"groups/{team}/", who, {"name": "Mine"}, 403)
+        # TEAM-35: a platform admin gives it a coach in the Django admin; Cora is seated as a member and in the chat
+        admin = User.objects.create_superuser("admin@example.com", PASSWORD, full_name="Admin")
+        self.client.force_authenticate(None)
+        self.client.force_login(admin)
+        r = self.client.post(f"/admin/teams/group/{team}/change/", {"type": "team", "name": "Tigers", "coach": cora.id,
+                                                                     "created_by": "", "sport": ""})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(GroupMember.objects.get(group_id=team, user=cora).status, "active")
+        self.assertTrue(ChatMember.objects.filter(chat__group_id=team, user=cora).exists())
+        self.client.logout()
+        self.call("post", f"groups/{team}/members/", cora, {"user": ben.id}, 201)
+        self.call("delete", f"groups/{team}/members/{ann.id}/", ann, expect=204)
+
+    def test_admin_deactivation_is_not_deletion(self):
+        """ACC-35, ACC-30: an admin's deactivation stops sign-in like a wrong password and scrubs nothing; switching it
+        back on restores the account."""
+        ann = self.user("ann")
+        self.client.force_authenticate(None)
+        login = {"email": "ann@example.com", "password": PASSWORD}
+        token = self.client.post("/api/auth/login/", login).data["token"]
+        User.objects.filter(pk=ann.pk).update(is_active=False)
+        r = self.client.post("/api/auth/login/", login)
+        wrong = self.client.post("/api/auth/login/", {**login, "password": "nope-nope-1"})
+        self.assertEqual((r.status_code, r.data), (wrong.status_code, wrong.data))
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+        self.assertEqual(self.client.get("/api/me/").status_code, 401)
+        User.objects.filter(pk=ann.pk).update(is_active=True)
+        self.assertEqual(self.client.get("/api/me/").data["full_name"], "Ann")
