@@ -1,6 +1,6 @@
 # Push notifications and the scheduler (NOTE)
 
-**Status: built, except the changes from the owner's review of 2026-11-20 to NOTE-3 and NOTE-30, which are planned** (the `payment_due` and `payment_marked` triggers of NOTE-20 and NOTE-33 are built, 2026-11-21). Built: devices and the sender in `backend/accounts/`, `tick` in `backend/bookings/management/commands/`, the `scheduler` service in `docker-compose.yml`). The Firebase sender is tested with the HTTP layer mocked; it has not sent a real push yet (no Firebase project).
+**Status: built, except the change from the owner's review of 2026-11-20 to NOTE-30 (the scheduler waits for a healthy backend), which is planned** (NOTE-3, the `payment_due` and `payment_marked` triggers of NOTE-20, and NOTE-33 are built, 2026-11-21). Built: devices and the sender in `backend/accounts/`, `tick` in `backend/bookings/management/commands/`, the `scheduler` service in `docker-compose.yml`). The Firebase sender is tested with the HTTP layer mocked; it has not sent a real push yet (no Firebase project).
 
 ## Devices
 

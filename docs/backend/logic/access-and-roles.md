@@ -1,6 +1,6 @@
 # Access and roles (ACC)
 
-**Status: built, except sign-out and password reset from the owner's review of 2026-11-20, which are planned** (ACC-30 to ACC-32; account deletion and deactivation, ACC-33 to ACC-35, built 2026-11-21). The changes from the review of 2026-11-17 (marked *review 2026-11-17*: ACC-1 group manager and coach's players, ACC-6, ACC-7, ACC-12) are built (2026-11-21). ACC-10 to ACC-13 in `backend/accounts/`, ACC-20 to ACC-23 in `backend/teams/` (avatar links arrive with REC-30). The names and default rules are applied by every endpoint. Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
+**Status: built** (the changes from the owner's reviews of 2026-11-17 and 2026-11-20, ACC-30 to ACC-35 included, built 2026-11-21). The changes from the review of 2026-11-17 (marked *review 2026-11-17*: ACC-1 group manager and coach's players, ACC-6, ACC-7, ACC-12) are built (2026-11-21). ACC-10 to ACC-13 in `backend/accounts/`, ACC-20 to ACC-23 in `backend/teams/` (avatar links arrive with REC-30). The names and default rules are applied by every endpoint. Who is who, and the default rules for seeing and changing things. Each other page adds its own "who may" line per action, using the names defined here.
 
 ## Names used on every page
 
@@ -61,7 +61,7 @@
 
 ## Your account
 
-*Review 2026-11-20, planned.* Register, login and the profile are described on the [accounts API page](../api/accounts.md); these rules add sign-out, password reset and account deletion.
+*Review 2026-11-20, built 2026-11-21.* Register, login and the profile are described on the [accounts API page](../api/accounts.md); these rules add sign-out, password reset and account deletion.
 
 **ACC-30.** **Tokens.** One token per user, with no expiry; logging in again returns the same token. Only a password reset (ACC-32) or deleting the account (ACC-33) deletes it, which signs the user out on every device.
 
@@ -85,6 +85,8 @@ Email goes out through the SMTP server named in the settings (`EMAIL_HOST` and t
 
 **ACC-34.** **After deletion.** The user shows as "Deleted user" wherever they appear, and is never found by search or by profile id (ACC-20, ACC-23: inactive). Payments they owe stay due; the payee may still receive or waive them (PAY-20, PAY-25). Payments owed to them as a coach stay due, and nobody can mark them any more; paid ones can still be settled by a platform admin (COM-10).
 
+**ACC-35.** A platform admin setting `is_active = false` in the Django admin is **deactivation**, not deletion: nothing is scrubbed or removed, sign-in stops (login answers like a wrong password), and setting it back restores the account. Only ACC-33 deletes an account.
+
 **ACC-36.** *Decided during build (2026-11-21), what ACC-33 leaves open:* the body is checked before the rule (GEN-4): a missing or wrong `password` is `400` on `password`, then `owns_club`. In step 1 a request the user made is withdrawn and one made to them is declined (BOOK-22, the other side is told); a confirmed session is cancelled as BOOK-50 with the user as the caller (everyone else listed is told); rows in sessions that are already cancelled are left alone. Teams the user created get `created_by` emptied (step 2). The avatar is emptied in the transaction and its file deleted after commit. Each later app forgets the user through one function called from `accounts.services.delete_account` ([backend README](../README.md)).
 
-**ACC-35.** A platform admin setting `is_active = false` in the Django admin is **deactivation**, not deletion: nothing is scrubbed or removed, sign-in stops (login answers like a wrong password), and setting it back restores the account. Only ACC-33 deletes an account.
+**ACC-37.** *Decided during build (2026-11-21), what ACC-31 and ACC-32 leave open:* a `device_token` that is not the caller's is ignored (`204`). A malformed `email` on reset is `400` on `email` (it says nothing about accounts). The reset email is Django's built-in text, sent from `DEFAULT_FROM_EMAIL`; the link is `http://` instead of `https://` only while `DEBUG` is on. `PASS_HOST` defaults to `localhost:8000`. The confirm page is Django's own page (the admin's look, without the admin's links); after success `/account/reset/done/` tells the user to go back to the app and sign in. SMTP uses STARTTLS (`EMAIL_USE_TLS=1`, port 587) unless `.env` says otherwise.
