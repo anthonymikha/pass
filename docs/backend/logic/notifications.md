@@ -1,6 +1,6 @@
 # Push notifications and the scheduler (NOTE)
 
-**Status: built, except the changes from the owner's review of 2026-11-20, which are planned** (marked *review 2026-11-20*: NOTE-3, NOTE-20, NOTE-30, NOTE-33). Built: devices and the sender in `backend/accounts/`, `tick` in `backend/bookings/management/commands/`, the `scheduler` service in `docker-compose.yml`). The Firebase sender is tested with the HTTP layer mocked; it has not sent a real push yet (no Firebase project).
+**Status: built, except the changes from the owner's review of 2026-11-20 to NOTE-3 and NOTE-30, which are planned** (the `payment_due` and `payment_marked` triggers of NOTE-20 and NOTE-33 are built, 2026-11-21). Built: devices and the sender in `backend/accounts/`, `tick` in `backend/bookings/management/commands/`, the `scheduler` service in `docker-compose.yml`). The Firebase sender is tested with the HTTP layer mocked; it has not sent a real push yet (no Firebase project).
 
 ## Devices
 
@@ -56,6 +56,6 @@ Shadow players have no devices, so they never receive pushes. Nobody receives a 
 
 **NOTE-32.** *Decided during build (2026-11-16):* the service-account file is read once per process. Only Firebase's `UNREGISTERED` answer deletes a device (NOTE-12); a malformed-token answer is logged like any other failure. Each reminder row is claimed with a conditional update before the push is sent, so overlapping ticks never remind twice; a push that then fails is not retried (at most once). The reminder window includes both ends (`ends_at` exactly 7 days ago is still reminded). A push carries `data = {"type": <trigger>, "id": <object id>}`, all values as strings.
 
-**NOTE-33.** **Billing** (*review 2026-11-17*, built 2026-11-21; the push is planned). Each tick bills the sessions whose check-in has closed (PAY-10). A session is billed once: `billed_at` is set under the session lock, so overlapping ticks and a scheduler that was down never bill twice or miss a session. After each session's billing commits, each new payment row sends `payment_due` to its payer, with the payment id, the amount, the currency and the payee's name (*review 2026-11-20*; before, billing sent no push). A push that fails is not retried.
+**NOTE-33.** **Billing** (*review 2026-11-17*, built 2026-11-21). Each tick bills the sessions whose check-in has closed (PAY-10). A session is billed once: `billed_at` is set under the session lock, so overlapping ticks and a scheduler that was down never bill twice or miss a session. After each session's billing commits, each new payment row sends `payment_due` to its payer, with the payment id, the amount, the currency and the payee's name (*review 2026-11-20*; before, billing sent no push). A push that fails is not retried.
 
 **NOTE-9.** New column `session_participants.rpe_reminded_at` (nullable) supports NOTE-31. Approved by the owner at review, 2026-11-16.

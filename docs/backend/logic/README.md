@@ -53,7 +53,7 @@ Four more from the owner's review of 2026-11-17, **built** (2026-11-21: migratio
 | `payments` | New column `waived_at` (nullable): the payee gave the payment up | PAY-25 |
 | `groups` | `owner` renamed `created_by`, now nullable (emptied if that account is deleted); history only, gives no rights | ACC-1, TEAM-20, TEAM-29 |
 
-One more from the owner's review of 2026-11-20, **planned**:
+One more from the owner's review of 2026-11-20, **built** (2026-11-21: migration `billing/0003`):
 
 | Table | Change | Rule |
 |---|---|---|

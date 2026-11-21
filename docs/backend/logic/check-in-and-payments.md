@@ -1,6 +1,6 @@
 # Check-in and payments (PAY)
 
-**Status: built, except the changes from the owner's review of 2026-11-20, which are planned** (marked *review 2026-11-20*: PAY-20, PAY-21, PAY-23 to PAY-27). The changes from the review of 2026-11-17 (marked *review 2026-11-17*: PAY-2, PAY-4, PAY-6 to PAY-16, PAY-21, PAY-25) are built (2026-11-21). Check-in in `backend/bookings/`, payments in `backend/billing/`; API pages [bookings](../api/bookings.md), [billing](../api/billing.md). Attendance, how each fee is paid, and the payment rows that record money owed. There is no payment gateway: money changes hands at the court, and the payee ticks it off.
+**Status: built** (the changes from the owner's reviews of 2026-11-17 and 2026-11-20, marked *review 2026-11-17*: PAY-2, PAY-4, PAY-6 to PAY-16, PAY-21, PAY-25, and *review 2026-11-20*: PAY-20, PAY-21, PAY-23 to PAY-27, built 2026-11-21). Check-in in `backend/bookings/`, payments in `backend/billing/`; API pages [bookings](../api/bookings.md), [billing](../api/billing.md). Attendance, how each fee is paid, and the payment rows that record money owed. There is no payment gateway: money changes hands at the court, and the payee ticks it off.
 
 ## Check-in
 
@@ -81,6 +81,8 @@ The booker's row is created first, so a booker who is a payer takes the remainde
 **PAY-27.** **Undo declare.** Who may: the payer. Allowed while `paid_at` is empty; received: `400 already_paid`. Effect: `payer_marked_at` emptied. Not declared: no change (GEN-5).
 
 **PAY-28.** *Decided during build (2026-11-21), codes PAY-25 leaves open:* waiving answers like marking received (PAY-24): the payer gets `403` (they can see the row), anyone else `404`; a repeat returns `200` with the first `waived_at`. The ticks are `POST /api/payments/<id>/mark-paid/` (received), `mark-due/` (back to due) and `waive/`.
+
+**PAY-29.** *Decided during build (2026-11-21), what PAY-26 and PAY-27 leave open:* `POST /api/payments/<id>/declare-paid/` and `undo-declare/`. The payee side gets `403` (they can see the row), anyone else `404`. Checks in order: received (`already_paid`), a repeat (`200`, no change, no push), waived (`already_waived`, declaring only). Undoing on a waived payment is allowed. The `payment_marked` push never goes to the payer themselves (a payer who is also club staff), and expired staff are not the payee side (ACC-2). The `payment_due` and `payment_marked` pushes carry the amount rounded to the currency's minor units in the text (`"You owe 37.98 EUR to Hoops"`, `"Rana says they paid 37.98 EUR"`) and `{"type", "id"}` with the payment id as data (NOTE-14).
 
 State of a payment row:
 

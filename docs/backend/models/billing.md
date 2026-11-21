@@ -16,7 +16,7 @@ One row per amount **owed** by one person to one payee for one session. A row sa
 | `amount`, `currency` | What is owed |
 | `platform_fee` | The platform's cut of this payment, in the same currency, fixed at creation |
 | `method` | Empty until paid. `offline` today; `online` once a gateway exists |
-| `payer_marked_at` | When the payer said "I paid" (planned, review 2026-11-20, [PAY-26](../logic/check-in-and-payments.md#marking-paid)). A claim only: the row stays due until `paid_at` is set |
+| `payer_marked_at` | When the payer said "I paid" (review 2026-11-20, [PAY-26](../logic/check-in-and-payments.md#marking-paid)). A claim only: the row stays due until `paid_at` is set |
 | `paid_at` | When the payee received it. Empty (and not waived) = still due |
 | `waived_at` | When the payee gave it up ([PAY-25](../logic/check-in-and-payments.md#marking-paid)). Set = not owed |
 | `settled_at` | When the platform's cut was settled with the payee. Empty = still owed |
