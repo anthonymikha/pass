@@ -2081,7 +2081,8 @@ class TickTests(BookingBase):
         SessionParticipant.objects.filter(pk=ahead_row.pk).update(checked_in_at=NOW)
 
         self.tick()
-        self.assertEqual([(p["user_id"], p["data"]) for p in accounts.outbox], [
+        reminders = lambda: [p for p in accounts.outbox if p["data"]["type"] == "rpe_reminder"]  # noqa: E731 (not payment_due)
+        self.assertEqual([(p["user_id"], p["data"]) for p in reminders()], [
             (rana.id, {"type": "rpe_reminder", "id": str(due.id)}), (gus.id, {"type": "rpe_reminder", "id": str(edge.id)})])
         self.assertEqual(len(self.pushed(rana, "rpe_reminder")), 1)
         for r in (row, edge_row):
@@ -2091,12 +2092,12 @@ class TickTests(BookingBase):
 
         accounts.outbox.clear()  # safe to run twice in a row
         self.tick()
-        self.assertEqual(accounts.outbox, [])
+        self.assertEqual(accounts.outbox, [])  # nothing billed twice either
 
         # the scheduler was down while the later session ended: it is caught up on the next tick, once
         self.clock.return_value = NOW + 3 * hour
         self.tick()
         self.tick()
-        self.assertEqual([(p["user_id"], p["data"]["id"]) for p in accounts.outbox], [(rana.id, str(ahead.id))])
+        self.assertEqual([(p["user_id"], p["data"]["id"]) for p in reminders()], [(rana.id, str(ahead.id))])
         ahead_row.refresh_from_db()
         self.assertEqual(ahead_row.rpe_reminded_at, NOW + 3 * hour)

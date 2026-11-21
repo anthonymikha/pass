@@ -126,6 +126,82 @@ class PaymentTests(base.PaymentBase):
         # the payer sees the waived row (PAY-23)
         self.assertEqual(self.call("get", f"payments/{row.id}/", ben, expect=200).data["waived_at"], z(at(base.TUE, 15)))
 
+    def test_declare_paid_journey(self):
+        """PAY-26, PAY-27, PAY-20, PAY-21, PAY-23, PAY-25, PAY-29, NOTE-20, NOTE-33, RPT-2, GEN-5: billing pushes
+        payment_due to each payer (not to a shadow player); the payer declares paid, which pushes the payee side and
+        keeps the payment due; only the payee's tick makes it paid; undo; refusals."""
+        rana, ben, sam, sue, sami, pat = (self.user(n) for n in ("rana", "ben", "sam", "sue", "sami", "pat"))
+        sami.is_coach = True
+        sami.save()
+        self.staff(sam)
+        self.staff(sue, expires_on=dt.date(2026, 12, 31))  # expired staff: not the payee side any more (ACC-2)
+        kid = self.shadow("Kid", sami)
+        Connection.objects.create(user=sami, other_user=ben, type="coaching", status="accepted")
+        court = Session.objects.get(pk=self.book(rana, at(MON, 10), at(MON, 11)).data["id"])
+        training = self.train(sami, at(MON, 12), at(MON, 13), fee="40", player=ben.id)
+        kids = self.train(sami, at(MON, 14), at(MON, 15), fee="25", player=kid.id)
+        for session, who in ((court, rana), (training, sami), (kids, sami)):
+            self.clock.return_value = session.starts_at
+            self.check_in(who, session)
+        self.clock.return_value = at(base.TUE, 15)
+        base.accounts.outbox.clear()
+        self.tick()
+
+        # NOTE-33: one payment_due per new row, to its payer, naming the amount, currency and payee; the kid has no device
+        club_row, coach_row = Payment.objects.get(club=self.club), Payment.objects.get(coach=sami, payer=ben)
+        due = [(p["user_id"], p["body"], p["data"]) for p in base.accounts.outbox if p["data"]["type"] == "payment_due"]
+        self.assertEqual(due, [(rana.id, "You owe 50.00 USD to Hoops", {"type": "payment_due", "id": str(club_row.id)}),
+                               (ben.id, "You owe 40.00 USD to Sami", {"type": "payment_due", "id": str(coach_row.id)})])
+        self.assertTrue(Payment.objects.filter(payer=kid).exists())
+        base.accounts.outbox.clear()
+        self.tick()
+        self.assertEqual(base.accounts.outbox, [])  # billed once, pushed once
+
+        # PAY-29: only the payer declares; the payee side sees the row (403), anyone else 404
+        for who, status in ((self.owner, 403), (sam, 403), (pat, 404), (ben, 404)):
+            self.call("post", f"payments/{club_row.id}/declare-paid/", who, expect=status)
+            self.call("post", f"payments/{club_row.id}/undo-declare/", who, expect=status)
+        self.call("post", f"payments/{coach_row.id}/declare-paid/", sami, expect=403)
+
+        # PAY-26: Rana declares; the owner and current staff are told, not Rana, not expired staff; a repeat sends nothing
+        self.clock.return_value = at(base.TUE, 16)
+        r = self.call("post", f"payments/{club_row.id}/declare-paid/", rana, expect=200, push=True)
+        self.assertEqual((r.data["payer_marked_at"], r.data["paid_at"]), (z(at(base.TUE, 16)), None))
+        marked = [p["user_id"] for p in base.accounts.outbox if p["data"]["type"] == "payment_marked"]
+        self.assertEqual(sorted(marked), sorted([self.owner.id, sam.id]))
+        self.assertEqual(self.pushed(sam, "payment_marked")[0]["body"], "Rana says they paid 50.00 USD")
+        base.accounts.outbox.clear()
+        self.clock.return_value = at(base.TUE, 17)
+        r = self.call("post", f"payments/{club_row.id}/declare-paid/", rana, expect=200, push=True)
+        self.assertEqual((r.data["payer_marked_at"], base.accounts.outbox), (z(at(base.TUE, 16)), []))
+        # RPT-2, PAY-23: still due and in the totals, with the declaration showing; both sides see it
+        dues = self.call("get", f"clubs/{self.club.id}/dues/", sam, expect=200).data
+        self.assertEqual([(d["id"], d["payer_marked_at"]) for d in dues["payments"]], [(club_row.id, z(at(base.TUE, 16)))])
+        self.assertEqual(dues["totals"], [{"currency": "USD", "total": "50.000"}])
+        self.assertEqual(self.call("get", f"payments/{club_row.id}/", self.owner, expect=200).data["payer_marked_at"], z(at(base.TUE, 16)))
+        r = self.call("get", f"clubs/{self.club.id}/revenue/?from=2027-01-01&to=2027-01-31", self.owner, expect=200).data
+        self.assertEqual(r, {"currencies": []})
+
+        # PAY-20: the payee receives it; the declaration stays; the payer can no longer undo (PAY-27)
+        r = self.call("post", f"payments/{club_row.id}/mark-paid/", sam, expect=200)
+        self.assertEqual((r.data["paid_at"], r.data["payer_marked_at"]), (z(at(base.TUE, 17)), z(at(base.TUE, 16))))
+        self.code(self.call("post", f"payments/{club_row.id}/undo-declare/", rana), 400, "already_paid")
+        self.code(self.call("post", f"payments/{club_row.id}/declare-paid/", rana), 400, "already_paid")
+        # PAY-21: back to due keeps the declaration; then the payer undoes it, and a repeat is 200
+        r = self.call("post", f"payments/{club_row.id}/mark-due/", sam, expect=200)
+        self.assertEqual((r.data["paid_at"], r.data["payer_marked_at"]), (None, z(at(base.TUE, 16))))
+        r = self.call("post", f"payments/{club_row.id}/undo-declare/", rana, expect=200)
+        self.assertIsNone(r.data["payer_marked_at"])
+        self.call("post", f"payments/{club_row.id}/undo-declare/", rana, expect=200)
+
+        # PAY-25: a declared payment can still be waived; then declaring is already_waived, undoing is allowed
+        self.call("post", f"payments/{coach_row.id}/declare-paid/", ben, expect=200)
+        self.call("post", f"payments/{coach_row.id}/waive/", sami, expect=200)
+        self.call("post", f"payments/{coach_row.id}/undo-declare/", ben, expect=200)
+        self.code(self.call("post", f"payments/{coach_row.id}/declare-paid/", ben), 400, "already_waived")
+        # PAY-20: the payee may receive a payment the payer never declared
+        self.call("post", f"payments/{club_row.id}/mark-paid/", self.owner, expect=200)
+
     def test_admin_settles_payments_journey(self):
         """ACC-7, COM-10, PAY-22: a platform admin sets `settled_at` in the Django admin, only on a paid payment; no
         payment can be added or deleted there."""
