@@ -42,6 +42,7 @@ class SessionsScreen extends StatefulWidget {
 
 class _SessionsScreenState extends State<SessionsScreen> {
   bool past = false;
+  int version = 0; // bumped to reload after acting on a session
 
   Future<List<Map<String, dynamic>>> _load() async {
     final now = DateTime.now().toUtc();
@@ -59,7 +60,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('My sessions')),
         body: Loaded(
-          key: ValueKey(past),
+          key: ValueKey('$past$version'),
           load: _load,
           builder: (context, rows, reload) {
             final me = Api.instance.myId;
@@ -101,7 +102,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
           trailing: StatusChip(s['status']),
           onTap: () async {
             await context.push('/sessions/${s['id']}');
-            if (mounted) setState(() {}); // reload after acting on it
+            if (mounted) setState(() => version++);
           },
         ),
       );
@@ -151,7 +152,7 @@ class SessionScreen extends StatelessWidget {
                 if (s['court'] != null) Text('Court: ${money(s['price'], cur)}'),
                 if (num.parse('${s['discount_amount']}') > 0) Text('Reduction: −${money(s['discount_amount'], cur)}'),
                 if (s['kind'] == 'training') Text('Coach fee: ${money(s['coach_fee'], cur)}'),
-                Text('Paid at the court.', style: text.bodySmall),
+                Text('Paid in person.', style: text.bodySmall),
               ],
               if ((s['rentals'] as List).isNotEmpty) ...[
                 const Heading('Rentables'),

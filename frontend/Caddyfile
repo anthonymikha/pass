@@ -1,0 +1,19 @@
+{
+	# Behind Traefik or the Caddy override, keep their X-Forwarded-Proto: Django trusts it for HTTPS.
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:80 {
+	@django path /api/* /admin /admin/* /static/* /account/*
+	handle @django {
+		reverse_proxy backend:8000
+	}
+	handle {
+		root * /srv
+		# ponytail: no cache headers; add "Cache-Control: no-cache" on index.html if users see stale builds.
+		try_files {path} /index.html
+		file_server
+	}
+}

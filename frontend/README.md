@@ -1,5 +1,3 @@
 # frontend
 
-Placeholder. A single Flutter project will live here later, targeting web, iOS and Android.
-The web build will be served by a `web` service added to `docker-compose.yml` (see the commented stub there),
-which serves the app at `/` and forwards `/api/` and `/admin/` to the backend on the same origin.
+The PASS Flutter app (web, Android, iOS). Docs: [docs/frontend/README.md](../docs/frontend/README.md); the MVP spec: [docs/frontend/mvp.md](../docs/frontend/mvp.md).
