@@ -31,7 +31,8 @@ docs/
     eraser/              diagram code for eraser.io: one file per app plus overview.eraser (generate.py rebuilds them)
   deployment.md          production: hosts, Traefik or Caddy, settings, backups
   frontend/
-    README.md            Flutter app: status and what it needs from the backend
+    README.md            Flutter app: layout, run, store builds, what it needs from the backend
+    mvp.md               the frontend MVP spec (FE-1 to FE-12)
 ```
 
 ## Where to start
@@ -48,7 +49,7 @@ docs/
 
 ## Status markers
 
-Each flow page says what is **built** (has endpoints and tests) and what is **planned** (schema exists, logic not written). As of 2026-11-21 every backend flow is built and tested (steps 2 to 10 of the roadmap and the reviews of 2026-11-17 and 2026-11-20, T14 to T19); only the deferred recovery level and suggested times are not. The Flutter app is not started.
+Each flow page says what is **built** (has endpoints and tests) and what is **planned** (schema exists, logic not written). As of 2026-11-21 every backend flow is built and tested (steps 2 to 10 of the roadmap and the reviews of 2026-11-17 and 2026-11-20, T14 to T19); only the deferred recovery level and suggested times are not. The Flutter MVP (web, Android, iOS) is built (2026-11-24, [frontend/mvp.md](frontend/mvp.md)); it has not been released to the stores yet.
 
 ## Keeping these docs true
 
