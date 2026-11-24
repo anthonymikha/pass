@@ -3,7 +3,6 @@
 ## Layout
 
 - `backend/` Django project: `config/` (settings, urls) and 7 apps: `accounts`, `venues`, `teams`, `bookings`, `billing`, `wellness`, `chat`. Foreign keys only point to apps earlier in that list.
-- `frontend/` placeholder for the Flutter app (web, iOS, Android).
 - `docker-compose.yml` Postgres, object storage, backend, scheduler and nightly backup; `docker-compose.traefik.yml` and `docker-compose.caddy.yml` add a reverse proxy on a server ([deployment](docs/deployment.md)).
 
 - `data/` created by Docker for container data (database files); gitignored, root-owned.

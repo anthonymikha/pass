@@ -93,7 +93,6 @@ backend/            Django project
   accounts/ venues/ teams/ bookings/ billing/ wellness/ chat/
   tests.py          schema constraint tests
   requirements.txt  Dockerfile  .dockerignore  manage.py
-frontend/           README placeholder; one Flutter project later (web, iOS, Android)
 docker-compose.yml  db (Postgres), storage + storage-init (SeaweedFS S3), backend (healthcheck), scheduler (tick every 60 s), backup (nightly pg_dump); commented stub for the future `web` service
 docker-compose.traefik.yml / docker-compose.caddy.yml   production overrides (docs/deployment.md)
 data/               created by Docker, gitignored, root-owned
