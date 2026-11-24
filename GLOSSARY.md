@@ -43,6 +43,30 @@ An account a platform admin switched off. Nothing is removed and it can be switc
 **Coach's players**:
 The players a coach may follow: those with an accepted coaching link to the coach, members of teams the coach currently coaches, and the shadow players the coach looks after.
 
+**Coach rate**:
+What a coach asks per hour of training, shown on their profile. A guide only: the coach fee of each session is set when the coach confirms it.
+
+## Clubs
+
+**Club owner**:
+The person who created a club. Sets up its courts, prices, amenities and rentables, and sees its bookings.
+_Avoid_: manager, court manager (a manager runs a play group or team)
+
+**Club staff**:
+People the club owner adds to help day to day: they see the club's bookings and handle rentals, but change no setup.
+_Avoid_: manager, employee
+
+**Club side**:
+The club owner and the club staff together.
+
+**Amenity**:
+Something a club offers free with a booking, for one court or all of them: balls, showers, parking.
+_Avoid_: facility, feature
+
+**Rentable**:
+An item a booker may rent with a booking for a price set by the club owner, subject to the club side's approval.
+_Avoid_: add-on, extra
+
 ## Sessions
 
 **Session**:
