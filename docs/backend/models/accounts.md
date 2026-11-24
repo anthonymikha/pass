@@ -15,7 +15,7 @@ One row per person, whatever their role. Login is by email and password; there i
 | `nationality` | Optional, 2-letter ISO country code such as `LB` |
 | `dominant_hand` | Optional: `left`, `right` or `both` |
 | `is_coach` | The user offers coaching. Self-declared, no approval |
-| `coach_bio`, `coach_rate`, `coach_currency` | Shown on the coach's profile. `coach_rate` is per hour and informational; the real fee is set per session |
+| `coach_bio`, `coach_rate`, `coach_currency` | Shown on the coach's profile. `coach_rate` is informational; the real fee is set per session |
 | `managed_by` | For shadow players: the coach who manages them |
 | `is_staff`, `is_active`, `is_superuser` | Django admin access and account switch |
 

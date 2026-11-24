@@ -55,11 +55,6 @@ class VenuesBase(APITestCase):
 
 
 class OwnerSetupTests(VenuesBase):
-    def test_sports_list_is_public(self):
-        r = self.call("get", "sports/", expect=200)  # CLUB-36: no token, not paged, by name
-        self.assertEqual(r.data, [{"id": self.basketball.id, "name": "Basketball"},
-                                  {"id": self.volleyball.id, "name": "Volleyball"}])
-
     def test_owner_journey(self):
         """CLUB-1, CLUB-2, CLUB-5, CLUB-6, CLUB-8, CLUB-9, CLUB-11, CLUB-15, CLUB-17, CLUB-18, CLUB-20, CLUB-21, CLUB-22,
         CLUB-23, CLUB-25, CLUB-26, CLUB-27, CLUB-28, CLUB-29, CLUB-31, PRC-1, PRC-2, PRC-3, ACC-3, ACC-5: an owner sets up

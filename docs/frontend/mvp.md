@@ -1,6 +1,6 @@
 # Frontend MVP
 
-**Status: approved 2026-11-24, being built.** Agreed in a question round on 2026-11-24 and approved the same day. It is built without further questions; anything found during the build is added here first, marked *decided during build*.
+**Status: approved 2026-11-24, not built.** Agreed in a question round on 2026-11-24 and approved the same day. A first build was torn down at the owner's request the same day; the frontend restarts from this spec.
 
 The MVP is scheduling between players, coaches and courts: players find a court or a coach, see prices, amenities and rentables, and book; coaches answer training requests; the club side sets up courts, prices, amenities and rentables and sees its bookings. Words follow [GLOSSARY.md](../../GLOSSARY.md).
 

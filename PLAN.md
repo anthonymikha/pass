@@ -2,23 +2,15 @@
 
 PASS (Performance Analytics and Sports Solutions) helps players, coaches, and court/club owners stay organised: court booking, teams, coaching, wellness tracking, session video, chat.
 
-Last updated: 2026-11-24. Written so a new session can continue with no other context.
+Last updated: 2026-11-21. Written so a new session can continue with no other context.
 
 ## Prompt to resume
 
 Paste this into a new session opened in the repo root:
 
-> Read PLAN.md in the repo root in full (start with "Status on 2026-11-21 (latest)"), then `docs/backend/logic/README.md` and every page it lists, `docs/deployment.md`, then `git log --oneline` and `backend/*/models.py`. The logic pages are the approved specification, and `docs/frontend/mvp.md` the approved frontend spec. Steps 2 to 10, T14 to T19 and the Flutter MVP are done; the next work is the owner's store, Firebase and server setup, then the first release, within the standing permissions in "Working agreements".
+> Read PLAN.md in the repo root in full (start with "Status on 2026-11-21 (latest)"), then `docs/backend/logic/README.md` and every page it lists, `docs/deployment.md`, then `git log --oneline` and `backend/*/models.py`. The logic pages are the approved specification. Steps 2 to 10 and T14 to T19 are done (the backend is finished); the next work is step 11 (Flutter) and the first deployment, within the standing permissions in "Working agreements".
 
-## Status on 2026-11-24 (latest: frontend MVP)
-
-- **Question round 2026-11-24** settled the MVP (spec [docs/frontend/mvp.md](docs/frontend/mvp.md), FE-1 to FE-12, approved the same day): scheduling between players, coaches and courts; coach prices; court prices, amenities and rentables; the club side's schedule and setup. Flutter for web, Android and iOS, launched together; USD only; no split fees; pushes on phones.
-- **Built:** `GET /api/sports/` (CLUB-36, the only backend gap) and the Flutter app in `frontend/` (layout in [docs/frontend/README.md](docs/frontend/README.md)), a `web` service in compose (Caddy serving the web build and forwarding Django's paths; the Traefik and Caddy overrides now route `PASS_HOST` to it), and `.github/workflows/mobile.yml` (Play internal track, TestFlight).
-- **Flutter on this machine:** the network is slow (about 150 KB/s), so the SDK runs from the local image `pass-flutter-tools:3.35.7` (or `ghcr.io/cirruslabs/flutter:3.35.7`), pinned to 3.35.7 everywhere. No SDK on the host.
-- **Not done, needs the owner:** Apple Developer and Google Play accounts, the Firebase project (Android and iOS apps, APNs key), GitHub secrets (docs/frontend/README.md), the real bundle id (placeholder `app.pass.mobile`, FE-11). The CI workflow has never run. iOS was never built (no Mac here).
-- The old local `.env` was replaced by one for a local stack (`HTTPS=0`, `PASS_HOST=localhost:8080`, `BACKEND_PORT=8001`, `WEB_PORT=8080`); the previous file is kept as `.env.local-2026-11-16.bak`.
-
-## Status on 2026-11-21 (after the overnight build)
+## Status on 2026-11-21 (latest, after the overnight build)
 
 - **T14 to T19 are built**, committed and pushed to `origin/main` (built in a separate worktree, `build/t14-t19`, pushed as `main`). 121 tests, green on SQLite and on Postgres in Docker from an empty `./data`; every task was also exercised with curl against the running stack. Every rule of the reviews of 2026-11-17 and 2026-11-20 is marked built on its logic page; rules added during the build carry *decided during build (2026-11-21)*: PAY-10 (the `billed_at` migration), PAY-28, PAY-29, TEAM-35, RPT-9, ACC-36, ACC-37, BOOK-1's table (now says "before anyone checks in"), and the deployment page's own list.
 - **Uncommitted work found in the main checkout** (`/home/amikhael/pass`): an earlier, never-committed build of the 2026-11-17 audit (an `attendance` column, CLUB-34 blocks reach the club side, CLUB-35 admins confirm clubs, chat `display_name`, and two large test files `backend/test_e2e.py` and `backend/test_locks.py`), left half-merged by an autostash. The committed spec superseded it, so it was not built. It is kept on the local branch `wip/local-2026-11-17-audit` (commit `af62bc0`, not pushed) and in `stash@{0}`; the main checkout itself was left untouched (conflicts and all). The owner decides whether CLUB-34, CLUB-35 or the e2e and lock tests come back (they would need a spec and an update to the new billing).
@@ -278,7 +270,7 @@ All workflow tests on Postgres in Docker from an empty `./data`, docs and Eraser
 
 ### Step 11: Flutter app
 
-**MVP done 2026-11-24** ([docs/frontend/mvp.md](docs/frontend/mvp.md)). One project in `frontend/` for web, iOS and Android, with the `web` service in compose. Screens for the rest of the backend (check-in, payments, chat, wellness, recordings, teams, friends) come after the MVP.
+One project in `frontend/` for web, iOS and Android; add the `web` service and reverse proxy to compose.
 
 ### Later
 

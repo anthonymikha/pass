@@ -89,9 +89,6 @@ The club side, affiliated coaches and the member themselves may list the club's 
 
 ## Public search and detail
 
-**CLUB-36.** **Sports list** (no sign-in needed): every sport, `id` and `name`, sorted by name, not paginated. *Frontend MVP (FE spec, 2026-11-24): court creation, club search and training requests need sport ids and nothing listed them.*
-
-
 **CLUB-30.** **Search** (no sign-in needed). Clubs that have at least one active court. Optional filters: `sport` (a club with an active court offering it), `q` (club name contains, case-insensitive), `lat` + `lng` + `radius_km` (1–200, default 25). With a location: keep clubs whose `latitude`/`longitude` are set and within the radius (great-circle distance, Earth radius 6371 km), sorted by distance, and include `distance_km` rounded to 1 decimal. Without a location: sorted by name. Paginated.
 <!-- ponytail: distance computed in Python after a bounding-box filter; move to PostGIS only if the club list gets large -->
 

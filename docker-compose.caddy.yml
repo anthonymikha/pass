@@ -1,12 +1,9 @@
 # Production on a server with no reverse proxy (docs/deployment.md):
 #   docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
 # Caddy takes ports 80 and 443, gets the certificates itself (data in ./data/caddy) and forwards PASS_HOST to the
-# web service (the app, which forwards the API to the backend) and FILES_HOST to storage, keeping the Host header (signed storage links depend on it).
+# backend and FILES_HOST to storage, keeping the Host header (signed storage links depend on it).
 services:
   backend:
-    ports: !reset []
-
-  web:
     ports: !reset []
 
   storage:
@@ -25,14 +22,14 @@ services:
     volumes:
       - ./data/caddy:/data
     depends_on:
-      - web
+      - backend
       - storage
 
 configs:
   caddyfile:
     content: |
       ${PASS_HOST} {
-        reverse_proxy web:80
+        reverse_proxy backend:8000
       }
       ${FILES_HOST} {
         reverse_proxy storage:8333

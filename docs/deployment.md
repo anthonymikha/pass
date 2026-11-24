@@ -8,7 +8,7 @@ Two hostnames, both DNS **A records** at GoDaddy pointing at the server's IP. Th
 
 | Setting | Example | Serves |
 |---|---|---|
-| `PASS_HOST` | `pass.example.com` | The `web` service: the Flutter web app at `/`, and Django's `/api/`, `/admin/`, `/static/`, `/account/` (password reset pages, ACC-32) forwarded to the backend, on the same origin, so the API needs no CORS |
+| `PASS_HOST` | `pass.example.com` | Django: `/api/`, `/admin/`, `/static/`, `/account/` (password reset pages, ACC-32). Later `/` serves the Flutter web build, on the same origin, so the API needs no CORS |
 | `FILES_HOST` | `files.example.com` | SeaweedFS S3: the signed upload and playback links (REC-1). It needs its own host because a signed link is tied to the host it was signed for. `STORAGE_PUBLIC_ENDPOINT` = `https://FILES_HOST` |
 
 HTTPS is ended at the reverse proxy; the containers speak plain HTTP inside the compose network.
@@ -23,7 +23,7 @@ HTTPS is ended at the reverse proxy; the containers speak plain HTTP inside the 
 docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
 ```
 
-`docker-compose.traefik.yml` adds Traefik labels to `web` (rule `Host(PASS_HOST)`) and `storage` (rule `Host(FILES_HOST)`), joins both to Traefik's external network, and removes the published host ports of `backend`, `web` and `storage` (`ports: !reset []`). The `web` service's Caddy forwards Django's paths to `backend:8000` and keeps Traefik's `X-Forwarded-Proto`. Traefik's names come from `.env`:
+`docker-compose.traefik.yml` adds Traefik labels to `backend` (rule `Host(PASS_HOST)`) and `storage` (rule `Host(FILES_HOST)`), joins both to Traefik's external network, and removes their published host ports (`ports: !reset []`). Traefik's names come from `.env`:
 
 | Setting | Default |
 |---|---|
@@ -37,7 +37,7 @@ docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
 ```
 
-`docker-compose.caddy.yml` adds a `caddy` service on ports 80 and 443 with a short Caddyfile: `PASS_HOST` goes to `web:80` (which forwards Django's paths to the backend), `FILES_HOST` to `storage:8333`, and certificates are automatic. Caddy's data goes in `./data/caddy`.
+`docker-compose.caddy.yml` adds a `caddy` service on ports 80 and 443 with a short Caddyfile: `PASS_HOST` goes to `backend:8000`, `FILES_HOST` to `storage:8333`, and certificates are automatic. Caddy's data goes in `./data/caddy`.
 
 ## Production settings
 

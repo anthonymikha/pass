@@ -3,8 +3,8 @@
 ## Layout
 
 - `backend/` Django project: `config/` (settings, urls) and 7 apps: `accounts`, `venues`, `teams`, `bookings`, `billing`, `wellness`, `chat`. Foreign keys only point to apps earlier in that list.
-- `frontend/` the Flutter app (web, iOS, Android): [docs/frontend/README.md](docs/frontend/README.md).
-- `docker-compose.yml` Postgres, object storage, backend, scheduler, nightly backup and `web` (the Flutter web app, which forwards the API to the backend); `docker-compose.traefik.yml` and `docker-compose.caddy.yml` add a reverse proxy on a server ([deployment](docs/deployment.md)).
+- `frontend/` placeholder for the Flutter app (web, iOS, Android).
+- `docker-compose.yml` Postgres, object storage, backend, scheduler and nightly backup; `docker-compose.traefik.yml` and `docker-compose.caddy.yml` add a reverse proxy on a server ([deployment](docs/deployment.md)).
 
 - `data/` created by Docker for container data (database files); gitignored, root-owned.
 
@@ -32,7 +32,7 @@ docker compose up --build
 docker compose exec backend python manage.py createsuperuser
 ```
 
-App: http://localhost:8080 (`WEB_PORT`). Admin: http://localhost:8000/admin/ (`BACKEND_PORT`). On start the backend runs `migrate`, `createcachetable` (the shared rate-limit cache) and `storage_cors`, then gunicorn with 3 workers; the scheduler waits until the backend is healthy. The `backup` service writes one `pg_dump` a day to `./data/backups` and keeps 7 days. On a server, follow [docs/deployment.md](docs/deployment.md).
+Admin: http://localhost:8000/admin/. On start the backend runs `migrate`, `createcachetable` (the shared rate-limit cache) and `storage_cors`, then gunicorn with 3 workers; the scheduler waits until the backend is healthy. The `backup` service writes one `pg_dump` a day to `./data/backups` and keeps 7 days. On a server, follow [docs/deployment.md](docs/deployment.md).
 
 ### Scheduler and push notifications
 

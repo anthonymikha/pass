@@ -53,7 +53,7 @@
 
 **ACC-20.** **User search** (signed-in only): `q` of at least 2 characters matches `full_name` case-insensitively (contains), or an exact `email` (case-insensitive). Shadow players, inactive users and users in a blocked pair with the caller are left out. Results show the **public profile** only.
 
-**ACC-21.** The **public profile** is: `id`, `full_name`, `avatar` (signed link, REC-30), `is_coach`, and when `is_coach` is true also `coach_bio`, `coach_rate` (per hour, a guide only: the coach fee is set per session, *frontend MVP, 2026-11-24*), `coach_currency` and the clubs where the user is an affiliated coach (`id`, `name`). Email, phone and body data are never in a public profile.
+**ACC-21.** The **public profile** is: `id`, `full_name`, `avatar` (signed link, REC-30), `is_coach`, and when `is_coach` is true also `coach_bio`, `coach_rate`, `coach_currency` and the clubs where the user is an affiliated coach (`id`, `name`). Email, phone and body data are never in a public profile.
 
 **ACC-22.** **Coach search**: coaches only (`is_coach = true`, active, not shadow), optional `q` on name, optional `club` (affiliated coaches of that club). Sorted by `full_name`. Same public profile. Users in a blocked pair with the caller are left out, as in ACC-20 (*decided during build, 2026-11-16*: their profile is 404 by ACC-23). `club` must be a club the caller can see; otherwise the list is empty.
 
