@@ -32,6 +32,7 @@ docs/
   deployment.md          production: hosts, Traefik or Caddy, settings, backups
   frontend/
     README.md            Flutter app: status and what it needs from the backend
+    mvp.md               the frontend MVP spec (FE-1 to FE-14)
 ```
 
 ## Where to start

@@ -4,7 +4,7 @@
 
 ## Who may call
 
-- **Public (no token):** `GET /api/clubs/` (search) and `GET /api/courts/<id>/` (court detail). Everything else needs a token.
+- **Public (no token):** `GET /api/sports/` (CLUB-36), `GET /api/clubs/` (search) and `GET /api/courts/<id>/` (court detail). Everything else needs a token.
 - **Writes** are the club owner's only. A user who cannot see the club or court gets `404`; one who can see it but does not own it (staff, coach, player, anyone) gets `403`.
 - **A club is visible** to its owner, to anyone with a membership row in it, and to everyone once it has an active court. An inactive court is visible to its owner only.
 - **Configuration reads** (currencies, rates, closures, equipment, overrides, one row by id) are the owner's too: others get `403`. The public reads the same data through court detail.
@@ -13,6 +13,7 @@
 
 | Method | Path | Who | Body / notes | Success |
 |---|---|---|---|---|
+| GET | `/api/sports/` | public | every sport `[{id, name}]` by name, not paged (CLUB-36) | `200` |
 | GET | `/api/clubs/` | public | `sport` (id), `q`, `lat` + `lng` + `radius_km` (1-200, default 25) | `200` page of clubs |
 | POST | `/api/clubs/` | any user | `name`, `timezone`, `currency`, optional `address`, `latitude`, `longitude` | `201` club |
 | GET, PATCH | `/api/clubs/<id>/` | visible; PATCH owner | `currency` cannot change (`400 base_currency_fixed`) | `200` |
