@@ -40,7 +40,9 @@ services:
         echo "s3.bucket.create -name $$STORAGE_BUCKET" | weed shell -master=storage:9333
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped  # back after a reboot or a crash
     env_file: .env
     environment:
@@ -64,7 +66,9 @@ services:
   # NOTE-30: one `manage.py tick` a minute (billing, RPE reminders). Same image as the backend; never migrates (the
   # backend does), so it starts only once the backend is healthy.
   scheduler:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped  # back after a reboot or a crash
     env_file: .env
     environment:

@@ -156,6 +156,19 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# FE-13: the Flutter web build, served by WhiteNoise at / (the image copies it here; locally `frontend/build/web`).
+FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR", BASE_DIR.parent / "frontend" / "build" / "web"))
+WHITENOISE_ROOT = FRONTEND_DIR if FRONTEND_DIR.is_dir() else None
+
+
+def _app_file_headers(headers, path, url):
+    """FE-13: no long cache on the app's files, so a deploy shows on the next load (no service worker either)."""
+    if not url.startswith("/static/"):
+        headers["Cache-Control"] = "no-cache"
+
+
+WHITENOISE_ADD_HEADERS_FUNCTION = _app_file_headers
+
 # REC-1: S3-compatible object storage (SeaweedFS in docker-compose). Moving to a cloud bucket is a change of these values.
 # Empty STORAGE_ENDPOINT = in-memory fake (the test suite, a bare `runserver`); see config/storage.py.
 STORAGE_ENDPOINT = os.environ.get("STORAGE_ENDPOINT", "")  # how the backend reaches storage (head, delete)
