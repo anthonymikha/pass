@@ -113,6 +113,7 @@ class _ClubScheduleScreenState extends State<ClubScheduleScreen> {
         const SizedBox(height: PassSpace.ml),
         DayBar(
             value: _date,
+            today: _today,
             first: _today.subtract(const Duration(days: 7)),
             last: _today.add(const Duration(days: 60)),
             onChanged: (d) => setState(() => _date = d)),
@@ -133,7 +134,8 @@ class _ClubScheduleScreenState extends State<ClubScheduleScreen> {
         ),
         const SizedBox(height: PassSpace.ml),
         ApiLoader<Map<String, dynamic>>(
-          key: ValueKey('schedule-${ymd(_date)}-$_court-$_version'),
+          key: ValueKey('schedule-${ymd(_date)}-$_court'),
+          version: _version,
           load: () async => asMap(await _api.get('/api/clubs/${widget.id}/schedule/',
               query: {'from': ymd(_date), 'to': ymd(_date), if (_court != null) 'court': '$_court'})),
           builder: (context, data, _) {
@@ -236,6 +238,7 @@ class _ClubSetupScreenState extends State<ClubSetupScreen> {
 
   @override
   Widget build(BuildContext context) => ApiLoader<(Map<String, dynamic>, List<dynamic>)>(
+        back: '/club/${widget.id}',
         load: () async =>
             (asMap(await _api.get('/api/clubs/${widget.id}/')), await _api.getAll('/api/clubs/${widget.id}/courts/')),
         builder: (context, data, _) {
@@ -386,6 +389,7 @@ class _CourtEditScreenState extends State<CourtEditScreen> {
 
   @override
   Widget build(BuildContext context) => ApiLoader<(List<Map<String, dynamic>>, List<dynamic>)>(
+        back: '/club/${widget.clubId}/setup',
         load: () async => (
           await loadSports(),
           widget.courtId == null ? <dynamic>[] : await _api.getAll('/api/clubs/${widget.clubId}/courts/'),
@@ -431,19 +435,25 @@ class _CourtEditScreenState extends State<CourtEditScreen> {
               if (!isNew) ...[
                 const CapsHeader('Prices · club time'),
                 ApiLoader<List<dynamic>>(
-                  key: ValueKey('rates-$_ratesVersion'),
+                  version: _ratesVersion,
                   load: () => _api.getAll('/api/courts/${widget.courtId}/rates/'),
                   builder: (context, data, _) {
                     final rates = asMaps(data)
                       ..sort((a, b) => '${a['weekday']}${a['start_time']}'.compareTo('${b['weekday']}${b['start_time']}'));
                     if (rates.isEmpty) return const EmptyText('No prices yet: the court offers no slots.');
+                    // As on the court's listing: the day, then the window and price in the smaller type, on one line.
                     return GroupedCard(inset: 0, children: [
                       for (final r in rates)
                         ListRow(
                           label: weekdays[r['weekday'] as int],
-                          value: '${clock('${r['start_time']}')}–${clock('${r['end_time']}')} · '
-                              '${money('${r['price']}', '${_clubOf(widget.clubId)?['currency'] ?? 'USD'}')}',
-                          trailing: CheckMark(visible: _editingRate == r['id']),
+                          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text(
+                                '${clock('${r['start_time']}')}–${clock('${r['end_time']}')} · '
+                                '${money('${r['price']}', '${_clubOf(widget.clubId)?['currency'] ?? 'USD'}')}',
+                                style: PassText.subhead.copyWith(color: c.label2)),
+                            const SizedBox(width: PassSpace.sm),
+                            CheckMark(visible: _editingRate == r['id']),
+                          ]),
                           onTap: () => setState(() {
                             _editingRate = r['id'] as int;
                             _days = {r['weekday'] as int};
@@ -579,7 +589,8 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
 
   @override
   Widget build(BuildContext context) => ApiLoader<(List<dynamic>, List<dynamic>)>(
-        key: ValueKey('equipment-$_version'),
+        version: _version,
+        back: '/club/${widget.clubId}/setup',
         load: () async => (
           await _api.getAll('/api/clubs/${widget.clubId}/courts/'),
           await _api.getAll('/api/clubs/${widget.clubId}/equipment/'),
@@ -708,7 +719,7 @@ class _StaffScreenState extends State<StaffScreen> {
         children: [
           const LargeTitleHeader(kicker: 'Setup', title: 'Staff'),
           ApiLoader<List<dynamic>>(
-            key: ValueKey('staff-$_version'),
+            version: _version,
             load: () => _api.getAll('/api/clubs/${widget.clubId}/members/'),
             builder: (context, data, _) {
               final staff = asMaps(data).where((m) => m['role'] == 'staff').toList();

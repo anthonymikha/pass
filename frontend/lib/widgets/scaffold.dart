@@ -147,7 +147,7 @@ class _PassScaffoldState extends State<PassScaffold> {
         : keyboard > 0
             ? keyboard
             : hidesTabBar(GoRouterState.of(context).uri.path)
-                ? MediaQuery.paddingOf(context).bottom
+                ? MediaQuery.paddingOf(context).bottom + PassSpace.xs
                 : PassSpace.tabBarHeight + PassSpace.tabBarBottom + 8;
 
     final bottomPad = desktop ? PassSpace.xxxl : PassSpace.contentBottom;
@@ -204,9 +204,9 @@ class _Centered extends StatelessWidget {
   final double maxWidth;
   final Widget child;
 
+  // The full column width, not the child's own: headers and captions line up with the cards, as on a phone.
   @override
-  Widget build(BuildContext context) =>
-      Center(child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth), child: child));
+  Widget build(BuildContext context) => Center(child: SizedBox(width: maxWidth, child: child));
 }
 
 /// Marks a subtree as the detail pane of a desktop master–detail layout (hides its Back button).

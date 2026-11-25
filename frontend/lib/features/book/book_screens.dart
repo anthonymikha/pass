@@ -2,6 +2,8 @@
 // coaches); a court as a listing (what it offers, rentables, prices) with a reserve bar; then the steps: days (the
 // iOS calendar, several at once), times and prices per day, extras (sport, rentables), confirm and book, "Booked".
 // A coach's profile and a training request.
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 
@@ -101,11 +103,21 @@ class _BookScreenState extends State<BookScreen> {
   final _q = TextEditingController();
   String _query = '';
   Set<int> _sports = {};
+  Timer? _typing;
 
   @override
   void dispose() {
+    _typing?.cancel();
     _q.dispose();
     super.dispose();
+  }
+
+  /// Search as you type, once typing pauses.
+  void _search(String v, {Duration after = const Duration(milliseconds: 300)}) {
+    _typing?.cancel();
+    _typing = Timer(after, () {
+      if (mounted && v.trim() != _query) setState(() => _query = v.trim());
+    });
   }
 
   @override
@@ -127,10 +139,8 @@ class _BookScreenState extends State<BookScreen> {
               placeholder: _mode == 'courts' ? 'Search clubs by name' : 'Search coaches by name',
               margin: const EdgeInsets.fromLTRB(PassSpace.gutter, PassSpace.l, PassSpace.gutter, 0),
               textInputAction: TextInputAction.search,
-              onSubmitted: (v) => setState(() => _query = v.trim()),
-              onChanged: (v) {
-                if (v.isEmpty) setState(() => _query = '');
-              }),
+              onSubmitted: (v) => _search(v, after: Duration.zero),
+              onChanged: _search),
           if (_mode == 'courts') ...[
             ApiLoader<List<Map<String, dynamic>>>(
               load: loadSports,
@@ -139,7 +149,8 @@ class _BookScreenState extends State<BookScreen> {
                   SportTags(sports: sports, all: true, selected: _sports, onChanged: (v) => setState(() => _sports = v)),
             ),
             ApiLoader<List<dynamic>>(
-              key: ValueKey('clubs-$_query-${(_sports.toList()..sort()).join(',')}'),
+              key: const ValueKey('clubs'),
+              version: '$_query|${(_sports.toList()..sort()).join(',')}',
               load: () => _api.getAll('/api/clubs/', query: {
                 if (_query.isNotEmpty) 'q': _query,
                 if (_sports.isNotEmpty) 'sport': [for (final s in _sports) '$s'],
@@ -164,7 +175,8 @@ class _BookScreenState extends State<BookScreen> {
             ),
           ] else
             ApiLoader<List<dynamic>>(
-              key: ValueKey('coaches-$_query'),
+              key: const ValueKey('coaches'),
+              version: _query,
               load: () => _api.getAll('/api/coaches/', query: {if (_query.isNotEmpty) 'q': _query}),
               builder: (context, data, _) {
                 final coaches = asMaps(data);
@@ -197,6 +209,7 @@ class ClubScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ApiLoader<(Map<String, dynamic>, List<dynamic>, List<Map<String, dynamic>>)>(
+        back: '/book',
         load: () async => (
           asMap(await _api.get('/api/clubs/$id/')),
           await _api.getAll('/api/clubs/$id/courts/'),
@@ -375,6 +388,7 @@ class CourtScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ApiLoader<Map<String, dynamic>>(
+        back: '/book',
         load: () => _loadCourt(id),
         builder: (context, detail, _) {
           final c = context.c;
@@ -433,21 +447,18 @@ class CourtScreen extends StatelessWidget {
                 const EmptyText('No prices set yet.')
               else
                 GroupedCard(children: [
-                  for (var d = 0; d < 7; d++)
-                    if (rates.any((r) => r['weekday'] == d))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: PassSpace.m),
-                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          SizedBox(width: 100, child: Text(weekdays[d], style: PassText.body.copyWith(color: c.label))),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                              for (final r in rates.where((r) => r['weekday'] == d))
-                                Text('${clock('${r['start_time']}')}–${clock('${r['end_time']}')} · ${money('${r['price']}', currency)}',
-                                    style: PassText.subhead.copyWith(color: c.label2)),
-                            ]),
-                          ),
-                        ]),
-                      ),
+                  for (final (days, windows) in priceLines(rates, currency))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: PassSpace.m),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        SizedBox(width: 100, child: Text(days, style: PassText.body.copyWith(color: c.label))),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                            for (final w in windows) Text(w, style: PassText.subhead.copyWith(color: c.label2, height: 1.5)),
+                          ]),
+                        ),
+                      ]),
+                    ),
                 ]),
               FootnoteText('Price per ${court['slot_minutes']}-minute slot.'),
             ],
@@ -491,6 +502,7 @@ class _TimesScreenState extends State<TimesScreen> {
 
   @override
   Widget build(BuildContext context) => ApiLoader<Map<String, dynamic>>(
+        back: '/book/courts/${widget.trip.court}',
         load: () => _loadCourt(widget.trip.court),
         builder: (context, detail, _) {
           final club = asMap(detail['club']);
@@ -559,6 +571,7 @@ class _ExtrasScreenState extends State<ExtrasScreen> {
 
   @override
   Widget build(BuildContext context) => ApiLoader<Map<String, dynamic>>(
+        back: widget.trip.path('times'),
         load: () => _loadCourt(widget.trip.court),
         builder: (context, detail, _) {
           final club = asMap(detail['club']);
@@ -693,6 +706,7 @@ class _ReserveScreenState extends State<ReserveScreen> {
     }
     return ApiLoader<(Map<String, dynamic>, List<Object>)>(
       key: ValueKey(trip.path('reserve')),
+      back: trip.path('extras'),
       load: _load,
       builder: (context, data, _) {
         final (detail, quotes) = data;
@@ -751,7 +765,10 @@ class _ReserveScreenState extends State<ReserveScreen> {
                     ListRow(label: '${r['name']} ×${r['quantity']}', value: money('${r['price']}', currency)),
                 ],
               ],
-              if (total != null) ListRow(label: 'Total', value: money(total, currency)),
+              if (total != null)
+                ListRow(
+                    label: 'Total',
+                    trailing: Text(money(total, currency), style: PassText.headline.copyWith(color: context.c.label))),
             ]),
             if (trip.rent.isNotEmpty) const FootnoteText('Rentables are subject to the club’s approval.'),
           ],
@@ -839,6 +856,7 @@ class _CoachScreenState extends State<CoachScreen> {
 
   @override
   Widget build(BuildContext context) => ApiLoader<(Map<String, dynamic>, List<Map<String, dynamic>>)>(
+        back: '/book',
         load: () async => (asMap(await _api.get('/api/users/${widget.id}/')), await loadSports()),
         builder: (context, data, _) {
           final c = context.c;

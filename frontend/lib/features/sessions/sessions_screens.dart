@@ -1,5 +1,7 @@
 // Sessions tab (FE-10): my sessions, a coach's training requests (FE-8), a session's details with cancel,
 // withdraw and decline, and the coach's confirm screen (BOOK-21, FE-4). Personal times use the device's time zone.
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 
@@ -188,6 +190,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
   @override
   Widget build(BuildContext context) => ApiLoader<Map<String, dynamic>>(
         key: _loader,
+        back: '/sessions',
         load: () async => asMap(await _api.get('/api/sessions/${widget.id}/')),
         builder: (context, s, _) {
           final status = '${s['status']}';
@@ -212,6 +215,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 subtitle: timeRange(at('${s['starts_at']}'), at('${s['ends_at']}')),
                 trailing: statusPill(context, status),
               ),
+              const SizedBox(height: PassSpace.ml),
               if (status == 'requested')
                 NoticeBanner(
                     kind: NoticeKind.tint,
@@ -291,9 +295,11 @@ class _ConfirmTrainingScreenState extends State<ConfirmTrainingScreen> {
   Map<String, dynamic>? _court; // court detail (CLUB-31)
   SlotRun? _run;
   bool _busy = false;
+  Timer? _typing;
 
   @override
   void dispose() {
+    _typing?.cancel();
     _fee.dispose();
     _clubQuery.dispose();
     super.dispose();
@@ -336,6 +342,7 @@ class _ConfirmTrainingScreenState extends State<ConfirmTrainingScreen> {
 
   @override
   Widget build(BuildContext context) => ApiLoader<Map<String, dynamic>>(
+        back: '/sessions/${widget.id}',
         load: () async => asMap(await _api.get('/api/sessions/${widget.id}/')),
         builder: (context, s, _) {
           if (_start == null) _setTimes(at('${s['starts_at']}'), at('${s['ends_at']}'));
@@ -446,10 +453,16 @@ class _ConfirmTrainingScreenState extends State<ConfirmTrainingScreen> {
           controller: _clubQuery,
           placeholder: 'Search clubs by name',
           textInputAction: TextInputAction.search,
+          onChanged: (v) {
+            _typing?.cancel();
+            _typing = Timer(const Duration(milliseconds: 300), () {
+              if (mounted) setState(() => _q = v.trim());
+            });
+          },
           onSubmitted: (v) => setState(() => _q = v.trim())),
       const SizedBox(height: PassSpace.ml),
       ApiLoader<List<dynamic>>(
-        key: ValueKey('clubs-$_q'),
+        version: _q,
         load: () => _api.getAll('/api/clubs/', query: {'sport': '${sport['id']}', if (_q.isNotEmpty) 'q': _q}),
         builder: (context, data, _) {
           final clubs = asMaps(data);

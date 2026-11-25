@@ -112,3 +112,13 @@ What the decisions and screens above leave open, settled while building:
 - **Sport tags as in Notes:** tap to select, tap again to clear, several at once, "All sports" clears. In search, several sports mean clubs offering all of them (`GET /api/clubs/?sport=1&sport=2`). A session has one sport, so its tags keep exactly one on.
 - **Sessions** use pass_v1's schedule rows (a day column, the title and times, the status), requests to the coach tinted.
 - Not done: photos of clubs and courts (the backend has none), booking several days at once (one run of slots per booking, as the API books), live glass blur (kept off for scrolling speed, see `Glass`).
+
+## UI pass (2026-11-25, after a walk through every screen in the browser)
+
+- **No dead ends.** A screen that loads its data keeps its nav bar and Back while it loads and when the load fails (`ApiLoader(back:)`); before, a failed load showed only "Try again", and the installed app has no browser Back.
+- **The booking steps own the bottom of the screen.** On a court's listing, Times, Extras and Confirm the phone tab bar steps aside (iOS `hidesBottomBarWhenPushed`), so the reserve bar is the only bar there. Back brings it back.
+- **Search as you type.** Club and coach search (Book) and the club search when a coach confirms on a court ask again 300 ms after typing stops; Enter still searches at once. The old results stay until the new ones come.
+- **Prices read as a price list.** On a court's listing, days in a row with the same windows share a line ("Mon–Fri", "Every day"). The owner's list keeps one row per window (each is tapped to edit), in the listing's smaller type so a window fits on one line.
+- **Gaps in a day show.** The slot grid shows the times between two free slots crossed out ("Unavailable": booked or closed), so 17:00 followed by 20:00 reads as a gap and not as a court that skips hours.
+- **Saves don't blank the screen.** After a save on Equipment, Staff, a court's prices or the schedule, the list reloads in place (`ApiLoader(version:)`), keeping the screen and its scroll; a new key still starts over with the spinner.
+- Smaller: the desktop column is left-aligned like the phone (headers were centred above left-aligned cards); the schedule's day says Today, Tomorrow or Yesterday; the quote's total is set in bold; Profile's Save buttons light up only when something changed; a row's value may take half a wide row before it wraps.

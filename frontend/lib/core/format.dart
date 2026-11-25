@@ -51,11 +51,44 @@ String hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toStri
 /// "Tue 25 Nov".
 String dayLabel(DateTime t) => '${weekdays[t.weekday - 1].substring(0, 3)} ${t.day} ${_months[t.month - 1]}';
 
+/// "Today · Tue 25 Nov" (also Tomorrow and Yesterday), else "Tue 25 Nov". Both are dates (no time of day).
+String relativeDay(DateTime day, DateTime today) {
+  DateTime shift(int n) => DateTime(today.year, today.month, today.day + n);
+  final word = day == today ? 'Today' : day == shift(1) ? 'Tomorrow' : day == shift(-1) ? 'Yesterday' : null;
+  return word == null ? dayLabel(day) : '$word · ${dayLabel(day)}';
+}
+
 /// "Tue 25 Nov · 16:00–17:30".
 String timeRange(DateTime start, DateTime end) => '${dayLabel(start)} · ${hm(start)}–${hm(end)}';
 
 /// "09:00:00" from the API to "09:00".
 String clock(String apiTime) => apiTime.length >= 5 ? apiTime.substring(0, 5) : apiTime;
+
+/// A court's price windows as a price list: days in a row with the same windows share a line,
+/// ("Mon–Fri", ["08:00–22:00 · 20.00 USD"]), all seven are "Every day". Days without a window are left out.
+List<(String, List<String>)> priceLines(List<Map<String, dynamic>> rates, String currency) {
+  List<String> windows(int day) => [
+        for (final r in rates.where((r) => r['weekday'] == day).toList()
+          ..sort((a, b) => '${a['start_time']}'.compareTo('${b['start_time']}')))
+          '${clock('${r['start_time']}')}–${clock('${r['end_time']}')} · ${money('${r['price']}', currency)}',
+      ];
+  final lines = <(String, List<String>)>[];
+  for (var d = 0; d < 7;) {
+    final w = windows(d);
+    var e = d;
+    while (e < 6 && windows(e + 1).join('|') == w.join('|')) {
+      e++;
+    }
+    if (w.isNotEmpty) {
+      lines.add((
+        e == d ? weekdays[d] : e - d == 6 ? 'Every day' : '${weekdays[d].substring(0, 3)}–${weekdays[e].substring(0, 3)}',
+        w,
+      ));
+    }
+    d = e + 1;
+  }
+  return lines;
+}
 
 /// Minor units per currency (GEN-15). The MVP shows USD only (FE-3).
 int minorUnits(String currency) => switch (currency) {

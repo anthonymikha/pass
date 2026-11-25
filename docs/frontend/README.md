@@ -53,6 +53,8 @@ The web app needs the API on the same origin. The simplest way to see it is the 
 3. a club owner (desktop width) adds a court, a price window for six weekdays, an amenity and a rentable;
 4. a Confirm link without a time asks for one instead of failing.
 
+`test/format_test.dart` checks the price list grouping (`priceLines`) and the Today / Tomorrow / Yesterday day labels.
+
 ## What the app is responsible for
 
 | Concern | Detail |

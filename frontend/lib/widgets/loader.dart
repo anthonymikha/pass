@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import '../core/api_client.dart';
 import '../theme/tokens.dart';
 import 'controls.dart';
+import 'scaffold.dart';
 
 /// Usage:
 /// ```dart
@@ -44,10 +45,18 @@ mixin RefreshOnReturn<W extends StatefulWidget> on State<W> {
   }
 }
 class ApiLoader<T> extends StatefulWidget {
-  const ApiLoader({super.key, required this.load, required this.builder, this.loading});
+  const ApiLoader({super.key, required this.load, required this.builder, this.loading, this.version, this.back});
   final Future<T> Function() load;
   final Widget Function(BuildContext context, T data, Future<void> Function() reload) builder;
   final Widget? loading;
+
+  /// A change reloads in place: the old data stays on screen until the new data comes (after a save, a new search).
+  /// A new [key] instead starts over with the spinner.
+  final Object? version;
+
+  /// Set when the loader is a whole screen: while loading, and on an error, it keeps a nav bar with Back to this path
+  /// (an installed web app has no browser Back).
+  final String? back;
 
   @override
   State<ApiLoader<T>> createState() => ApiLoaderState<T>();
@@ -62,6 +71,9 @@ class ApiLoaderState<T> extends State<ApiLoader<T>> with RefreshOnReturn {
   /// Data came (from the API client's cache) right away: show it without the fade.
   bool _instant = false;
 
+  /// Only the latest fetch may land: an older one can answer after a newer one (fast typing in a search).
+  int _gen = 0;
+
   @override
   void initState() {
     super.initState();
@@ -71,7 +83,7 @@ class ApiLoaderState<T> extends State<ApiLoader<T>> with RefreshOnReturn {
   @override
   void didUpdateWidget(covariant ApiLoader<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.key != widget.key) reload();
+    if (oldWidget.version != widget.version) reload();
   }
 
   /// Re-fetches from the server; keeps showing the old data while loading.
@@ -81,10 +93,11 @@ class ApiLoaderState<T> extends State<ApiLoader<T>> with RefreshOnReturn {
   Future<void> refreshOnReturn() => reload();
 
   Future<void> _fetch({required bool fresh}) async {
+    final gen = ++_gen;
     setState(() => _loading = _data == null);
     try {
       final d = await (fresh ? ApiClient.fresh(widget.load) : widget.load());
-      if (mounted) {
+      if (mounted && gen == _gen) {
         setState(() {
           if (_data == null && DateTime.now().difference(_born) < const Duration(milliseconds: 120)) _instant = true;
           _data = d;
@@ -94,7 +107,7 @@ class ApiLoaderState<T> extends State<ApiLoader<T>> with RefreshOnReturn {
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && gen == _gen) {
         setState(() {
           _error = e;
           _loading = false;
@@ -106,12 +119,13 @@ class ApiLoaderState<T> extends State<ApiLoader<T>> with RefreshOnReturn {
   @override
   Widget build(BuildContext context) {
     final Widget child;
+    Widget screen(Widget view) => widget.back == null ? view : PassScaffold(title: '', back: widget.back, children: [view]);
     if (_data != null) {
       child = KeyedSubtree(key: const ValueKey('data'), child: widget.builder(context, _data as T, reload));
     } else if (_loading) {
-      child = KeyedSubtree(key: const ValueKey('loading'), child: widget.loading ?? const LoadingView());
+      child = KeyedSubtree(key: const ValueKey('loading'), child: screen(widget.loading ?? const LoadingView()));
     } else {
-      child = KeyedSubtree(key: const ValueKey('error'), child: ErrorView(error: _error, onRetry: reload));
+      child = KeyedSubtree(key: const ValueKey('error'), child: screen(ErrorView(error: _error, onRetry: reload)));
     }
     // Content fades in over the spinner; reloads keep the 'data' key, so they don't animate.
     return AnimatedSwitcher(

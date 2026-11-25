@@ -407,6 +407,20 @@ class _SlotGridState extends State<SlotGrid> {
         }
         _seeded = true;
         if (slots.isEmpty) return const EmptyText('No free times on this day.');
+        // Times between two free slots (booked, or closed) show greyed out, so a gap reads as one and not as a
+        // time the court doesn't have.
+        List<String> gap(int i) {
+          if (i == 0) return const [];
+          final prev = slots[i - 1];
+          final step = DateTime.parse('${prev['ends_at']}').difference(DateTime.parse('${prev['starts_at']}'));
+          final next = DateTime.parse('${slots[i]['starts_at']}');
+          return [
+            if (step > Duration.zero)
+              for (var t = DateTime.parse('${prev['ends_at']}'); t.isBefore(next); t = t.add(step))
+                hm(at(t.toIso8601String(), widget.clubZone)),
+          ];
+        }
+
         return Padding(
           padding: kGutter,
           child: GridView.count(
@@ -418,7 +432,25 @@ class _SlotGridState extends State<SlotGrid> {
             physics: const NeverScrollableScrollPhysics(),
             padding: EdgeInsets.zero,
             children: [
-              for (var i = 0; i < slots.length; i++)
+              for (var i = 0; i < slots.length; i++) ...[
+                for (final t in gap(i))
+                  Semantics(
+                    label: '$t unavailable',
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                          border: Border.all(color: c.sep, width: PassSpace.hairline),
+                          borderRadius: BorderRadius.circular(PassRadii.slot)),
+                      child: ExcludeSemantics(
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text(t,
+                              style: PassText.subhead.copyWith(
+                                  color: c.label3, fontWeight: PassText.semibold, decoration: TextDecoration.lineThrough)),
+                          Text('Unavailable', style: PassText.caption2.copyWith(color: c.label3)),
+                        ]),
+                      ),
+                    ),
+                  ),
                 Pressable(
                   semanticLabel: 'Slot ${hm(at(slots[i]['starts_at'] as String, widget.clubZone))}',
                   onTap: () => _pick(slots, i),
@@ -439,6 +471,7 @@ class _SlotGridState extends State<SlotGrid> {
                     );
                   }),
                 ),
+              ],
             ],
           ),
         );
@@ -563,8 +596,9 @@ class ActionBar extends StatelessWidget {
 
 /// A day with arrows either side and the date capsule between (opens the calendar): the club schedule's day.
 class DayBar extends StatelessWidget {
-  const DayBar({super.key, required this.value, required this.first, required this.last, required this.onChanged});
-  final DateTime value, first, last;
+  const DayBar(
+      {super.key, required this.value, required this.today, required this.first, required this.last, required this.onChanged});
+  final DateTime value, today, first, last;
   final ValueChanged<DateTime> onChanged;
 
   @override
@@ -590,7 +624,7 @@ class DayBar extends StatelessWidget {
         arrow(PassIcons.back, const Size(12, 20), -1, 'Previous day'),
         Expanded(
           child: Center(
-            child: DateCapsule(dayLabel(value), semanticLabel: 'Pick a day', onTap: () async {
+            child: DateCapsule(relativeDay(value, today), semanticLabel: 'Pick a day', onTap: () async {
               final d = await pickDate(context, value: value, first: first, last: last);
               if (d != null) onChanged(d);
             }),

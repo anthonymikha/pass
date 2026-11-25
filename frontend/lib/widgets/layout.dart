@@ -233,7 +233,8 @@ class ListRow extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: PassSpace.rowHeight),
       child: Padding(
         padding: padding,
-        child: Row(mainAxisAlignment: center ? MainAxisAlignment.center : MainAxisAlignment.start, children: [
+        child: LayoutBuilder(
+          builder: (context, box) => Row(mainAxisAlignment: center ? MainAxisAlignment.center : MainAxisAlignment.start, children: [
           if (leading != null) ...[leading!, const SizedBox(width: PassSpace.ml)],
           if (center)
             Text(label, style: PassText.body.copyWith(color: labelColor ?? c.label))
@@ -241,14 +242,16 @@ class ListRow extends StatelessWidget {
             Expanded(child: Text(label, style: PassText.body.copyWith(color: labelColor ?? c.label))),
           if (value != null) ...[
             const SizedBox(width: PassSpace.ml),
-            // At most 180 wide: a long value wraps instead of overflowing the row at phone width.
+            // At most 180 wide on a phone, half the row on a wider screen: a long value wraps instead of overflowing
+            // the row, and the label keeps its room.
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 180),
+              constraints: BoxConstraints(maxWidth: box.maxWidth / 2 > 180 ? box.maxWidth / 2 : 180),
               child: Text(value!, textAlign: TextAlign.right, style: PassText.body.copyWith(color: c.label2)),
             ),
           ],
           if (trailing != null) ...[const SizedBox(width: PassSpace.ml), trailing!],
-        ]),
+          ]),
+        ),
       ),
     );
     return onTap == null ? row : Pressable(onTap: onTap, child: row);

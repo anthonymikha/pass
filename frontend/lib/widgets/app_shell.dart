@@ -110,8 +110,9 @@ class AppShell extends StatelessWidget {
   }
 }
 
-/// Screens that cover the phone tab bar (none in the MVP; pass_v1 used it for a chat thread).
-bool hidesTabBar(String path) => false;
+/// Screens that cover the phone tab bar: a court listing and the booking steps have their own bottom bar (Airbnb's
+/// reserve bar), so the tab bar steps aside as on iOS (hidesBottomBarWhenPushed).
+bool hidesTabBar(String path) => RegExp(r'^/book/courts/\d+(/(times|extras|reserve))?$').hasMatch(path);
 
 bool _isActive(String path, String tabPath) => path == tabPath || path.startsWith('$tabPath/');
 

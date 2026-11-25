@@ -33,6 +33,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final _rate = TextEditingController(text: s.me?.coachRate == null ? '' : money(s.me!.coachRate, 'USD').split(' ').first);
   bool _busy = false;
 
+  /// The Save buttons light up only when there is something to save.
+  bool get _profileChanged =>
+      s.me != null && (_name.text.trim() != s.me!.fullName || _phone.text.trim() != s.me!.phone || _zone != s.me!.timezone);
+  bool get _coachingChanged =>
+      s.me != null &&
+      (_bio.text.trim() != s.me!.coachBio || double.tryParse(_rate.text.trim()) != double.tryParse(s.me!.coachRate ?? ''));
+
   @override
   void dispose() {
     _name.dispose();
@@ -65,13 +72,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         LargeTitleHeader(title: me?.fullName ?? 'Profile', subtitle: me?.email),
         const CapsHeader('Profile'),
         GroupedCard(inset: 0, children: [
-          FormFieldRow(label: 'Name', controller: _name),
-          FormFieldRow(label: 'Phone', controller: _phone, placeholder: 'Optional', keyboardType: TextInputType.phone),
+          FormFieldRow(label: 'Name', controller: _name, onChanged: (_) => setState(() {})),
+          FormFieldRow(
+              label: 'Phone',
+              controller: _phone,
+              placeholder: 'Optional',
+              keyboardType: TextInputType.phone,
+              onChanged: (_) => setState(() {})),
           PickerRow(label: 'Time zone', options: zoneNames(), value: _zone, onChanged: (v) => setState(() => _zone = v)),
         ]),
         PassButton('Save profile',
             kind: PassButtonKind.secondary,
             margin: _buttonMargin,
+            enabled: _profileChanged,
             busy: _busy,
             onPressed: () => _save({'full_name': _name.text.trim(), 'phone': _phone.text.trim(), 'timezone': _zone},
                 done: 'Profile saved')),
@@ -86,12 +99,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _save({'is_coach': v, if (v) 'coach_currency': 'USD'});
                   })),
           if (_coach) ...[
-            FormFieldRow(label: 'Bio', controller: _bio, placeholder: 'What you coach'),
+            FormFieldRow(label: 'Bio', controller: _bio, placeholder: 'What you coach', onChanged: (_) => setState(() {})),
             FormFieldRow(
                 label: 'Rate',
                 controller: _rate,
                 placeholder: 'USD per hour',
-                keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => setState(() {})),
           ],
         ]),
         if (_coach) ...[
@@ -100,6 +114,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           PassButton('Save coaching',
               kind: PassButtonKind.secondary,
               margin: _buttonMargin,
+              enabled: _coachingChanged,
               busy: _busy,
               onPressed: () => _save({
                     'coach_bio': _bio.text.trim(),
