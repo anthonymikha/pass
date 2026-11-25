@@ -1,5 +1,6 @@
 import datetime as dt
 import zoneinfo
+from collections import Counter
 from decimal import Decimal
 from io import StringIO
 from unittest import mock
@@ -2105,28 +2106,41 @@ class TickTests(BookingBase):
 
 
 class SeedDemoTests(APITestCase):
-    def test_every_screen_has_data_and_a_second_run_adds_nothing(self):
-        """SEED-4: each thing the app shows exists, court sessions sit on free offered slots, and it runs once."""
+    def test_every_screen_has_varied_data_and_a_changed_script_starts_over(self):
+        """SEED-4: each thing the app shows exists and varies, court sessions sit on free offered slots, nobody is
+        in two places at once; a second run changes nothing; a changed script wipes everything but real accounts."""
+        from bookings.management.commands import seed_demo
         from bookings.services import offered_slots
 
         with mock.patch.dict("os.environ", {"DEMO_PASSWORD": PASSWORD}):
             call_command("seed_demo", stdout=StringIO())
         sessions = Session.objects.all()
-        future = sessions.filter(starts_at__gt=dt.datetime.now(UTC))
+        now = dt.datetime.now(UTC)
         for found in [
             User.objects.filter(is_coach=True, coach_rate__isnull=False), User.objects.filter(is_coach=True, coach_rate=None),
             Court.objects.filter(is_active=False), CourtRate.objects.all(), CourtBlockout.objects.exclude(repeat="none"),
             Equipment.objects.filter(rental_price=None), Equipment.objects.filter(rental_price__isnull=False),
             Equipment.objects.filter(court__isnull=False), Discount.objects.filter(min_bookings=None),
+            Discount.objects.filter(user__isnull=False), Discount.objects.filter(amount_off__isnull=False),
             ClubMember.objects.filter(role="staff", status="active"), ClubMember.objects.filter(role="coach", status="active"),
             sessions.filter(status="requested"), sessions.filter(status="cancelled"), sessions.filter(discount_amount__gt=0),
-            future.filter(status="confirmed", kind="play"), sessions.filter(kind="training", court=None, status="confirmed"),
-            sessions.filter(kind="training", group__isnull=False), sessions.exclude(status="requested").filter(
-                starts_at__lt=dt.datetime.now(UTC)),
+            sessions.filter(starts_at__gt=now, status="confirmed", kind="play"), sessions.filter(starts_at__lt=now),
+            sessions.filter(kind="training", court=None, status="confirmed"), sessions.filter(kind="training", group__isnull=False),
             SessionRental.objects.filter(status="requested"), SessionRental.objects.filter(status="declined"),
             SessionParticipant.objects.filter(status="invited"),
         ]:
             self.assertTrue(found.exists(), found.query)
+
+        coaches = User.objects.filter(is_coach=True)
+        bios = [b for b in coaches.values_list("coach_bio", flat=True) if b]
+        self.assertEqual(len(bios), len(set(bios)))  # no two coaches share a bio
+        self.assertGreater(len(set(coaches.values_list("coach_rate", "coach_currency"))), 10)
+        self.assertGreater(len(set(CourtRate.objects.values_list("price", flat=True))), 60)
+        self.assertGreater(len(set(CourtRate.objects.values_list("start_time", "end_time"))), 8)
+        training = sessions.filter(kind="training", court=None).exclude(status="requested")
+        self.assertGreater(len({s.starts_at.astimezone(zoneinfo.ZoneInfo(s.coach.timezone)).hour for s in training}), 8)
+        sports_per_coach = Counter(c for c, _ in set(training.values_list("coach", "sport")))
+        self.assertGreater(max(sports_per_coach.values()), 1)  # some coaches teach several sports
 
         for court in Court.objects.filter(sessions__isnull=False).distinct().select_related("club"):
             booked = list(court.sessions.exclude(status="cancelled").order_by("starts_at"))
@@ -2138,8 +2152,7 @@ class SeedDemoTests(APITestCase):
             for s in booked:
                 self.assertIn(s.starts_at, starts)
                 self.assertIn(s.ends_at, ends)
-
-        times = {}  # nobody is in two sessions at once
+        times = {}
         for row in SessionParticipant.objects.exclude(session__status="cancelled").select_related("session"):
             times.setdefault(row.user_id, []).append((row.session.starts_at, row.session.ends_at))
         for spans in times.values():
@@ -2156,3 +2169,12 @@ class SeedDemoTests(APITestCase):
         call_command("seed_demo", stdout=StringIO())
         self.assertEqual((User.objects.count(), Session.objects.count(), Equipment.objects.count()), before)
         self.assertFalse(User.objects.get(email="player@pass-demo.example").has_usable_password())  # no DEMO_PASSWORD
+
+        real = User.objects.create_user("real@example.com", PASSWORD)
+        Club.objects.create(owner=real, name="Mine", timezone="Asia/Beirut", currency="USD")
+        with mock.patch.object(seed_demo, "VERSION", "changed"):
+            call_command("seed_demo", stdout=StringIO())
+        self.assertTrue(User.objects.filter(pk=real.pk).exists())
+        self.assertFalse(Club.objects.filter(name="Mine").exists())
+        self.assertFalse(User.objects.filter(email__startswith="seed-").exclude(email="seed-changed@pass-demo.example").exists())
+        self.assertEqual(Club.objects.filter(owner__email="owner@pass-demo.example").count(), 2)

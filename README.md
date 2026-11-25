@@ -63,7 +63,7 @@ export DEBUG=1
 .venv/bin/python manage.py runserver
 ```
 
-Padel, Tennis, Basketball and Pickleball exist after `migrate` (CLUB-36). Seed the other launch sports, default commission rows and placeholder exercises (safe to run again): `python manage.py seed`. Demo clubs, courts, prices, equipment, coaches, players and sessions for every screen (SEED-4, made once; the backend container runs it at every start): `python manage.py seed_demo`; sign in as `owner@`, `staff@`, `coach@` or `player@pass-demo.example` with `DEMO_PASSWORD` from `.env`.
+Padel, Tennis, Basketball and Pickleball exist after `migrate` (CLUB-36). Seed the other launch sports, default commission rows and placeholder exercises (safe to run again): `python manage.py seed`. Demo clubs, courts, prices, equipment, coaches, players and sessions for every screen (SEED-4; the backend container runs it at every start, and when the script changed it first deletes everything but the real accounts): `python manage.py seed_demo`; sign in as `owner@`, `staff@`, `coach@` or `player@pass-demo.example` with `DEMO_PASSWORD` from `.env`.
 
 ## Tests
 

@@ -33,5 +33,6 @@ RUN python -m whitenoise.compress /app/frontend_build \
 USER app
 EXPOSE 8000
 # Deployment: migrations, the shared rate-limit cache table and the bucket's CORS rule first, then the seed and demo
-# data (SEED-4: made once, then only the demo password is set; a failure there never keeps the site down), then 3 workers.
+# data (SEED-4: when the script changed, everything but the real accounts is deleted and rebuilt; a failure there never
+# keeps the site down), then 3 workers.
 CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable && python manage.py storage_cors && { python manage.py seed_demo || echo 'seed_demo failed, starting anyway'; } && exec gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 3"]
