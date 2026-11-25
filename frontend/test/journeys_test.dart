@@ -35,7 +35,16 @@ const pat = {'id': 1, 'full_name': 'Pat Player', 'is_coach': false};
 const kim = {'id': 2, 'full_name': 'Kim Coach', 'is_coach': true};
 
 void main() {
-  testWidgets('player finds a court, picks two slots and a rentable, sees the quote and books', (tester) async {
+  testWidgets('player finds a court, picks two days and their times, adds a rentable, sees the quotes and books both',
+      (tester) async {
+    var nextId = 9;
+    Map<String, Object?> session(int id) => {
+          'id': id, 'kind': 'play', 'status': 'confirmed', 'sport': {'id': 1, 'name': 'Padel'},
+          'court': {'id': 1, 'name': 'Court 1', 'club': {'id': 1, 'name': 'Hoops'}}, 'booked_by': pat, 'coach': null,
+          'starts_at': '2030-01-07T08:00:00Z', 'ends_at': '2030-01-07T10:00:00Z', 'currency': 'USD',
+          'price': '40.000', 'discount_amount': '0.000', 'coach_fee': '0.000', 'participants': [],
+          'rentals': [{'id': 3, 'equipment': {'id': 2, 'name': 'Rackets'}, 'quantity': 2, 'price': '10.000', 'status': 'requested'}],
+        };
     final api = FakeApi({
       'GET /api/sports/': (_) => [{'id': 1, 'name': 'Padel'}],
       'GET /api/clubs/': (_) => page([{...club, 'distance_km': null, 'courts': [{'id': 1, 'name': 'Court 1'}]}]),
@@ -45,57 +54,80 @@ void main() {
       'GET /api/courts/1/slots/': slotsFor,
       'GET /api/coaches/': (_) => page([kim]),
       'POST /api/sessions/quote/': (s) {
-        final rentals = ((s.body as Map)['rentals'] as List).cast<Map>();
+        final body = s.body as Map;
+        final rentals = (body['rentals'] as List).cast<Map>();
         final q = rentals.isEmpty ? 0 : rentals.first['quantity'] as int;
+        final hours = DateTime.parse(body['ends_at'] as String).difference(DateTime.parse(body['starts_at'] as String)).inHours;
         return {
-          'currency': 'USD', 'price': '40.000', 'offer': null, 'discount_amount': '0.000',
+          'currency': 'USD', 'price': '${20 * hours}.000', 'offer': null, 'discount_amount': '0.000',
           'rentals': [if (q > 0) {'equipment': 2, 'name': 'Rackets', 'quantity': q, 'price': '${5 * q}.000'}],
-          'court_amount': '${40 + 5 * q}.000',
+          'court_amount': '${20 * hours + 5 * q}.000',
         };
       },
-      'POST /api/sessions/': (_) => (201, {'id': 9}),
-      'GET /api/sessions/9/': (_) => {
-            'id': 9, 'kind': 'play', 'status': 'confirmed', 'sport': {'id': 1, 'name': 'Padel'},
-            'court': {'id': 1, 'name': 'Court 1', 'club': {'id': 1, 'name': 'Hoops'}}, 'booked_by': pat, 'coach': null,
-            'starts_at': '2030-01-07T08:00:00Z', 'ends_at': '2030-01-07T10:00:00Z', 'currency': 'USD',
-            'price': '40.000', 'discount_amount': '0.000', 'coach_fee': '0.000', 'participants': [],
-            'rentals': [{'id': 3, 'equipment': {'id': 2, 'name': 'Rackets'}, 'quantity': 2, 'price': '10.000', 'status': 'requested'}],
-          },
+      'POST /api/sessions/': (_) => (201, {'id': nextId++}),
+      'GET /api/sessions/9/': (_) => session(9),
+      'GET /api/sessions/10/': (_) => session(10),
     });
     await startApp(tester, api, '/book', me: meJson());
 
     await tapText(tester, 'Hoops');
     expect(find.text('Kim Coach'), findsOneWidget); // the club's coaches
     await tapText(tester, 'Court 1');
-    expect(find.text('Showers'), findsOneWidget); // amenity
+    expect(find.text('Showers'), findsOneWidget); // what the court offers
     expect(find.text('09:00–22:00 · 20.00 USD'), findsOneWidget); // prices per weekday
     expect(find.text('Monday'), findsOneWidget);
 
-    await tapText(tester, 'Pick a time'); // the calendar sheet opens on the first day with prices (a Monday)
+    // Days: the court has prices on Mondays only, so pick the next two (the calendar may need the next month).
+    await tapText(tester, 'Add dates');
+    final today = clubToday('Asia/Beirut');
+    final monday = today.add(Duration(days: (8 - today.weekday) % 7));
+    for (final d in [monday, monday.add(const Duration(days: 7))]) {
+      if (find.bySemanticsLabel(RegExp('^${dayLabel(d)}')).evaluate().isEmpty) await tapLabel(tester, 'Next month');
+      await tapLabel(tester, dayLabel(d));
+    }
+    expect(find.text('2 days'), findsOneWidget);
+    await tapText(tester, 'Next');
+
+    // Times: 10:00–12:00 on the first day, 12:00–13:00 on the second.
     await tapLabel(tester, 'Slot 10:00');
     await tapLabel(tester, 'Slot 11:00');
-    await tapText(tester, 'Reserve');
-    expect(find.text('120 min'), findsOneWidget); // the summary card
+    await tapLabel(tester, 'Slot 12:00', index: 1);
+    expect(find.text('2 of 2 days'), findsOneWidget);
+    await tapText(tester, 'Next');
+
+    // Extras: two rackets for each booking.
     await tapLabel(tester, 'Increase');
     await tapLabel(tester, 'Increase');
-    expect(find.text('Rackets ×2'), findsOneWidget); // quote line
-    expect(find.text('50.00 USD'), findsNWidgets(2)); // total, in the price card and the bar
+    expect(find.text('2 rentables'), findsOneWidget);
+    await tapText(tester, 'Review');
+
+    // Confirm: a quote per booking, added up exactly.
+    expect(find.text('Rackets ×2'), findsNWidgets(3)); // the summary, and a rentals line per booking
+    expect(find.text('40.00 USD'), findsOneWidget); // 2 hours on the first day
+    expect(find.text('80.00 USD'), findsNWidgets(2)); // total = 50 + 30, in the price card and the bar
     expect(find.text('Rentables are subject to the club’s approval.'), findsOneWidget);
 
-    await tapText(tester, 'Book now');
+    await tapText(tester, 'Book 2');
     expect(find.text('BOOKED'), findsOneWidget); // the hero
+    expect(find.text('Padel, 2 sessions.\nCourt 1, Hoops.'), findsOneWidget);
 
-    final quote = api.calls('POST', '/api/sessions/quote/').last.body as Map;
-    final booking = api.calls('POST', '/api/sessions/').single.body as Map;
-    expect(booking, quote); // booked exactly what was quoted
-    expect(booking['court'], 1);
-    expect(booking['sport'], 1);
-    expect(booking['currency'], 'USD');
-    expect(booking['rentals'], [{'equipment': 2, 'quantity': 2}]);
-    expect(DateTime.parse(booking['ends_at'] as String).difference(DateTime.parse(booking['starts_at'] as String)),
-        const Duration(hours: 2));
-    await tapText(tester, 'See session');
-    expect(find.textContaining('waiting for the club'), findsOneWidget); // the session, with its rental's status
+    final quotes = api.calls('POST', '/api/sessions/quote/').map((c) => c.body).toList();
+    final bookings = api.calls('POST', '/api/sessions/').map((c) => c.body as Map).toList();
+    expect(bookings, quotes); // booked exactly what was quoted
+    expect(bookings.length, 2);
+    for (final b in bookings) {
+      expect(b['court'], 1);
+      expect(b['sport'], 1);
+      expect(b['currency'], 'USD');
+      expect(b['rentals'], [{'equipment': 2, 'quantity': 2}]);
+    }
+    Duration len(Map b) => DateTime.parse(b['ends_at'] as String).difference(DateTime.parse(b['starts_at'] as String));
+    expect([for (final b in bookings) len(b)], [const Duration(hours: 2), const Duration(hours: 1)]);
+  });
+
+  test('sumMoney adds API decimals exactly', () {
+    expect(sumMoney(['50.000', '30.5', '0.105', '7']), '87.605');
+    expect(sumMoney([for (var i = 0; i < 10; i++) '0.100']), '1.000');
   });
 
   testWidgets('coach confirms a request with the fee prefilled as rate × hours, on a court at another time',

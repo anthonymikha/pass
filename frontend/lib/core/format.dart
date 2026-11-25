@@ -83,8 +83,7 @@ String money(String? amount, String? currency) {
 /// FE-4: coach rate (per hour, a decimal string) times the minutes, rounded to the currency's minor units,
 /// half away from zero (GEN-16). Exact: done in thousandths.
 String coachFee(String rate, int minutes, String currency) {
-  final parts = rate.split('.');
-  final thousandths = int.parse(parts[0]) * 1000 + int.parse('${parts.length > 1 ? parts[1] : ''}000'.substring(0, 3));
+  final thousandths = _thousandths(rate);
   final step = [1000, 100, 10, 1][minorUnits(currency)];
   final raw = thousandths * minutes;
   final rounded = ((raw + 30 * step) ~/ (60 * step)) * step; // round half up over minutes/60
@@ -92,4 +91,16 @@ String coachFee(String rate, int minutes, String currency) {
   final frac = (rounded % 1000).toString().padLeft(3, '0');
   final units = minorUnits(currency);
   return units == 0 ? '$whole' : '$whole.${frac.substring(0, units)}';
+}
+
+/// "50.000" -> 50000: a non-negative API decimal in thousandths, its stored precision.
+int _thousandths(String amount) {
+  final parts = amount.split('.');
+  return int.parse(parts[0]) * 1000 + int.parse('${parts.length > 1 ? parts[1] : ''}000'.substring(0, 3));
+}
+
+/// Quoted amounts added up exactly, in thousandths: the total of several bookings made together ("60.000").
+String sumMoney(Iterable<String> amounts) {
+  final t = amounts.fold(0, (sum, a) => sum + _thousandths(a));
+  return '${t ~/ 1000}.${(t % 1000).toString().padLeft(3, '0')}';
 }

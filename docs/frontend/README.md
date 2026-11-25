@@ -21,7 +21,7 @@ frontend/
     widgets/             pass_v1's shared widgets (PassScaffold, ApiLoader, showErrorAlert, ...)
     features/
       auth/              welcome, sign up, sign in, forgot password
-      book/              find a club or a coach, club, court listing, calendar sheet, confirm (quote, book), booked, coach
+      book/              find a club or a coach, club, court listing; days sheet, times, extras, confirm and book (one booking per day), booked; coach
       sessions/          my sessions, training requests, session detail, confirm a request
       club/              my clubs, schedule and rentals, setup (club, courts and prices, equipment, staff)
       profile/           profile, coach switch and rate, create a club, log out, delete account
@@ -48,7 +48,7 @@ The web app needs the API on the same origin. The simplest way to see it is the 
 
 `test/journeys_test.dart` runs the real app (router and screens) with only the HTTP transport replaced by `package:http`'s `MockClient` (`test/helpers.dart`), and checks what is on screen and which requests went out with which bodies:
 
-1. a player finds a club (and its coaches) and a court, sees prices and amenities, picks two slots on the calendar sheet, adds two rentables on Confirm, sees the quote and books exactly what was quoted, then the Booked hero;
+1. a player finds a club (and its coaches) and a court, sees prices and what it offers, picks two days on the days sheet, a run of slots on each, two rentables on Extras, sees a quote per booking and their exact total, and books exactly what was quoted (one booking per day), then the Booked hero;
 2. a coach sees the badge and the request, the fee prefilled from the coach rate × hours, moves the training onto a court at another time (the fee follows) and confirms;
 3. a club owner (desktop width) adds a court, a price window for six weekdays, an amenity and a rentable;
 4. a Confirm link without a time asks for one instead of failing.
@@ -59,6 +59,6 @@ The web app needs the API on the same origin. The simplest way to see it is the 
 |---|---|
 | Login state | The token from register or login, in local storage; sent as `Authorization: Token <token>`; a `401` forgets it and shows Welcome |
 | Time zones | The API sends UTC. Court times (slots, prices, the club schedule) in the club's `timezone`; everything else in the device's |
-| Money | USD only (FE-3); decimal strings shown cut to the currency's minor units, never added up in the app (the quote's total comes from the server) |
+| Money | USD only (FE-3); decimal strings shown cut to the currency's minor units; each quote's total comes from the server, and several bookings made together are added up exactly in thousandths (`sumMoney`), never as floating point |
 
 Not in the MVP (the backend keeps them): push notifications, check-in, payments, chat, wellness and sleep import, recordings and video, teams and play groups, friends, offers, other currencies, closures, coach affiliation, shadow players, coach-booked training, availability, avatars, native store builds.

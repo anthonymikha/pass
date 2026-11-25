@@ -22,11 +22,13 @@ const _monthNames = [
 DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 
 /// The iOS inline calendar (UIDatePicker, inline style): month with arrows, weekday letters, a grid of days.
-/// Days before [first], after [last] or refused by [isOpen] are greyed out and can't be picked.
+/// [selected] days are tinted discs (several for a multi-day pick). Days before [first], after [last] or refused by
+/// [isOpen] are greyed out and can't be picked.
 class PassCalendar extends StatefulWidget {
   const PassCalendar(
       {super.key, required this.selected, required this.first, this.last, this.isOpen, required this.onChanged});
-  final DateTime selected, first;
+  final Set<DateTime> selected;
+  final DateTime first;
   final DateTime? last;
   final bool Function(DateTime day)? isOpen;
   final ValueChanged<DateTime> onChanged;
@@ -36,13 +38,10 @@ class PassCalendar extends StatefulWidget {
 }
 
 class _PassCalendarState extends State<PassCalendar> {
-  late DateTime _month = DateTime(widget.selected.year, widget.selected.month);
-
-  @override
-  void didUpdateWidget(PassCalendar old) {
-    super.didUpdateWidget(old);
-    if (old.selected != widget.selected) _month = DateTime(widget.selected.year, widget.selected.month);
-  }
+  late DateTime _month = () {
+    final d = widget.selected.isEmpty ? widget.first : widget.selected.reduce((a, b) => a.isBefore(b) ? a : b);
+    return DateTime(d.year, d.month);
+  }();
 
   bool _canPick(DateTime d) =>
       !d.isBefore(_day(widget.first)) &&
@@ -103,7 +102,7 @@ class _PassCalendarState extends State<PassCalendar> {
 
   Widget _cell(BuildContext context, DateTime d, DateTime today) {
     final c = context.c;
-    final on = _day(widget.selected) == d;
+    final on = widget.selected.contains(d);
     final isToday = d == today;
     final can = _canPick(d);
     // iOS: the chosen day is a tinted disc, today is tint text (white on a full disc when chosen too).
@@ -154,7 +153,7 @@ Future<DateTime?> pickDate(BuildContext context, {required DateTime value, requi
     showPassSheet<DateTime>(
         context,
         (ctx) => PassCalendar(
-            selected: value, first: first, last: last, onChanged: (d) => Navigator.of(ctx).pop(d)));
+            selected: {_day(value)}, first: first, last: last, onChanged: (d) => Navigator.of(ctx).pop(d)));
 
 /// Time wheels in a sheet, 5-minute steps; the time of [value] changed (same day).
 Future<DateTime?> pickTime(BuildContext context, DateTime value) async {
@@ -296,7 +295,6 @@ class SlotRun {
 }
 
 /// Pick a day on the calendar (club time zone) and a run of consecutive free slots of one court (AVL-10, BOOK-4).
-/// Tap a slot to start a run, tap a later slot to extend it; a gap starts a new run.
 /// Days of the week in [openWeekdays] (0 = Monday, the court's price windows) are the only ones offered.
 class SlotRunPicker extends StatefulWidget {
   const SlotRunPicker(
@@ -312,106 +310,140 @@ class SlotRunPicker extends StatefulWidget {
   final Set<int>? openWeekdays;
 
   @override
-  State<SlotRunPicker> createState() => SlotRunPickerState();
+  State<SlotRunPicker> createState() => _SlotRunPickerState();
 }
 
-class SlotRunPickerState extends State<SlotRunPicker> {
-  static const _days = 60;
+class _SlotRunPickerState extends State<SlotRunPicker> {
   late final DateTime _today = clubToday(widget.clubZone);
   late DateTime _date = [
-    for (var i = 0; i < _days; i++) DateTime(_today.year, _today.month, _today.day + i),
+    for (var i = 0; i < bookingHorizonDays; i++) DateTime(_today.year, _today.month, _today.day + i),
   ].firstWhere(_open, orElse: () => _today);
-  int? _from, _to;
-  int _reload = 0;
 
   bool _open(DateTime d) => widget.openWeekdays?.contains(d.weekday - 1) ?? true;
 
-  /// After a `slot_taken`: forget the run and load the day again.
-  void reload() => setState(() {
-        _reload++;
-        _from = _to = null;
-        widget.onChanged(null);
-      });
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        PassCard(
+          padding: const EdgeInsets.all(PassSpace.ml),
+          child: PassCalendar(
+              selected: {_date},
+              first: _today,
+              last: _today.add(const Duration(days: bookingHorizonDays)),
+              isOpen: _open,
+              onChanged: (d) {
+                setState(() => _date = d);
+                widget.onChanged(null);
+              }),
+        ),
+        CapsHeader('Free times · ${dayLabel(_date)}'),
+        SlotGrid(
+            key: ValueKey(ymd(_date)),
+            courtId: widget.courtId,
+            date: _date,
+            clubZone: widget.clubZone,
+            currency: widget.currency,
+            onChanged: widget.onChanged),
+        const FootnoteText('Tap a start time, then a later one for a longer booking.'),
+      ]);
+}
+
+/// Free slots are offered from today to today + 60 days (AVL-10).
+const bookingHorizonDays = 60;
+
+/// One day's free slots of a court with their prices (pass_v1's slot grid, four to a row). Tap a slot to start a
+/// run, tap a later slot to extend it; a gap starts a new run. [initial] (from, to) is shown picked when it is free.
+class SlotGrid extends StatefulWidget {
+  const SlotGrid(
+      {super.key,
+      required this.courtId,
+      required this.date,
+      required this.clubZone,
+      required this.currency,
+      required this.onChanged,
+      this.initial});
+  final int courtId;
+  final DateTime date;
+  final String clubZone, currency;
+  final ValueChanged<SlotRun?> onChanged;
+  final (String, String)? initial;
+
+  @override
+  State<SlotGrid> createState() => _SlotGridState();
+}
+
+class _SlotGridState extends State<SlotGrid> {
+  int? _from, _to;
+  bool _seeded = false;
 
   void _pick(List<Map<String, dynamic>> slots, int i) {
     bool joined(int k) => slots[k]['ends_at'] == slots[k + 1]['starts_at'];
     setState(() {
-      if (_from != null && i > _to! && [for (var k = _to!; k < i; k++) joined(k)].every((x) => x)) {
+      if (_from == i && _to == i) {
+        _from = _to = null; // tap the only picked slot again: none
+      } else if (_from != null && i > _to! && [for (var k = _to!; k < i; k++) joined(k)].every((x) => x)) {
         _to = i;
       } else {
         _from = _to = i;
       }
     });
-    widget.onChanged(SlotRun(slots.sublist(_from!, _to! + 1)));
+    widget.onChanged(_from == null ? null : SlotRun(slots.sublist(_from!, _to! + 1)));
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.c;
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      PassCard(
-        padding: const EdgeInsets.all(PassSpace.ml),
-        child: PassCalendar(
-            selected: _date,
-            first: _today,
-            last: _today.add(const Duration(days: _days)),
-            isOpen: _open,
-            onChanged: (d) {
-              setState(() {
-                _date = d;
-                _from = _to = null;
-              });
-              widget.onChanged(null);
-            }),
-      ),
-      CapsHeader('Free times · ${dayLabel(_date)}'),
-      ApiLoader<List<dynamic>>(
-        key: ValueKey('slots-${widget.courtId}-${ymd(_date)}-$_reload'),
-        load: () async =>
-            await ApiClient.instance.get('/api/courts/${widget.courtId}/slots/', query: {'date': ymd(_date)}) as List,
-        builder: (context, data, _) {
-          final slots = asMaps(data);
-          if (slots.isEmpty) return const EmptyText('No free times on this day.');
-          // pass_v1's slot grid: four to a row.
-          return Padding(
-            padding: kGutter,
-            child: GridView.count(
-              crossAxisCount: 4,
-              mainAxisSpacing: PassSpace.s,
-              crossAxisSpacing: PassSpace.s,
-              childAspectRatio: 1.5,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: EdgeInsets.zero,
-              children: [
-                for (var i = 0; i < slots.length; i++)
-                  Pressable(
-                    semanticLabel: 'Slot ${hm(at(slots[i]['starts_at'] as String, widget.clubZone))}',
-                    onTap: () => _pick(slots, i),
-                    child: Builder(builder: (context) {
-                      final on = _from != null && i >= _from! && i <= _to!;
-                      return AnimatedContainer(
-                        duration: PassMotion.fast,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                            color: on ? c.tint : c.bgCard, borderRadius: BorderRadius.circular(PassRadii.slot)),
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Text(hm(at(slots[i]['starts_at'] as String, widget.clubZone)),
-                              style: PassText.subhead
-                                  .copyWith(color: on ? PassColors.white : c.label, fontWeight: PassText.semibold)),
-                          Text(money(slots[i]['price'] as String?, widget.currency),
-                              style: PassText.caption2.copyWith(color: on ? PassColors.white : c.label2)),
-                        ]),
-                      );
-                    }),
-                  ),
-              ],
-            ),
-          );
-        },
-      ),
-      const FootnoteText('Tap a start time, then a later one for a longer booking.'),
-    ]);
+    return ApiLoader<List<dynamic>>(
+      load: () async =>
+          await ApiClient.instance.get('/api/courts/${widget.courtId}/slots/', query: {'date': ymd(widget.date)}) as List,
+      builder: (context, data, _) {
+        final slots = asMaps(data);
+        if (!_seeded && widget.initial != null) {
+          final i = slots.indexWhere((s) => s['starts_at'] == widget.initial!.$1);
+          final j = slots.indexWhere((s) => s['ends_at'] == widget.initial!.$2);
+          if (i >= 0 && j >= i) {
+            _from = i;
+            _to = j;
+          }
+        }
+        _seeded = true;
+        if (slots.isEmpty) return const EmptyText('No free times on this day.');
+        return Padding(
+          padding: kGutter,
+          child: GridView.count(
+            crossAxisCount: 4,
+            mainAxisSpacing: PassSpace.s,
+            crossAxisSpacing: PassSpace.s,
+            childAspectRatio: 1.5,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            children: [
+              for (var i = 0; i < slots.length; i++)
+                Pressable(
+                  semanticLabel: 'Slot ${hm(at(slots[i]['starts_at'] as String, widget.clubZone))}',
+                  onTap: () => _pick(slots, i),
+                  child: Builder(builder: (context) {
+                    final on = _from != null && i >= _from! && i <= _to!;
+                    return AnimatedContainer(
+                      duration: PassMotion.fast,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                          color: on ? c.tint : c.bgCard, borderRadius: BorderRadius.circular(PassRadii.slot)),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(hm(at(slots[i]['starts_at'] as String, widget.clubZone)),
+                            style: PassText.subhead
+                                .copyWith(color: on ? PassColors.white : c.label, fontWeight: PassText.semibold)),
+                        Text(money(slots[i]['price'] as String?, widget.currency),
+                            style: PassText.caption2.copyWith(color: on ? PassColors.white : c.label2)),
+                      ]),
+                    );
+                  }),
+                ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -444,9 +476,14 @@ class SummaryCard extends StatelessWidget {
 /// pass_v1's tint "Booked" hero with the follow-up actions.
 class BookedBody extends StatelessWidget {
   const BookedBody(
-      {super.key, required this.kicker, required this.headline, required this.body, required this.sessionId, required this.againPath});
-  final String kicker, headline, body, againPath;
-  final int sessionId;
+      {super.key,
+      required this.kicker,
+      required this.headline,
+      required this.body,
+      required this.seeLabel,
+      required this.seePath,
+      required this.againPath});
+  final String kicker, headline, body, seeLabel, seePath, againPath;
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -463,7 +500,7 @@ class BookedBody extends StatelessWidget {
           ]),
         ),
         const SizedBox(height: PassSpace.lg),
-        PassButton('See session', kind: PassButtonKind.secondary, onPressed: () => context.go('/sessions/$sessionId')),
+        PassButton(seeLabel, kind: PassButtonKind.secondary, onPressed: () => context.go(seePath)),
         Padding(
           padding: kGutter,
           child: Align(

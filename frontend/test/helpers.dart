@@ -67,9 +67,9 @@ Future<void> tapText(WidgetTester tester, String text, {int index = 0}) async {
 }
 
 /// Taps the control with this semantics label ("Increase", "Slot 10:00", "Saturday").
-Future<void> tapLabel(WidgetTester tester, String label) async {
+Future<void> tapLabel(WidgetTester tester, String label, {int index = 0}) async {
   // A Pressable's label is followed by its child's text ("Slot 10:00\n10:00\n20.00 USD").
-  final f = find.bySemanticsLabel(RegExp('^${RegExp.escape(label)}(\\s|\$)')).first;
+  final f = find.bySemanticsLabel(RegExp('^${RegExp.escape(label)}(\\s|\$)')).at(index);
   await tester.ensureVisible(f);
   await settle(tester);
   await tester.tap(f);

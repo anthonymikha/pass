@@ -55,16 +55,17 @@ GoRouter buildRouter(AppState state, {String initialLocation = '/'}) => GoRouter
               GoRoute(path: '/book', pageBuilder: (c, st) => _root(st, const BookScreen()), routes: [
                 GoRoute(path: 'clubs/:id', pageBuilder: (c, st) => _push(st, ClubScreen(id: _id(st)))),
                 GoRoute(path: 'courts/:id', pageBuilder: (c, st) => _push(st, CourtScreen(id: _id(st))), routes: [
-                  GoRoute(
-                      path: 'reserve',
-                      pageBuilder: (c, st) => _push(
-                          st,
-                          ReserveScreen(
-                              id: _id(st),
-                              from: st.uri.queryParameters['from'] ?? '',
-                              to: st.uri.queryParameters['to'] ?? ''))),
+                  GoRoute(path: 'times', pageBuilder: (c, st) => _push(st, TimesScreen(trip: Trip.of(_id(st), st.uri)))),
+                  GoRoute(path: 'extras', pageBuilder: (c, st) => _push(st, ExtrasScreen(trip: Trip.of(_id(st), st.uri)))),
+                  GoRoute(path: 'reserve', pageBuilder: (c, st) => _push(st, ReserveScreen(trip: Trip.of(_id(st), st.uri)))),
                 ]),
-                GoRoute(path: 'booked/:id', pageBuilder: (c, st) => _push(st, BookedScreen(id: _id(st)))),
+                GoRoute(
+                    path: 'booked/:ids',
+                    pageBuilder: (c, st) => _push(
+                        st,
+                        BookedScreen(ids: [
+                          for (final i in (st.pathParameters['ids'] ?? '').split(',')) ?int.tryParse(i),
+                        ]))),
                 GoRoute(path: 'coaches/:id', pageBuilder: (c, st) => _push(st, CoachScreen(id: _id(st)))),
               ]),
             ]),
