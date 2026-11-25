@@ -23,7 +23,7 @@ Model pages ([models/](../models/)) say what each field means. Flow pages ([flow
 | [recordings.md](recordings.md) | `REC` | Storage, upload, playback, tags, avatars |
 | [chat.md](chat.md) | `CHAT` | Direct, group and inquiry chats, polling, unread |
 | [notifications.md](notifications.md) | `NOTE` | Devices, push sending, triggers, the scheduler |
-| [seed-data.md](seed-data.md) | `SEED` | Sports, default commission, placeholder exercises |
+| [seed-data.md](seed-data.md) | `SEED` | Sports, default commission, placeholder exercises, demo data |
 
 ## How to read a rule
 

@@ -1,4 +1,5 @@
 import datetime as dt
+import zoneinfo
 from decimal import Decimal
 from io import StringIO
 from unittest import mock
@@ -2101,3 +2102,57 @@ class TickTests(BookingBase):
         self.assertEqual([(p["user_id"], p["data"]["id"]) for p in reminders()], [(rana.id, str(ahead.id))])
         ahead_row.refresh_from_db()
         self.assertEqual(ahead_row.rpe_reminded_at, NOW + 3 * hour)
+
+
+class SeedDemoTests(APITestCase):
+    def test_every_screen_has_data_and_a_second_run_adds_nothing(self):
+        """SEED-4: each thing the app shows exists, court sessions sit on free offered slots, and it runs once."""
+        from bookings.services import offered_slots
+
+        with mock.patch.dict("os.environ", {"DEMO_PASSWORD": PASSWORD}):
+            call_command("seed_demo", stdout=StringIO())
+        sessions = Session.objects.all()
+        future = sessions.filter(starts_at__gt=dt.datetime.now(UTC))
+        for found in [
+            User.objects.filter(is_coach=True, coach_rate__isnull=False), User.objects.filter(is_coach=True, coach_rate=None),
+            Court.objects.filter(is_active=False), CourtRate.objects.all(), CourtBlockout.objects.exclude(repeat="none"),
+            Equipment.objects.filter(rental_price=None), Equipment.objects.filter(rental_price__isnull=False),
+            Equipment.objects.filter(court__isnull=False), Discount.objects.filter(min_bookings=None),
+            ClubMember.objects.filter(role="staff", status="active"), ClubMember.objects.filter(role="coach", status="active"),
+            sessions.filter(status="requested"), sessions.filter(status="cancelled"), sessions.filter(discount_amount__gt=0),
+            future.filter(status="confirmed", kind="play"), sessions.filter(kind="training", court=None, status="confirmed"),
+            sessions.filter(kind="training", group__isnull=False), sessions.exclude(status="requested").filter(
+                starts_at__lt=dt.datetime.now(UTC)),
+            SessionRental.objects.filter(status="requested"), SessionRental.objects.filter(status="declined"),
+            SessionParticipant.objects.filter(status="invited"),
+        ]:
+            self.assertTrue(found.exists(), found.query)
+
+        for court in Court.objects.filter(sessions__isnull=False).distinct().select_related("club"):
+            booked = list(court.sessions.exclude(status="cancelled").order_by("starts_at"))
+            for a, b in zip(booked, booked[1:]):
+                self.assertLessEqual(a.ends_at, b.starts_at)
+            days = {s.starts_at.astimezone(zoneinfo.ZoneInfo(court.club.timezone)).date() for s in booked}
+            slots = offered_slots(court, sorted(days))
+            starts, ends = {s.starts_at for s in slots}, {s.ends_at for s in slots}
+            for s in booked:
+                self.assertIn(s.starts_at, starts)
+                self.assertIn(s.ends_at, ends)
+
+        times = {}  # nobody is in two sessions at once
+        for row in SessionParticipant.objects.exclude(session__status="cancelled").select_related("session"):
+            times.setdefault(row.user_id, []).append((row.session.starts_at, row.session.ends_at))
+        for spans in times.values():
+            spans.sort()
+            for (_, end), (start, _) in zip(spans, spans[1:]):
+                self.assertLessEqual(end, start)
+
+        login = self.client.post("/api/auth/login/", {"email": "player@pass-demo.example", "password": PASSWORD})
+        self.assertEqual(login.status_code, 200)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {login.data['token']}")
+        self.assertGreater(self.client.get("/api/me/sessions/").data["count"], 0)
+
+        before = (User.objects.count(), Session.objects.count(), Equipment.objects.count())
+        call_command("seed_demo", stdout=StringIO())
+        self.assertEqual((User.objects.count(), Session.objects.count(), Equipment.objects.count()), before)
+        self.assertFalse(User.objects.get(email="player@pass-demo.example").has_usable_password())  # no DEMO_PASSWORD
