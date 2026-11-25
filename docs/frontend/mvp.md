@@ -1,6 +1,6 @@
 # Frontend MVP
 
-**Status: revised 2026-11-24, waiting for the owner's review, not built.** The first version of this spec (Flutter for web, Android and iOS, Material 3) was approved and built on 2026-11-24, then torn down at the owner's request. A second question round the same day changed the platform to a web app styled after pass_v1 (FE-1, FE-8 to FE-14 below). Everything else carries over.
+**Status: approved 2026-11-24, building.** The first version of this spec (Flutter for web, Android and iOS, Material 3) was approved and built on 2026-11-24, then torn down at the owner's request. A second question round the same day changed the platform to a web app styled after pass_v1 (FE-1, FE-8 to FE-14 below). Everything else carries over.
 
 The MVP is scheduling between players, coaches and courts: players find a court or a coach, see prices, amenities and rentables, and book; coaches answer training requests; the club side sets up courts, prices, amenities and rentables and sees its bookings. Words follow [GLOSSARY.md](../../GLOSSARY.md).
 
