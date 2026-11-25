@@ -10,7 +10,11 @@ Paste this into a new session opened in the repo root:
 
 > Read PLAN.md in the repo root in full (start with "Status on 2026-11-21 (latest)"), then `docs/backend/logic/README.md` and every page it lists, `docs/deployment.md`, then `git log --oneline` and `backend/*/models.py`. The logic pages are the approved specification. Steps 2 to 10 and T14 to T19 are done (the backend is finished); the next work is step 11 (Flutter) and the first deployment, within the standing permissions in "Working agreements".
 
-## Status on 2026-11-21 (latest, after the overnight build)
+## Status on 2026-11-25 (latest)
+
+- **Step 11 is built as the frontend MVP** ([docs/frontend/mvp.md](docs/frontend/mvp.md), issue #1): a Flutter web app in pass_v1's design, served by the backend image at `/`, plus CLUB-36 (sports list and starting sports). Widget tests of three journeys, `flutter analyze` clean, backend suite green on SQLite and Postgres, and a local end-to-end run in Chromium at 390 px and desktop width. Not deployed: the owner gives the server and the hosts. What was settled while building is in mvp.md, *Decided during build (2026-11-25)*.
+
+## Status on 2026-11-21 (after the overnight build)
 
 - **T14 to T19 are built**, committed and pushed to `origin/main` (built in a separate worktree, `build/t14-t19`, pushed as `main`). 121 tests, green on SQLite and on Postgres in Docker from an empty `./data`; every task was also exercised with curl against the running stack. Every rule of the reviews of 2026-11-17 and 2026-11-20 is marked built on its logic page; rules added during the build carry *decided during build (2026-11-21)*: PAY-10 (the `billed_at` migration), PAY-28, PAY-29, TEAM-35, RPT-9, ACC-36, ACC-37, BOOK-1's table (now says "before anyone checks in"), and the deployment page's own list.
 - **Uncommitted work found in the main checkout** (`/home/amikhael/pass`): an earlier, never-committed build of the 2026-11-17 audit (an `attendance` column, CLUB-34 blocks reach the club side, CLUB-35 admins confirm clubs, chat `display_name`, and two large test files `backend/test_e2e.py` and `backend/test_locks.py`), left half-merged by an autostash. The committed spec superseded it, so it was not built. It is kept on the local branch `wip/local-2026-11-17-audit` (commit `af62bc0`, not pushed) and in `stash@{0}`; the main checkout itself was left untouched (conflicts and all). The owner decides whether CLUB-34, CLUB-35 or the e2e and lock tests come back (they would need a spec and an update to the new billing).

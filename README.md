@@ -3,11 +3,13 @@
 ## Layout
 
 - `backend/` Django project: `config/` (settings, urls) and 7 apps: `accounts`, `venues`, `teams`, `bookings`, `billing`, `wellness`, `chat`. Foreign keys only point to apps earlier in that list.
-- `docker-compose.yml` Postgres, object storage, backend, scheduler and nightly backup; `docker-compose.traefik.yml` and `docker-compose.caddy.yml` add a reverse proxy on a server ([deployment](docs/deployment.md)).
+- `frontend/` the web app (Flutter web, pass_v1's design): [docs/frontend](docs/frontend/README.md). `scripts/flutter.sh` runs Flutter in Docker; `docker/` holds its image.
+- `scripts/autoupdate.sh` pulls and rebuilds the stack on a server when `origin` has new commits ([deployment](docs/deployment.md#auto-update)).
+- `docker-compose.yml` Postgres, object storage, backend (which also serves the web app), scheduler and nightly backup; `docker-compose.traefik.yml` and `docker-compose.caddy.yml` add a reverse proxy on a server ([deployment](docs/deployment.md)).
 
 - `data/` created by Docker for container data (database files); gitignored, root-owned.
 
-URLs: Django admin at `/admin/`, REST API under `/api/`.
+URLs: the web app at `/`, Django admin at `/admin/`, REST API under `/api/`.
 
 ## API
 
@@ -31,7 +33,7 @@ docker compose up --build
 docker compose exec backend python manage.py createsuperuser
 ```
 
-Admin: http://localhost:8000/admin/. On start the backend runs `migrate`, `createcachetable` (the shared rate-limit cache) and `storage_cors`, then gunicorn with 3 workers; the scheduler waits until the backend is healthy. The `backup` service writes one `pg_dump` a day to `./data/backups` and keeps 7 days. On a server, follow [docs/deployment.md](docs/deployment.md).
+App: http://localhost:8000/ (the backend image builds it; the first build downloads the Flutter image and takes a few minutes). Admin: http://localhost:8000/admin/. On start the backend runs `migrate`, `createcachetable` (the shared rate-limit cache) and `storage_cors`, then gunicorn with 3 workers; the scheduler waits until the backend is healthy. The `backup` service writes one `pg_dump` a day to `./data/backups` and keeps 7 days. On a server, follow [docs/deployment.md](docs/deployment.md).
 
 ### Scheduler and push notifications
 
@@ -61,10 +63,11 @@ export DEBUG=1
 .venv/bin/python manage.py runserver
 ```
 
-Seed the launch sports, default commission rows and placeholder exercises (safe to run again): `python manage.py seed`.
+Padel, Tennis, Basketball and Pickleball exist after `migrate` (CLUB-36). Seed the other launch sports, default commission rows and placeholder exercises (safe to run again): `python manage.py seed`.
 
 ## Tests
 
 ```sh
 cd backend && DEBUG=1 .venv/bin/python manage.py test
+scripts/flutter.sh analyze && scripts/flutter.sh test     # the web app, in Docker
 ```

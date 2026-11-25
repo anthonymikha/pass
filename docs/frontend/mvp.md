@@ -1,6 +1,6 @@
 # Frontend MVP
 
-**Status: approved 2026-11-24, building.** The first version of this spec (Flutter for web, Android and iOS, Material 3) was approved and built on 2026-11-24, then torn down at the owner's request. A second question round the same day changed the platform to a web app styled after pass_v1 (FE-1, FE-8 to FE-14 below). Everything else carries over.
+**Status: approved 2026-11-24, built 2026-11-25** (widget tests and a local end-to-end run in the browser; not deployed). See *Decided during build* at the end. The first version of this spec (Flutter for web, Android and iOS, Material 3) was approved and built on 2026-11-24, then torn down at the owner's request. A second question round the same day changed the platform to a web app styled after pass_v1 (FE-1, FE-8 to FE-14 below). Everything else carries over.
 
 The MVP is scheduling between players, coaches and courts: players find a court or a coach, see prices, amenities and rentables, and book; coaches answer training requests; the club side sets up courts, prices, amenities and rentables and sees its bookings. Words follow [GLOSSARY.md](../../GLOSSARY.md).
 
@@ -86,3 +86,22 @@ The backend keeps them; the app has no screens for them: push notifications, che
 - Flutter 3.35.7 run through Docker (`scripts/flutter.sh`, the image `ghcr.io/cirruslabs/flutter:3.35.7` is cached on this machine), as in pass_v1. Packages: `http`, `go_router` (path URLs), `intl`. A hand-written API client in one file. No state-management package: widgets load their data.
 - Built with `flutter build web --release --no-web-resources-cdn --pwa-strategy=none`; `web/manifest.json` and `index.html` carry the home-screen name, icons, `display: standalone` and the iOS status-bar and safe-area settings.
 - Checks: `flutter analyze`; a widget test for booking and for confirming a training request; the backend test for CLUB-36; the web build driven in a browser against the local stack (book a court, request and confirm training, set up a club).
+
+## Decided during build (2026-11-25)
+
+What the decisions and screens above leave open, settled while building:
+
+- **Packages:** `http`, `go_router`, `timezone` and `web`, not `intl`. Dart has no IANA time zone data, and court times are in the club's zone, so the `timezone` package (its bundled `latest_10y` database, no network) converts them and lists the zones for the time zone pickers. Dates are formatted by hand, as in pass_v1.
+- **Token storage:** browser local storage, key `pass_token`. `lib/core/token_store_web.dart` is the one file that touches the browser (`package:web`, an exception to pass_v1's "no `package:web`" rule); tests and other platforms use an in-memory stand-in. The same file reads the device's IANA zone, the default time zone of a new club.
+- **401:** any 401 while a token is stored forgets the token and shows Welcome. A stored token is checked once at start with `GET /api/me/`.
+- **Money:** amounts are shown cut to the currency's minor units, `"50.000"` USD as `50.00 USD`; the digits are not recomputed. The coach fee prefill (FE-4) is computed exactly in thousandths and rounded half up to the minor units (GEN-16). It follows every change of time until the coach types a fee of their own.
+- **Booking:** the quote is asked again on every change of slots, sport or rentables; the Book button shows its total and is enabled only with a quote. `409 slot_taken` shows "Just taken" and reloads the day's slots. A run of slots is one day's (a run across midnight is not offered in the app). Rentable quantities go from 0 to the item's quantity.
+- **Training requests:** the player picks the sport (chips) and a proposed start and end (5-minute steps), device time. The coach confirms with "No court" (time pickers, currency USD) or "On a court": clubs offering the session's sport, then one of their active courts offering it, then a run of free slots; the currency is then the club's base.
+- **My sessions:** Upcoming is every session starting from now, soonest first; Past is the 50 most recent, newest first. A coach's training requests have their own section at the top and are left out of the two lists. A request never confirmed shows no court and no costs.
+- **Badge (FE-8):** refreshed at start, at sign-in, whenever a tab is tapped, when the app comes back to the foreground, and after the coach confirms or declines.
+- **Club tab:** shown when `GET /api/me/clubs/` has a club with role `owner` or `staff`; an affiliated coach alone is not the club side. The schedule's day chips start 7 days back and run 60 days ahead; Setup is shown to the owner only.
+- **Prices:** a new window can be added for several weekdays at once (one rate per weekday, CLUB-11); it starts as Monday to Friday, 08:00 to 22:00. Tapping a window edits or deletes it.
+- **Equipment:** one form for both kinds: an empty rental price makes an amenity (FE-7); quantity starts at 1; "For" is all courts or one court.
+- **Paths:** `/welcome`, `/signin`, `/signup`, `/forgot`; `/book`, `/book/clubs/<id>`, `/book/courts/<id>`, `/book/coaches/<id>`; `/sessions`, `/sessions/<id>`, `/sessions/<id>/confirm`; `/club`, `/club/<id>` (schedule), `/club/<id>/setup`, `/club/<id>/setup/courts/new`, `/club/<id>/setup/courts/<court>`, `/club/<id>/setup/equipment`, `/club/<id>/setup/staff`; `/profile`, `/profile/new-club`, `/profile/delete`.
+- **Changes to pass_v1's copied widgets**, each a fix: the desktop sidebar is reachable by screen readers (the tab navigator is its own semantics container, a route's barrier hid it); a `ListRow` value is at most 180 px wide and wraps (long values overflowed at phone width); tab and sidebar items no longer repeat their label to screen readers; the nav bar's chat button became an optional `trailing` widget and the profile button opens Profile; the shell rebuilds with the app state (the Club tab and the badge).
+

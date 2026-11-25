@@ -1,6 +1,6 @@
 # Deployment
 
-**Status: built** (owner's review of 2026-11-20, build step T18, 2026-11-21; not yet deployed to a server). How the compose stack runs in production. Files: `docker-compose.yml`, `docker-compose.traefik.yml`, `docker-compose.caddy.yml`, `backend/Dockerfile`, `backend/config/settings.py`, `.env.example`.
+**Status: built** (owner's review of 2026-11-20, build step T18, 2026-11-21; not yet deployed to a server). How the compose stack runs in production. Files: `docker-compose.yml`, `docker-compose.traefik.yml`, `docker-compose.caddy.yml`, `backend/Dockerfile`, `.dockerignore`, `backend/config/settings.py`, `backend/config/urls.py`, `.env.example`, `scripts/autoupdate.sh`.
 
 ## Hosts
 
@@ -8,7 +8,7 @@ Two hostnames, both DNS **A records** at GoDaddy pointing at the server's IP. Th
 
 | Setting | Example | Serves |
 |---|---|---|
-| `PASS_HOST` | `pass.example.com` | Django: `/api/`, `/admin/`, `/static/`, `/account/` (password reset pages, ACC-32). Later `/` serves the Flutter web build, on the same origin, so the API needs no CORS |
+| `PASS_HOST` | `pass.example.com` | Django: `/api/`, `/admin/`, `/static/`, `/account/` (password reset pages, ACC-32), and the web app at `/` (FE-13), on the same origin, so the API needs no CORS |
 | `FILES_HOST` | `files.example.com` | SeaweedFS S3: the signed upload and playback links (REC-1). It needs its own host because a signed link is tied to the host it was signed for. `STORAGE_PUBLIC_ENDPOINT` = `https://FILES_HOST` |
 
 HTTPS is ended at the reverse proxy; the containers speak plain HTTP inside the compose network.
@@ -38,6 +38,15 @@ docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
 ```
 
 `docker-compose.caddy.yml` adds a `caddy` service on ports 80 and 443 with a short Caddyfile: `PASS_HOST` goes to `backend:8000`, `FILES_HOST` to `storage:8333`, and certificates are automatic. Caddy's data goes in `./data/caddy`.
+
+## The web app
+
+FE-13. The backend image is built from the **repository root** (`build: {context: ., dockerfile: backend/Dockerfile}` in compose; `.dockerignore` at the root keeps `data/`, `.env`, `.git` and build output out). Its first stage runs `flutter build web --release --no-web-resources-cdn --pwa-strategy=none` in `ghcr.io/cirruslabs/flutter:3.35.7`; the second copies `build/web` to `/app/frontend_build` (`FRONTEND_DIR`) and pre-compresses it.
+
+- WhiteNoise serves the app's files from `/` (`WHITENOISE_ROOT`). Any other path that does not start with `api`, `admin`, `static` or `account` gets `index.html` (`config/urls.py`), so app URLs survive a refresh.
+- No long cache: the app's files and `index.html` are sent with `Cache-Control: no-cache` (the browser revalidates), and there is no service worker, so a deploy shows on the next load. `/static/` (the admin's files) keeps WhiteNoise's defaults.
+- No other host is asked for anything: CanvasKit and the fonts are in the build.
+- A local `runserver` serves `frontend/build/web` once it is built (`scripts/flutter.sh build web ...`); without a build, app paths answer `404`.
 
 ## Production settings
 
@@ -74,6 +83,12 @@ What the page above leaves open:
 - Backups: the `backup` service (the `postgres:18` image) checks every hour and makes the day's dump once (`./data/backups/pass-YYYY-MM-DD.dump`, UTC date, `pg_dump -Fc`, so it is compressed); a night the server was down is caught up when it comes back. Restore with `pg_restore --clean -d pass <file>` inside the `db` container. Dumps are written as `.part` and renamed when complete.
 - Every long-running service has `restart: unless-stopped`, so the stack comes back after a reboot.
 - Caddy is `caddy:2.10`, its Caddyfile is inline in `docker-compose.caddy.yml`; both proxies keep the `Host` header, which signed storage links depend on.
+
+## Auto-update
+
+FE-14, as in pass_v1. On the server, `scripts/autoupdate.sh` polls `origin` every 5 minutes (`INTERVAL` seconds), and when the branch has new commits it pulls (`--ff-only`) and runs `docker compose up -d --build`; a failed build leaves the running version up. Put the override in `.env` so that plain `docker compose` uses it: `COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml`. Run it in the background: `nohup scripts/autoupdate.sh >> autoupdate.log 2>&1 &`.
+
+On the owner's server Traefik's names are `TRAEFIK_NETWORK=traefik-net` and `TRAEFIK_CERTRESOLVER=mytlschallenge`.
 
 ## DNS and accounts the owner sets up
 
