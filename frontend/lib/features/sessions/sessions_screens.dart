@@ -190,6 +190,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           final iAmCoach = coach?['id'] == _meId;
           final iAmBooker = booker['id'] == _meId;
           final hasDiscount = (double.tryParse('${s['discount_amount']}') ?? 0) > 0;
+          // A request never confirmed has no currency (BOOK-20), so nothing is owed.
+          final confirmedOnce = (cur ?? '').isNotEmpty;
           return PassScaffold(
             title: sessionTitle(s),
             back: '/sessions',
@@ -203,6 +205,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               if (status == 'requested')
                 NoticeBanner(
                     kind: NoticeKind.tint,
+                    margin: const EdgeInsets.fromLTRB(PassSpace.gutter, PassSpace.ml, PassSpace.gutter, PassSpace.ml),
                     text: iAmCoach
                         ? 'Proposed time. Confirm it or another one, or decline.'
                         : 'Proposed time. The coach confirms it or another one.'),
@@ -211,13 +214,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     label: 'Court',
                     value: court != null
                         ? '${court['name']}, ${asMap(court['club'])['name']}'
-                        : status == 'requested'
-                            ? 'Not set yet'
-                            : 'Coach’s own venue'),
+                        : confirmedOnce
+                            ? 'Coach’s own venue'
+                            : 'Not set'),
                 ListRow(label: 'Booker', value: '${booker['full_name']}'),
                 if (coach != null) ListRow(label: 'Coach', value: '${coach['full_name']}'),
               ]),
-              if (status != 'requested') ...[
+              if (confirmedOnce) ...[
                 const CapsHeader('What it costs'),
                 GroupedCard(inset: 0, children: [
                   if (court != null) ListRow(label: 'Court price', value: money('${s['price']}', cur)),

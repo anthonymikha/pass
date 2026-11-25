@@ -217,3 +217,36 @@ DateTime nextHour([int addHours = 1]) {
   final n = DateTime.now();
   return DateTime(n.year, n.month, n.day, n.hour + addHours);
 }
+
+/// Sport chips: [all] adds an "All sports" chip (null).
+class SportChips extends StatelessWidget {
+  const SportChips({super.key, required this.sports, required this.selected, required this.onChanged, this.all = false});
+  final List<Map<String, dynamic>> sports;
+  final int? selected;
+  final ValueChanged<int?> onChanged;
+  final bool all;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.c;
+    Widget chip(String label, int? id) {
+      final on = selected == id;
+      return Pressable(
+        onTap: () => onChanged(id),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: PassSpace.l, vertical: PassSpace.sm),
+          decoration: BoxDecoration(color: on ? c.tint : c.bgCard, borderRadius: BorderRadius.circular(PassRadii.pill)),
+          child: Text(label, style: PassText.subhead.copyWith(color: on ? PassColors.white : c.label)),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(PassSpace.gutter, PassSpace.ml, PassSpace.gutter, 0),
+      child: Wrap(spacing: PassSpace.s, runSpacing: PassSpace.s, children: [
+        if (all) chip('All sports', null),
+        for (final s in sports) chip('${s['name']}', s['id'] as int),
+      ]),
+    );
+  }
+}

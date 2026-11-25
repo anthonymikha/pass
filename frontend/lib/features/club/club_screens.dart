@@ -265,20 +265,20 @@ class _ClubSetupScreenState extends State<ClubSetupScreen> {
                     label: '${c['name']}',
                     value: c['is_active'] == true ? null : 'Inactive',
                     trailing: const Chevron(),
-                    onTap: () => context.push('/club/${widget.id}/courts/${c['id']}'),
+                    onTap: () => context.push('/club/${widget.id}/setup/courts/${c['id']}'),
                   ),
                 ListRow(
                     label: 'Add a court',
                     labelColor: context.c.tint,
-                    onTap: () => context.push('/club/${widget.id}/courts/new')),
+                    onTap: () => context.push('/club/${widget.id}/setup/courts/new')),
               ]),
               const CapsHeader('Equipment and people'),
               GroupedCard(inset: 0, children: [
                 ListRow(
                     label: 'Amenities and rentables',
                     trailing: const Chevron(),
-                    onTap: () => context.push('/club/${widget.id}/equipment')),
-                ListRow(label: 'Staff', trailing: const Chevron(), onTap: () => context.push('/club/${widget.id}/staff')),
+                    onTap: () => context.push('/club/${widget.id}/setup/equipment')),
+                ListRow(label: 'Staff', trailing: const Chevron(), onTap: () => context.push('/club/${widget.id}/setup/staff')),
               ]),
             ],
           );
@@ -335,7 +335,7 @@ class _CourtEditScreenState extends State<CourtEditScreen> {
     await _write(context, () async {
       if (widget.courtId == null) {
         final court = asMap(await _api.post('/api/clubs/${widget.clubId}/courts/', body: body));
-        if (mounted) context.pushReplacement('/club/${widget.clubId}/courts/${court['id']}');
+        if (mounted) context.go('/club/${widget.clubId}/setup/courts/${court['id']}');
       } else {
         await _api.patch('/api/courts/${widget.courtId}/', body: body);
         if (mounted) {
@@ -449,7 +449,8 @@ class _CourtEditScreenState extends State<CourtEditScreen> {
                       for (final r in rates)
                         ListRow(
                           label: weekdays[r['weekday'] as int],
-                          value: '${clock('${r['start_time']}')}–${clock('${r['end_time']}')} · ${r['price']}',
+                          value: '${clock('${r['start_time']}')}–${clock('${r['end_time']}')} · '
+                              '${money('${r['price']}', '${_clubOf(widget.clubId)?['currency'] ?? 'USD'}')}',
                           trailing: CheckMark(visible: _editingRate == r['id']),
                           onTap: () => setState(() {
                             _editingRate = r['id'] as int;
@@ -609,7 +610,11 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       for (final e in rows)
                         ListRow(
                           label: '${e['name']} ×${e['quantity']}',
-                          value: [courtName(e['court']), if (e['rental_price'] != null) '${e['rental_price']}'].join(' · '),
+                          value: [
+                            courtName(e['court']),
+                            if (e['rental_price'] != null)
+                              money('${e['rental_price']}', '${_clubOf(widget.clubId)?['currency'] ?? 'USD'}'),
+                          ].join(' · '),
                           trailing: CheckMark(visible: _editing == e['id']),
                           onTap: () => setState(() {
                             _editing = e['id'] as int;

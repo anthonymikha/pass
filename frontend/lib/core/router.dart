@@ -68,13 +68,14 @@ GoRouter buildRouter(AppState state, {String initialLocation = '/'}) => GoRouter
             StatefulShellBranch(routes: [
               GoRoute(path: '/club', pageBuilder: (c, st) => _root(st, const MyClubsScreen()), routes: [
                 GoRoute(path: ':id', pageBuilder: (c, st) => _push(st, ClubScheduleScreen(id: _id(st))), routes: [
-                  GoRoute(path: 'setup', pageBuilder: (c, st) => _push(st, ClubSetupScreen(id: _id(st)))),
-                  GoRoute(path: 'courts/new', pageBuilder: (c, st) => _push(st, CourtEditScreen(clubId: _id(st)))),
-                  GoRoute(
-                      path: 'courts/:court',
-                      pageBuilder: (c, st) => _push(st, CourtEditScreen(clubId: _id(st), courtId: _id(st, 'court')))),
-                  GoRoute(path: 'equipment', pageBuilder: (c, st) => _push(st, EquipmentScreen(clubId: _id(st)))),
-                  GoRoute(path: 'staff', pageBuilder: (c, st) => _push(st, StaffScreen(clubId: _id(st)))),
+                  GoRoute(path: 'setup', pageBuilder: (c, st) => _push(st, ClubSetupScreen(id: _id(st))), routes: [
+                    GoRoute(path: 'courts/new', pageBuilder: (c, st) => _push(st, CourtEditScreen(clubId: _id(st)))),
+                    GoRoute(
+                        path: 'courts/:court',
+                        pageBuilder: (c, st) => _push(st, CourtEditScreen(clubId: _id(st), courtId: _id(st, 'court')))),
+                    GoRoute(path: 'equipment', pageBuilder: (c, st) => _push(st, EquipmentScreen(clubId: _id(st)))),
+                    GoRoute(path: 'staff', pageBuilder: (c, st) => _push(st, StaffScreen(clubId: _id(st)))),
+                  ]),
                 ]),
               ]),
             ]),

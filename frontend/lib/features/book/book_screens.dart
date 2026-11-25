@@ -47,7 +47,11 @@ class _BookScreenState extends State<BookScreen> {
               values: const ['courts', 'coaches'],
               labelOf: (v) => v == 'courts' ? 'Courts' : 'Coaches',
               selected: _mode,
-              onChanged: (v) => setState(() => _mode = v)),
+              onChanged: (v) => setState(() {
+                    _mode = v;
+                    _q.clear(); // a club name is no coach name
+                    _query = '';
+                  })),
           PassInput(
               controller: _q,
               placeholder: _mode == 'courts' ? 'Search clubs by name' : 'Search coaches by name',
@@ -61,7 +65,8 @@ class _BookScreenState extends State<BookScreen> {
             ApiLoader<List<Map<String, dynamic>>>(
               load: loadSports,
               loading: const SizedBox(height: PassSpace.xxxl),
-              builder: (context, sports, _) => _sportChips(context, sports),
+              builder: (context, sports, _) =>
+                  SportChips(sports: sports, all: true, selected: _sport, onChanged: (v) => setState(() => _sport = v)),
             ),
             ApiLoader<List<dynamic>>(
               key: ValueKey('clubs-$_query-$_sport'),
@@ -104,30 +109,6 @@ class _BookScreenState extends State<BookScreen> {
             ),
         ],
       );
-
-  Widget _sportChips(BuildContext context, List<Map<String, dynamic>> sports) {
-    final c = context.c;
-    Widget chip(String label, int? id) {
-      final on = _sport == id;
-      return Pressable(
-        onTap: () => setState(() => _sport = id),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: PassSpace.l, vertical: PassSpace.sm),
-          decoration: BoxDecoration(
-              color: on ? c.tint : c.bgCard, borderRadius: BorderRadius.circular(PassRadii.pill)),
-          child: Text(label, style: PassText.subhead.copyWith(color: on ? PassColors.white : c.label)),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(PassSpace.gutter, PassSpace.ml, PassSpace.gutter, 0),
-      child: Wrap(spacing: PassSpace.s, runSpacing: PassSpace.s, children: [
-        chip('All sports', null),
-        for (final s in sports) chip('${s['name']}', s['id'] as int),
-      ]),
-    );
-  }
 }
 
 String _courtCount(int n) => n == 1 ? '1 court' : '$n courts';
@@ -448,13 +429,9 @@ class _CoachScreenState extends State<CoachScreen> {
               ],
               if (!self) ...[
                 const CapsHeader('Request training'),
+                SportChips(sports: sports, selected: _sport, onChanged: (v) => setState(() => _sport = v)),
+                const SizedBox(height: PassSpace.ml),
                 GroupedCard(inset: 0, children: [
-                  if (sports.isNotEmpty)
-                    PickerRow(
-                        label: 'Sport',
-                        options: [for (final s in sports) '${s['name']}'],
-                        value: '${sports.firstWhere((s) => s['id'] == _sport)['name']}',
-                        onChanged: (v) => setState(() => _sport = sports.firstWhere((s) => s['name'] == v)['id'] as int)),
                   DateTimeRow(
                       label: 'Starts',
                       value: _start,

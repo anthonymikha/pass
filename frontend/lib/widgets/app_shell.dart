@@ -61,8 +61,11 @@ class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.shell});
   final StatefulNavigationShell shell;
 
+  // The tabs (Club) and the badge follow the app state (FE-8, FE-11).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(listenable: AppState.instance, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final Widget child = shell;
     final state = AppState.instance;
     final path = GoRouterState.of(context).uri.path;
@@ -150,7 +153,6 @@ class _TabBar extends StatelessWidget {
             for (var i = 0; i < n; i++)
               Expanded(
                 child: Pressable(
-                  semanticLabel: tabs[i].label,
                   onTap: () => goTab(context, tabs[i].path),
                   child: SizedBox(
                     height: 56,
@@ -196,7 +198,6 @@ class _Sidebar extends StatelessWidget {
     Widget item(String label, String target, Widget icon, {Widget? badge}) {
       final active = _isActive(path, target);
       return Pressable(
-        semanticLabel: label,
         onTap: () => goTab(context, target),
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: PassSpace.ml, vertical: 2),
