@@ -54,6 +54,36 @@ class VenuesBase(APITestCase):
         )
 
 
+class SportsListTests(VenuesBase):
+    def test_sports_list_is_public_sorted_and_not_paged(self):
+        """CLUB-36: no token needed (a dead one is ignored), every sport by name, a plain list of {id, name}."""
+        self.client.credentials(HTTP_AUTHORIZATION="Token dead")
+        r = self.call("get", "sports/", expect=200)
+        names = sorted(Sport.objects.values_list("name", flat=True))
+        self.assertEqual([s["name"] for s in r.data], names)
+        self.assertEqual(r.data[0], {"id": Sport.objects.get(name=names[0]).id, "name": names[0]})
+        self.assertTrue(all(set(s) == {"id", "name"} for s in r.data))
+
+    def test_starting_sports_exist_after_migrations(self):
+        """CLUB-36: Padel, Tennis, Basketball and Pickleball are there from the start."""
+        for name in ["Padel", "Tennis", "Basketball", "Pickleball"]:
+            self.assertEqual(Sport.objects.filter(name=name).count(), 1, name)
+
+    def test_migration_adds_no_duplicate(self):
+        """CLUB-36: a sport of the same name (any case) already there is kept, not added twice; a missing one is added."""
+        from importlib import import_module
+
+        from django.apps import apps
+        add_sports = import_module("venues.migrations.0002_starting_sports").add_sports
+        Sport.objects.filter(name="Tennis").update(name="tennis")
+        Sport.objects.filter(name="Pickleball").delete()
+        add_sports(apps, None)
+        self.assertFalse(Sport.objects.filter(name="Tennis").exists())
+        self.assertEqual(Sport.objects.filter(name__iexact="tennis").count(), 1)
+        self.assertEqual(Sport.objects.filter(name__iexact="padel").count(), 1)
+        self.assertTrue(Sport.objects.filter(name="Pickleball").exists())
+
+
 class OwnerSetupTests(VenuesBase):
     def test_owner_journey(self):
         """CLUB-1, CLUB-2, CLUB-5, CLUB-6, CLUB-8, CLUB-9, CLUB-11, CLUB-15, CLUB-17, CLUB-18, CLUB-20, CLUB-21, CLUB-22,
@@ -167,7 +197,7 @@ class OwnerSetupTests(VenuesBase):
         self.assertEqual([(c["currency"], c["exchange_rate"]) for c in d["club"]["currencies"]], [("EUR", "0.923457"), ("LBP", "89500.000000")])
         self.assertEqual([(x["weekday"], x["start_time"], x["end_time"], x["price"]) for x in d["rates"]],
                          [(0, "09:00:00", "17:00:00", "50.000"), (0, "17:00:00", "00:00:00", "70.000")])
-        self.assertEqual([s["name"] for s in d["court"]["sports"]], ["Basketball", "Volleyball"])
+        self.assertEqual(sorted(s["name"] for s in d["court"]["sports"]), ["Basketball", "Volleyball"])
         self.assertEqual([e["name"] for e in d["equipment"]["included"]], ["Basketballs"])
         self.assertEqual([e["name"] for e in d["equipment"]["rentable"]], ["Shooting machine"])
 

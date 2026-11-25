@@ -103,7 +103,7 @@ class WellnessBase(APITestCase):
     def setUp(self):
         accounts.outbox.clear()
         self.enterContext(mock.patch("django.utils.timezone.now", side_effect=lambda: self.now))
-        self.sport = Sport.objects.create(name="Padel")
+        self.sport = Sport.objects.get_or_create(name="Padel")[0]
 
     def user(self, name, **fields):
         user = User.objects.create_user(f"{name}@example.com", PASSWORD, full_name=name.title(), **fields)

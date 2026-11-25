@@ -45,7 +45,7 @@ class BookingBase(APITestCase):
         self.clock = patcher.start()
         self.addCleanup(patcher.stop)
         accounts.outbox.clear()
-        self.basketball = Sport.objects.create(name="Basketball")
+        self.basketball = Sport.objects.get_or_create(name="Basketball")[0]
         self.volleyball = Sport.objects.create(name="Volleyball")
         self.owner = self.user("olga")
         self.club = Club.objects.create(owner=self.owner, name="Hoops", timezone="Asia/Beirut", currency="USD")

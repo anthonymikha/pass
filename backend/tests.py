@@ -30,7 +30,7 @@ class SchemaTests(TestCase):
         )
         cls.equipment = Equipment.objects.create(club=cls.club, name="Racket", quantity=4)
         cls.session = Session.objects.create(
-            court=cls.court, sport=Sport.objects.create(name="Padel"), booked_by=cls.coach,
+            court=cls.court, sport=Sport.objects.get_or_create(name="Padel")[0], booked_by=cls.coach,
             kind="play", starts_at=T0, ends_at=T1, currency="KWD", price=Decimal("10"),
         )
 
@@ -117,7 +117,7 @@ class BilledAtMigrationTests(TransactionTestCase):
         old_session, old_payment = apps.get_model("bookings", "Session"), apps.get_model("billing", "Payment")
         user = old_user.objects.create(email="a@example.com", password="!")
         club = old_club.objects.create(owner=user, name="Club", timezone="UTC", currency="USD")
-        sport = apps.get_model("venues", "Sport").objects.create(name="Padel")
+        sport = apps.get_model("venues", "Sport").objects.get_or_create(name="Padel")[0]
         now = django_now()
 
         def session(ended_hours_ago, status="confirmed"):

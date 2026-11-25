@@ -8,11 +8,12 @@ from rest_framework.response import Response
 from config.api import BusinessError
 
 from . import services
-from .models import ClubCurrency, ClubMember, Court, CourtBlockout, CourtRate, Discount, Equipment, PriceOverride
+from .models import ClubCurrency, ClubMember, Court, CourtBlockout, CourtRate, Discount, Equipment, PriceOverride, Sport
 from .serializers import (
     ClosureSerializer, ClubCurrencySerializer, ClubCurrencyUpdateSerializer, ClubSearchSerializer, ClubSerializer, MyClubSerializer,
     CourtSerializer, EquipmentSerializer, MemberCreateSerializer, MemberSerializer, MemberUpdateSerializer,
-    OfferSerializer, OverridePriceSerializer, OverrideSerializer, RateSerializer, SearchParamsSerializer, court_detail,
+    OfferSerializer, OverridePriceSerializer, OverrideSerializer, RateSerializer, SearchParamsSerializer, SportSerializer,
+    court_detail,
 )
 
 SAFE = permissions.SAFE_METHODS
@@ -74,6 +75,16 @@ class ConfigDetail(ConfigAccess, generics.RetrieveUpdateDestroyAPIView):
 
 
 # ---- clubs ----
+
+class SportList(generics.ListAPIView):
+    """CLUB-36: every sport, public, by name, not paginated."""
+
+    queryset = Sport.objects.order_by("name")
+    serializer_class = SportSerializer
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    pagination_class = None
+
 
 class ClubListView(generics.ListCreateAPIView):
     """GET: public search (CLUB-30). POST: any user creates a club and owns it (CLUB-1)."""
