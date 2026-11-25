@@ -178,9 +178,10 @@ def add_member(club, user, role, expires_on=None, status=ClubMember.Status.ACTIV
 def search_clubs(sport=None, q=None, lat=None, lng=None, radius_km=25):
     """CLUB-30. Clubs with an active court, filtered; sorted by name, or by distance when a location is given."""
     courts = Court.objects.filter(club=OuterRef("pk"), is_active=True)
-    if sport:
-        courts = courts.filter(sports=sport)
-    clubs = Club.objects.filter(Exists(courts)).prefetch_related(
+    clubs = Club.objects.filter(Exists(courts))
+    for one in sport or []:  # several sports: the club offers every one of them (like tags in Notes)
+        clubs = clubs.filter(Exists(courts.filter(sports=one)))
+    clubs = clubs.prefetch_related(
         Prefetch("courts", Court.objects.filter(is_active=True).order_by("id"), to_attr="active_courts")
     )
     if q:

@@ -14,7 +14,7 @@
 | Method | Path | Who | Body / notes | Success |
 |---|---|---|---|---|
 | GET | `/api/sports/` | public | every sport `[{id, name}]` by name, not paged (CLUB-36) | `200` |
-| GET | `/api/clubs/` | public | `sport` (id), `q`, `lat` + `lng` + `radius_km` (1-200, default 25) | `200` page of clubs |
+| GET | `/api/clubs/` | public | `sport` (id; repeat it for several, a club must offer all), `q`, `lat` + `lng` + `radius_km` (1-200, default 25) | `200` page of clubs |
 | POST | `/api/clubs/` | any user | `name`, `timezone`, `currency`, optional `address`, `latitude`, `longitude` | `201` club |
 | GET, PATCH | `/api/clubs/<id>/` | visible; PATCH owner | `currency` cannot change (`400 base_currency_fixed`) | `200` |
 | GET | `/api/me/clubs/` | any user | clubs the caller owns or works at (active, unexpired `staff` or `coach`), each with `roles` (`owner`, `staff`, `coach`), by name (CLUB-33) | `200` page |

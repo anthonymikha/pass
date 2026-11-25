@@ -780,6 +780,8 @@ class OwnerSetupTests(VenuesBase):
         self.assertEqual(search(q="nothing")[0], [])
         self.assertEqual(search(sport=9999)[0], [])
         self.assertEqual(search(q="far", sport=self.basketball.id)[0], ["Alpha Far"])
+        both_sports = [self.basketball.id, self.volleyball.id]
+        self.assertEqual(search(sport=both_sports)[0], ["Both Courts"])  # several sports: clubs offering all of them
 
         # location: distance sorted, 1 decimal, default radius 25 km, clubs without coordinates left out
         _, rows = search(lat=0, lng=0)

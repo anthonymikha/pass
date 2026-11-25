@@ -54,7 +54,17 @@ GoRouter buildRouter(AppState state, {String initialLocation = '/'}) => GoRouter
             StatefulShellBranch(routes: [
               GoRoute(path: '/book', pageBuilder: (c, st) => _root(st, const BookScreen()), routes: [
                 GoRoute(path: 'clubs/:id', pageBuilder: (c, st) => _push(st, ClubScreen(id: _id(st)))),
-                GoRoute(path: 'courts/:id', pageBuilder: (c, st) => _push(st, CourtScreen(id: _id(st)))),
+                GoRoute(path: 'courts/:id', pageBuilder: (c, st) => _push(st, CourtScreen(id: _id(st))), routes: [
+                  GoRoute(
+                      path: 'reserve',
+                      pageBuilder: (c, st) => _push(
+                          st,
+                          ReserveScreen(
+                              id: _id(st),
+                              from: st.uri.queryParameters['from'] ?? '',
+                              to: st.uri.queryParameters['to'] ?? ''))),
+                ]),
+                GoRoute(path: 'booked/:id', pageBuilder: (c, st) => _push(st, BookedScreen(id: _id(st)))),
                 GoRoute(path: 'coaches/:id', pageBuilder: (c, st) => _push(st, CoachScreen(id: _id(st)))),
               ]),
             ]),

@@ -64,7 +64,7 @@ class MyClubSerializer(ClubSerializer):
 
 
 class SearchParamsSerializer(serializers.Serializer):
-    sport = serializers.IntegerField(required=False)
+    sport = serializers.ListField(child=serializers.IntegerField(), required=False)  # repeat for several: all of them
     q = serializers.CharField(required=False)
     lat = serializers.FloatField(required=False, min_value=-90, max_value=90)
     lng = serializers.FloatField(required=False, min_value=-180, max_value=180)

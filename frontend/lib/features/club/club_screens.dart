@@ -111,10 +111,10 @@ class _ClubScheduleScreenState extends State<ClubScheduleScreen> {
           trailing: owner ? PassLink('Setup', onTap: () => context.push('/club/${widget.id}/setup')) : null,
         ),
         const SizedBox(height: PassSpace.ml),
-        DayChips(
+        DayBar(
+            value: _date,
             first: _today.subtract(const Duration(days: 7)),
-            selected: _date,
-            count: 68,
+            last: _today.add(const Duration(days: 60)),
             onChanged: (d) => setState(() => _date = d)),
         ApiLoader<List<dynamic>>(
           load: () => _api.getAll('/api/clubs/${widget.id}/courts/'),
@@ -421,15 +421,7 @@ class _CourtEditScreenState extends State<CourtEditScreen> {
               ]),
               const FootnoteText('Turn Bookable off to take the court off PASS; its history stays.'),
               const CapsHeader('Sports'),
-              GroupedCard(inset: 0, children: [
-                for (final s in sports)
-                  ListRow(
-                    label: '${s['name']}',
-                    trailing: CheckCircle(selected: _sports.contains(s['id'])),
-                    onTap: () => setState(() =>
-                        _sports.contains(s['id']) ? _sports.remove(s['id']) : _sports.add(s['id'] as int)),
-                  ),
-              ]),
+              SportTags(sports: sports, selected: _sports, padding: kGutter, onChanged: (v) => setState(() => _sports = v)),
               PassButton(isNew ? 'Add court' : 'Save court',
                   kind: isNew ? PassButtonKind.primary : PassButtonKind.secondary,
                   margin: _buttonMargin,
@@ -490,10 +482,8 @@ class _CourtEditScreenState extends State<CourtEditScreen> {
                 ),
                 const SizedBox(height: PassSpace.m),
                 GroupedCard(inset: 0, children: [
-                  DateTimeRow(
-                      label: 'From', value: _from, mode: CupertinoDatePickerMode.time, onChanged: (v) => setState(() => _from = v)),
-                  DateTimeRow(
-                      label: 'To', value: _to, mode: CupertinoDatePickerMode.time, onChanged: (v) => setState(() => _to = v)),
+                  DateTimeRow(label: 'From', value: _from, timeOnly: true, onChanged: (v) => setState(() => _from = v)),
+                  DateTimeRow(label: 'To', value: _to, timeOnly: true, onChanged: (v) => setState(() => _to = v)),
                   FormFieldRow(
                       label: 'Price per slot',
                       labelWidth: 120,

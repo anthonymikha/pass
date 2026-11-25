@@ -56,14 +56,15 @@ class ApiClient {
   /// Called when the server says the token is dead (401).
   void Function()? onUnauthorized;
 
-  Uri uri(String path, [Map<String, String>? query]) {
+  /// A query value may be a list: `{'sport': ['1', '2']}` sends `sport=1&sport=2`.
+  Uri uri(String path, [Map<String, Object>? query]) {
     final base = baseUrl.isEmpty ? Uri.base : Uri.parse(baseUrl);
     final resolved = base.resolve(path);
     return query == null || query.isEmpty ? resolved : resolved.replace(queryParameters: query);
   }
 
   /// [fresh] skips the cache (also skipped inside [ApiClient.fresh]).
-  Future<dynamic> get(String path, {Map<String, String>? query, bool fresh = false}) async {
+  Future<dynamic> get(String path, {Map<String, Object>? query, bool fresh = false}) async {
     final u = uri(path, query);
     final key = u.toString();
     final hit = _cache[key];
@@ -74,7 +75,7 @@ class ApiClient {
   }
 
   /// Every page of a paginated list (GEN-12), as one list.
-  Future<List<dynamic>> getAll(String path, {Map<String, String>? query}) async {
+  Future<List<dynamic>> getAll(String path, {Map<String, Object>? query}) async {
     final out = <dynamic>[];
     for (var page = 1;; page++) {
       final data = await get(path, query: {...?query, 'page': '$page'}) as Map<String, dynamic>;

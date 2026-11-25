@@ -21,11 +21,11 @@ frontend/
     widgets/             pass_v1's shared widgets (PassScaffold, ApiLoader, showErrorAlert, ...)
     features/
       auth/              welcome, sign up, sign in, forgot password
-      book/              find a court or a coach, club, court (prices, amenities, rentables, slots, quote, book), coach
+      book/              find a club or a coach, club, court listing, calendar sheet, confirm (quote, book), booked, coach
       sessions/          my sessions, training requests, session detail, confirm a request
       club/              my clubs, schedule and rentals, setup (club, courts and prices, equipment, staff)
       profile/           profile, coach switch and rate, create a club, log out, delete account
-      shared.dart        day chips, the slot-run picker, date and time rows, sport chips
+      shared.dart        iOS calendar and date/time capsules, Notes-style sport tags, slot-run picker, summary card, booked hero, glass action bar
   test/                  widget tests of the three journeys against a fake network
 ```
 
@@ -48,9 +48,10 @@ The web app needs the API on the same origin. The simplest way to see it is the 
 
 `test/journeys_test.dart` runs the real app (router and screens) with only the HTTP transport replaced by `package:http`'s `MockClient` (`test/helpers.dart`), and checks what is on screen and which requests went out with which bodies:
 
-1. a player finds a club and a court, sees prices and amenities, picks two slots and two rentables, sees the quote and books exactly what was quoted;
+1. a player finds a club (and its coaches) and a court, sees prices and amenities, picks two slots on the calendar sheet, adds two rentables on Confirm, sees the quote and books exactly what was quoted, then the Booked hero;
 2. a coach sees the badge and the request, the fee prefilled from the coach rate × hours, moves the training onto a court at another time (the fee follows) and confirms;
-3. a club owner (desktop width) adds a court, a price window for six weekdays, an amenity and a rentable.
+3. a club owner (desktop width) adds a court, a price window for six weekdays, an amenity and a rentable;
+4. a Confirm link without a time asks for one instead of failing.
 
 ## What the app is responsible for
 

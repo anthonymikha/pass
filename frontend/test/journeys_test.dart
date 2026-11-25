@@ -43,6 +43,7 @@ void main() {
       'GET /api/clubs/1/courts/': (_) => page([courtRow]),
       'GET /api/courts/1/': (_) => courtDetail,
       'GET /api/courts/1/slots/': slotsFor,
+      'GET /api/coaches/': (_) => page([kim]),
       'POST /api/sessions/quote/': (s) {
         final rentals = ((s.body as Map)['rentals'] as List).cast<Map>();
         final q = rentals.isEmpty ? 0 : rentals.first['quantity'] as int;
@@ -64,22 +65,25 @@ void main() {
     await startApp(tester, api, '/book', me: meJson());
 
     await tapText(tester, 'Hoops');
+    expect(find.text('Kim Coach'), findsOneWidget); // the club's coaches
     await tapText(tester, 'Court 1');
     expect(find.text('Showers'), findsOneWidget); // amenity
     expect(find.text('09:00–22:00 · 20.00 USD'), findsOneWidget); // prices per weekday
     expect(find.text('Monday'), findsOneWidget);
 
+    await tapText(tester, 'Pick a time'); // the calendar sheet opens on the first day with prices (a Monday)
     await tapLabel(tester, 'Slot 10:00');
     await tapLabel(tester, 'Slot 11:00');
+    await tapText(tester, 'Reserve');
+    expect(find.text('120 min'), findsOneWidget); // the summary card
     await tapLabel(tester, 'Increase');
     await tapLabel(tester, 'Increase');
     expect(find.text('Rackets ×2'), findsOneWidget); // quote line
-    expect(find.text('50.00 USD'), findsOneWidget); // total
+    expect(find.text('50.00 USD'), findsNWidgets(2)); // total, in the price card and the bar
     expect(find.text('Rentables are subject to the club’s approval.'), findsOneWidget);
 
-    await tapText(tester, 'Book · 50.00 USD');
-    expect(find.text('Booked'), findsOneWidget);
-    await tapText(tester, 'OK');
+    await tapText(tester, 'Book now');
+    expect(find.text('BOOKED'), findsOneWidget); // the hero
 
     final quote = api.calls('POST', '/api/sessions/quote/').last.body as Map;
     final booking = api.calls('POST', '/api/sessions/').single.body as Map;
@@ -90,6 +94,7 @@ void main() {
     expect(booking['rentals'], [{'equipment': 2, 'quantity': 2}]);
     expect(DateTime.parse(booking['ends_at'] as String).difference(DateTime.parse(booking['starts_at'] as String)),
         const Duration(hours: 2));
+    await tapText(tester, 'See session');
     expect(find.textContaining('waiting for the club'), findsOneWidget); // the session, with its rental's status
   });
 
@@ -197,5 +202,11 @@ void main() {
     ]);
     expect(find.text('Showers ×1'), findsOneWidget);
     expect(find.text('Rackets ×4'), findsOneWidget);
+  });
+
+  testWidgets('a confirm link without a time asks for one instead of failing', (tester) async {
+    final api = FakeApi({});
+    await startApp(tester, api, '/book/courts/1/reserve?from', me: meJson());
+    expect(find.text('This link has no time in it.'), findsOneWidget);
   });
 }

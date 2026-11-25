@@ -81,7 +81,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
         await AppState.instance.refresh();
       },
       children: [
-        const LargeTitleHeader(title: 'Sessions'),
+        const LargeTitleHeader(kicker: 'Sessions', title: 'Your schedule'),
         if (coach)
           ApiLoader<List<dynamic>>(
             key: ValueKey('requests-${AppState.instance.requestCount}'),
@@ -118,25 +118,35 @@ class _SessionsScreenState extends State<SessionsScreen> {
     );
   }
 
+  /// pass_v1's schedule row: a day column, the title and times, the status; requests to me tinted.
   Widget _row(BuildContext context, Map<String, dynamic> s) {
     final c = context.c;
+    final start = at('${s['starts_at']}'), end = at('${s['ends_at']}');
+    final mine = _isRequestToMe(s);
     return Pressable(
       onTap: () => context.push('/sessions/${s['id']}'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: PassSpace.card, vertical: PassSpace.m),
+      child: Container(
+        color: mine ? c.tintBg : PassColors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: PassSpace.card, vertical: PassSpace.ml),
         child: Row(children: [
-          Expanded(
+          // Design measurement: 62px day column.
+          SizedBox(
+            width: 62,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(sessionTitle(s), style: PassText.body.copyWith(color: c.label)),
-              const SizedBox(height: PassSpace.xxs),
-              Text(timeRange(at('${s['starts_at']}'), at('${s['ends_at']}')),
-                  style: PassText.footnote.copyWith(color: c.label2)),
+              Text(dayLabel(start).split(' ').take(2).join(' '),
+                  style: PassText.callout.copyWith(fontWeight: PassText.semibold, color: mine ? c.tint : c.label)),
+              Text(dayLabel(start).split(' ').last, style: PassText.footnote.copyWith(color: c.label2)),
             ]),
           ),
-          const SizedBox(width: PassSpace.sm),
+          const SizedBox(width: PassSpace.ml),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(sessionTitle(s), style: PassText.callout.copyWith(color: c.label)),
+              Text('${hm(start)}–${hm(end)}', style: PassText.footnote.copyWith(color: c.label2)),
+            ]),
+          ),
+          const SizedBox(width: PassSpace.ml),
           statusPill(context, '${s['status']}'),
-          const SizedBox(width: PassSpace.sm),
-          const Chevron(),
         ]),
       ),
     );
@@ -391,6 +401,7 @@ class _ConfirmTrainingScreenState extends State<ConfirmTrainingScreen> {
             courtId: court['id'] as int,
             clubZone: '${club['timezone']}',
             currency: '${club['currency']}',
+            openWeekdays: {for (final r in asMaps(_court!['rates'])) r['weekday'] as int},
             onChanged: (run) => setState(() {
                   _run = run;
                   if (run != null) _setTimes(at(run.startsAt), at(run.endsAt));

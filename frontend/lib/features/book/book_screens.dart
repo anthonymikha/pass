@@ -1,5 +1,6 @@
-// Book tab (FE-10): find a court or a coach; a club's courts; a court's prices, amenities, rentables and free
-// slots, with the quote before booking; a coach's profile and a training request (mvp.md, Player).
+// Book tab (FE-10), in pass_v1's layout with an Airbnb-style flow: find a club or a coach; a club (its courts and
+// coaches); a court as a listing (amenities, rentables, prices) with a reserve bar; the calendar sheet with free
+// slots; confirm (summary, rentables, quote) and the "Booked" hero. A coach's profile and a training request.
 import 'package:flutter/cupertino.dart';
 import 'package:go_router/go_router.dart';
 
@@ -19,6 +20,75 @@ ApiClient get _api => ApiClient.instance;
 /// GET /api/sports/ (CLUB-36).
 Future<List<Map<String, dynamic>>> loadSports() async => asMaps(await _api.get('/api/sports/'));
 
+String _path(String path, Map<String, String> q) => Uri(path: path, queryParameters: q).toString();
+
+/// pass_v1's caps column header over a list of cards ("CLUB ... COURTS").
+Widget _columns(BuildContext context, String first, [String? second]) {
+  final style = PassText.caption.copyWith(color: context.c.label2);
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(34, PassSpace.l, 34, PassSpace.s),
+    child: Row(children: [
+      Expanded(child: Text(first.toUpperCase(), style: style)),
+      if (second != null) Text(second.toUpperCase(), style: style),
+    ]),
+  );
+}
+
+/// pass_v1's court card: bold name with a value on the right, a line of text, chips.
+Widget _card(BuildContext context,
+    {required String title, String? value, String? text, List<String> chips = const [], required VoidCallback onTap}) {
+  final c = context.c;
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(PassSpace.gutter, 0, PassSpace.gutter, PassSpace.sm),
+    child: Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: PassSpace.ml, horizontal: PassSpace.l),
+        decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(PassRadii.notice)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(title, style: PassText.headline.copyWith(color: c.label), overflow: TextOverflow.ellipsis)),
+            if (value != null) Text(value, style: PassText.callout.copyWith(color: c.tint, fontWeight: PassText.semibold)),
+            const SizedBox(width: PassSpace.sm),
+            const Chevron(),
+          ]),
+          if (text != null && text.isNotEmpty) ...[
+            const SizedBox(height: PassSpace.xxs),
+            Text(text, style: PassText.footnote.copyWith(color: c.label2)),
+          ],
+          if (chips.isNotEmpty) ...[
+            const SizedBox(height: PassSpace.s),
+            Wrap(spacing: PassSpace.xs, runSpacing: PassSpace.xs, children: [for (final t in chips) SmallChip(t)]),
+          ],
+        ]),
+      ),
+    ),
+  );
+}
+
+/// A coach as a row (Airbnb's host line): avatar, name, rate.
+Widget _coachRow(BuildContext context, Map<String, dynamic> coach) {
+  final c = context.c;
+  return Pressable(
+    onTap: () => context.push('/book/coaches/${coach['id']}'),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: PassSpace.m),
+      child: Row(children: [
+        Avatar(_initials('${coach['full_name']}'), size: 44, bg: c.tintBg, fg: c.tint),
+        const SizedBox(width: PassSpace.ml),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${coach['full_name']}', style: PassText.callout.copyWith(fontWeight: PassText.semibold, color: c.label)),
+            Text(coachRateLabel(coach).isEmpty ? 'Coach' : coachRateLabel(coach),
+                style: PassText.footnote.copyWith(color: c.label2)),
+          ]),
+        ),
+        const Chevron(),
+      ]),
+    ),
+  );
+}
+
 class BookScreen extends StatefulWidget {
   const BookScreen({super.key});
 
@@ -30,7 +100,7 @@ class _BookScreenState extends State<BookScreen> {
   String _mode = 'courts';
   final _q = TextEditingController();
   String _query = '';
-  int? _sport;
+  Set<int> _sports = {};
 
   @override
   void dispose() {
@@ -42,7 +112,7 @@ class _BookScreenState extends State<BookScreen> {
   Widget build(BuildContext context) => PassScaffold(
         title: 'Book',
         children: [
-          const LargeTitleHeader(title: 'Book'),
+          const LargeTitleHeader(kicker: 'Book a session', title: 'What are we playing?'),
           PassSegmented<String>(
               values: const ['courts', 'coaches'],
               labelOf: (v) => v == 'courts' ? 'Courts' : 'Coaches',
@@ -66,25 +136,29 @@ class _BookScreenState extends State<BookScreen> {
               load: loadSports,
               loading: const SizedBox(height: PassSpace.xxxl),
               builder: (context, sports, _) =>
-                  SportChips(sports: sports, all: true, selected: _sport, onChanged: (v) => setState(() => _sport = v)),
+                  SportTags(sports: sports, all: true, selected: _sports, onChanged: (v) => setState(() => _sports = v)),
             ),
             ApiLoader<List<dynamic>>(
-              key: ValueKey('clubs-$_query-$_sport'),
+              key: ValueKey('clubs-$_query-${(_sports.toList()..sort()).join(',')}'),
               load: () => _api.getAll('/api/clubs/', query: {
                 if (_query.isNotEmpty) 'q': _query,
-                if (_sport != null) 'sport': '$_sport',
+                if (_sports.isNotEmpty) 'sport': [for (final s in _sports) '$s'],
               }),
               builder: (context, data, _) {
                 final clubs = asMaps(data);
                 if (clubs.isEmpty) return const EmptyText('No clubs found.');
-                return GroupedCard(inset: 0, children: [
+                return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  _columns(context, 'Club', 'Courts'),
                   for (final club in clubs)
-                    ListRow(
-                      label: '${club['name']}',
-                      value: _courtCount(asMaps(club['courts']).length),
-                      trailing: const Chevron(),
-                      onTap: () => context.push('/book/clubs/${club['id']}'),
-                    ),
+                    _card(context,
+                        title: '${club['name']}',
+                        value: '${asMaps(club['courts']).length}',
+                        text: [
+                          '${club['address'] ?? ''}',
+                          if (club['distance_km'] != null) '${club['distance_km']} km',
+                        ].where((t) => t.isNotEmpty).join(' · '),
+                        chips: [for (final c in asMaps(club['courts'])) '${c['name']}'],
+                        onTap: () => context.push('/book/clubs/${club['id']}')),
                 ]);
               },
             ),
@@ -95,23 +169,15 @@ class _BookScreenState extends State<BookScreen> {
               builder: (context, data, _) {
                 final coaches = asMaps(data);
                 if (coaches.isEmpty) return const EmptyText('No coaches found.');
-                return GroupedCard(inset: 0, children: [
-                  for (final coach in coaches)
-                    ListRow(
-                      leading: Avatar(_initials('${coach['full_name']}'), size: 36, fontSize: 14),
-                      label: '${coach['full_name']}',
-                      value: coachRateLabel(coach),
-                      trailing: const Chevron(),
-                      onTap: () => context.push('/book/coaches/${coach['id']}'),
-                    ),
+                return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  _columns(context, 'Coach'),
+                  GroupedCard(children: [for (final coach in coaches) _coachRow(context, coach)]),
                 ]);
               },
             ),
         ],
       );
 }
-
-String _courtCount(int n) => n == 1 ? '1 court' : '$n courts';
 
 String _initials(String name) {
   final p = name.trim().split(RegExp(r'\s+')).where((x) => x.isNotEmpty).toList();
@@ -124,117 +190,131 @@ String coachRateLabel(Map<String, dynamic> coach) {
   return rate == null ? '' : '${money(rate, coach['coach_currency'] as String? ?? 'USD')} / hour';
 }
 
+/// A club as a listing: its courts, and the coaches who work there (Airbnb's hosts).
 class ClubScreen extends StatelessWidget {
   const ClubScreen({super.key, required this.id});
   final int id;
 
   @override
-  Widget build(BuildContext context) => ApiLoader<(Map<String, dynamic>, List<dynamic>)>(
-        load: () async => (asMap(await _api.get('/api/clubs/$id/')), await _api.getAll('/api/clubs/$id/courts/')),
+  Widget build(BuildContext context) => ApiLoader<(Map<String, dynamic>, List<dynamic>, List<Map<String, dynamic>>)>(
+        load: () async => (
+          asMap(await _api.get('/api/clubs/$id/')),
+          await _api.getAll('/api/clubs/$id/courts/'),
+          await loadSports(),
+        ),
         builder: (context, data, _) {
-          final (club, all) = data;
+          final (club, all, sports) = data;
           final courts = asMaps(all).where((c) => c['is_active'] == true).toList();
           return PassScaffold(
             title: '${club['name']}',
             back: '/book',
             children: [
-              LargeTitleHeader(title: '${club['name']}', subtitle: '${club['address']}'.isEmpty ? null : '${club['address']}'),
-              const CapsHeader('Courts'),
+              LargeTitleHeader(
+                  kicker: 'Club',
+                  title: '${club['name']}',
+                  subtitle: '${club['address'] ?? ''}'.isEmpty ? null : '${club['address']}'),
               if (courts.isEmpty)
                 const EmptyText('No courts to book yet.')
-              else
-                GroupedCard(inset: 0, children: [
-                  for (final court in courts)
-                    ListRow(
-                        label: '${court['name']}',
-                        trailing: const Chevron(),
-                        onTap: () => context.push('/book/courts/${court['id']}')),
-                ]),
+              else ...[
+                _columns(context, 'Court', 'Slot'),
+                for (final court in courts)
+                  _card(context,
+                      title: '${court['name']}',
+                      value: '${court['slot_minutes']} min',
+                      text: '${court['description'] ?? ''}',
+                      chips: [
+                        for (final s in sports)
+                          if ((court['sports'] as List).contains(s['id'])) '${s['name']}'
+                      ],
+                      onTap: () => context.push('/book/courts/${court['id']}')),
+              ],
+              ApiLoader<List<dynamic>>(
+                load: () => _api.getAll('/api/coaches/', query: {'club': '$id'}),
+                loading: const SizedBox.shrink(),
+                builder: (context, data, _) {
+                  final coaches = asMaps(data);
+                  if (coaches.isEmpty) return const SizedBox.shrink();
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    const CapsHeader('Coaches here'),
+                    GroupedCard(children: [for (final coach in coaches) _coachRow(context, coach)]),
+                  ]);
+                },
+              ),
             ],
           );
         },
       );
 }
 
-/// CLUB-31 court detail, then AVL-10 slots, BOOK-6 quote and BOOK-7 booking.
-class CourtScreen extends StatefulWidget {
+/// The court's weekdays with a price window (0 = Monday): the only days it has slots.
+Set<int> _openDays(Map<String, dynamic> detail) => {for (final r in asMaps(detail['rates'])) r['weekday'] as int};
+
+/// The calendar and free slots in a sheet (Airbnb's dates sheet); the picked run, or null.
+Future<SlotRun?> showAvailability(BuildContext context, Map<String, dynamic> detail) {
+  final club = asMap(detail['club']);
+  final court = asMap(detail['court']);
+  final zone = '${club['timezone']}';
+  SlotRun? run;
+  return showCupertinoModalPopup<SlotRun>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setSheet) => Container(
+        height: MediaQuery.sizeOf(ctx).height * .9,
+        constraints: const BoxConstraints(maxWidth: PassSpace.formMaxWidth),
+        decoration: BoxDecoration(
+            color: ctx.c.bgGrouped,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(PassRadii.alert))),
+        child: SafeArea(
+          top: false,
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(PassSpace.gutter, PassSpace.gutter, PassSpace.ml, 0),
+              child: Row(children: [
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${court['name']} · $zone time', style: PassText.footnote.copyWith(color: ctx.c.label2)),
+                    Text('When do you play?', style: PassText.title2.copyWith(color: ctx.c.label)),
+                  ]),
+                ),
+                PassLink('Close',
+                    padding: const EdgeInsets.all(PassSpace.sm), style: PassText.headline, onTap: () => Navigator.of(ctx).pop()),
+              ]),
+            ),
+            Expanded(
+              child: ListView(padding: const EdgeInsets.only(top: PassSpace.l), children: [
+                SlotRunPicker(
+                    courtId: court['id'] as int,
+                    clubZone: zone,
+                    currency: '${club['currency']}',
+                    openWeekdays: _openDays(detail),
+                    onChanged: (r) => setSheet(() => run = r)),
+              ]),
+            ),
+            ActionBar(
+              title: run == null ? 'Pick a time' : timeRange(at(run!.startsAt, zone), at(run!.endsAt, zone)),
+              subtitle: run == null ? 'Free times show for the day you pick' : '${run!.minutes} min',
+              action: 'Reserve',
+              enabled: run != null,
+              onPressed: () => Navigator.of(ctx).pop(run),
+            ),
+          ]),
+        ),
+      ),
+    ),
+  );
+}
+
+String _reservePath(int court, SlotRun run) =>
+    _path('/book/courts/$court/reserve', {'from': run.startsAt, 'to': run.endsAt});
+
+/// CLUB-31 court detail as a listing; the reserve bar opens the calendar sheet.
+class CourtScreen extends StatelessWidget {
   const CourtScreen({super.key, required this.id});
   final int id;
 
   @override
-  State<CourtScreen> createState() => _CourtScreenState();
-}
-
-class _CourtScreenState extends State<CourtScreen> {
-  final _slots = GlobalKey<SlotRunPickerState>();
-  SlotRun? _run;
-  int? _sport;
-  final Map<int, int> _rent = {}; // equipment id -> quantity
-  Map<String, dynamic>? _quote;
-  String? _quoteError;
-  int _quoteSeq = 0;
-  bool _busy = false;
-
-  Map<String, Object?> _body(Map<String, dynamic> detail) => {
-        'court': widget.id,
-        'sport': _sport,
-        'starts_at': _run!.startsAt,
-        'ends_at': _run!.endsAt,
-        'currency': asMap(detail['club'])['currency'],
-        'rentals': [
-          for (final e in _rent.entries)
-            if (e.value > 0) {'equipment': e.key, 'quantity': e.value},
-        ],
-      };
-
-  /// BOOK-6: the quote follows every change of run, sport or rentals.
-  Future<void> _requote(Map<String, dynamic> detail) async {
-    final seq = ++_quoteSeq;
-    setState(() {
-      _quote = null;
-      _quoteError = null;
-    });
-    if (_run == null || _sport == null) return;
-    try {
-      final q = asMap(await _api.post('/api/sessions/quote/', body: _body(detail)));
-      if (mounted && seq == _quoteSeq) setState(() => _quote = q);
-    } on ApiException catch (e) {
-      if (mounted && seq == _quoteSeq) setState(() => _quoteError = e.message);
-    }
-  }
-
-  Future<void> _book(Map<String, dynamic> detail) async {
-    setState(() => _busy = true);
-    try {
-      final s = asMap(await _api.post('/api/sessions/', body: _body(detail)));
-      if (!mounted) return;
-      final rented = _rent.values.any((q) => q > 0);
-      await showPassAlert(context,
-          title: 'Booked',
-          message: rented
-              ? 'The court is yours. Your rentables wait for the club’s approval.'
-              : 'The court is yours.',
-          actions: const [AlertAction('OK', kind: AlertKind.primary)]);
-      if (mounted) context.go('/sessions/${s['id']}');
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      if (e.code == 'slot_taken') {
-        await showPassAlert(context,
-            title: 'Just taken',
-            message: 'Someone booked this time a moment ago. Pick another time.',
-            actions: const [AlertAction('OK', kind: AlertKind.primary)]);
-        _slots.currentState?.reload();
-      } else {
-        await showErrorAlert(context, e, title: 'Not booked');
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) => ApiLoader<Map<String, dynamic>>(
-        load: () async => asMap(await _api.get('/api/courts/${widget.id}/')),
+        load: () async => asMap(await _api.get('/api/courts/$id/')),
         builder: (context, detail, _) {
           final c = context.c;
           final club = asMap(detail['club']);
@@ -242,17 +322,31 @@ class _CourtScreenState extends State<CourtScreen> {
           final zone = club['timezone'] as String;
           final currency = club['currency'] as String;
           final sports = asMaps(court['sports']);
-          _sport ??= sports.isEmpty ? null : sports.first['id'] as int;
           final equipment = asMap(detail['equipment']);
           final included = asMaps(equipment['included']);
           final rentable = asMaps(equipment['rentable']);
           final rates = asMaps(detail['rates']);
-          String scope(Map<String, dynamic> e) => e['court'] == null ? 'all courts' : 'this court';
+          // Display only: the cheapest window, compared as numbers (the app never adds money up).
+          final from = rates.isEmpty
+              ? null
+              : rates.map((r) => '${r['price']}').reduce((a, b) => double.parse(a) <= double.parse(b) ? a : b);
           return PassScaffold(
             title: '${court['name']}',
             back: '/book/clubs/${club['id']}',
+            bottom: ActionBar(
+              title: from == null ? 'Not bookable yet' : 'From ${money(from, currency)}',
+              subtitle: 'per ${court['slot_minutes']}-min slot',
+              action: 'Pick a time',
+              enabled: from != null,
+              onPressed: () async {
+                final run = await showAvailability(context, detail);
+                if (run != null && context.mounted) context.push(_reservePath(id, run));
+              },
+            ),
             children: [
-              LargeTitleHeader(kicker: '${club['name']}', title: '${court['name']}',
+              LargeTitleHeader(
+                  kicker: '${club['name']}',
+                  title: '${court['name']}',
                   subtitle: '${court['description']}'.isEmpty ? null : '${court['description']}'),
               Padding(
                 padding: const EdgeInsets.fromLTRB(PassSpace.gutter, PassSpace.ml, PassSpace.gutter, 0),
@@ -261,6 +355,26 @@ class _CourtScreenState extends State<CourtScreen> {
                   SmallChip('${court['slot_minutes']} min slots'),
                 ]),
               ),
+              const CapsHeader('Amenities · free with a booking'),
+              if (included.isEmpty)
+                const EmptyText('None listed.')
+              else
+                Padding(
+                  padding: kGutter,
+                  child: Wrap(spacing: PassSpace.xs, runSpacing: PassSpace.xs, children: [
+                    for (final e in included) SmallChip('${e['name']}', fg: c.label, bg: c.bgCard),
+                  ]),
+                ),
+              const CapsHeader('Rentables'),
+              if (rentable.isEmpty)
+                const EmptyText('Nothing to rent here.')
+              else ...[
+                GroupedCard(inset: 0, children: [
+                  for (final e in rentable)
+                    ListRow(label: '${e['name']}', value: '${money('${e['rental_price']}', currency)} · ${e['quantity']} here'),
+                ]),
+                const FootnoteText('Add them when you book. The club approves them.'),
+              ],
               CapsHeader('Prices · $zone time'),
               if (rates.isEmpty)
                 const EmptyText('No prices set yet.')
@@ -283,39 +397,167 @@ class _CourtScreenState extends State<CourtScreen> {
                       ),
                 ]),
               FootnoteText('Price per ${court['slot_minutes']}-minute slot.'),
-              const CapsHeader('Amenities · free with a booking'),
-              if (included.isEmpty)
-                const EmptyText('None listed.')
-              else
-                GroupedCard(inset: 0, children: [
-                  for (final e in included) ListRow(label: '${e['name']}', value: scope(e)),
-                ]),
-              const CapsHeader('Book'),
-              SlotRunPicker(
-                  key: _slots,
-                  courtId: widget.id,
-                  clubZone: zone,
-                  currency: currency,
-                  onChanged: (run) {
-                    _run = run;
-                    _requote(detail);
-                  }),
+            ],
+          );
+        },
+      );
+}
+
+/// Confirm (pass_v1's confirm step): the summary, sport, rentables and the quote (BOOK-6), then BOOK-7.
+/// The time lives in the URL (`from`, `to`), so a refresh keeps it.
+class ReserveScreen extends StatefulWidget {
+  const ReserveScreen({super.key, required this.id, required this.from, required this.to});
+  final int id;
+  final String from, to;
+
+  @override
+  State<ReserveScreen> createState() => _ReserveScreenState();
+}
+
+class _ReserveScreenState extends State<ReserveScreen> {
+  Map<String, dynamic>? _detail;
+  int? _sport;
+  final Map<int, int> _rent = {}; // equipment id -> quantity
+  Map<String, dynamic>? _quote;
+  String? _quoteError;
+  int _quoteSeq = 0;
+  bool _busy = false;
+
+  Map<String, Object?> get _body => {
+        'court': widget.id,
+        'sport': _sport,
+        'starts_at': widget.from,
+        'ends_at': widget.to,
+        'currency': asMap(_detail!['club'])['currency'],
+        'rentals': [
+          for (final e in _rent.entries)
+            if (e.value > 0) {'equipment': e.key, 'quantity': e.value},
+        ],
+      };
+
+  @override
+  void didUpdateWidget(ReserveScreen old) {
+    super.didUpdateWidget(old);
+    if (old.from != widget.from || old.to != widget.to) _requote();
+  }
+
+  /// BOOK-6: the quote follows every change of time, sport or rentals.
+  Future<void> _requote() async {
+    final seq = ++_quoteSeq;
+    setState(() {
+      _quote = null;
+      _quoteError = null;
+    });
+    if (_detail == null || _sport == null) return;
+    try {
+      final q = asMap(await _api.post('/api/sessions/quote/', body: _body));
+      if (mounted && seq == _quoteSeq) setState(() => _quote = q);
+    } on ApiException catch (e) {
+      if (mounted && seq == _quoteSeq) setState(() => _quoteError = e.message);
+    }
+  }
+
+  Future<void> _changeTime() async {
+    final run = await showAvailability(context, _detail!);
+    if (run != null && mounted) context.replace(_reservePath(widget.id, run));
+  }
+
+  Future<void> _book() async {
+    setState(() => _busy = true);
+    try {
+      final s = asMap(await _api.post('/api/sessions/', body: _body));
+      if (mounted) context.go('/book/booked/${s['id']}');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (e.code == 'slot_taken') {
+        await showPassAlert(context,
+            title: 'Just taken',
+            message: 'Someone booked this time a moment ago. Pick another time.',
+            actions: const [AlertAction('OK', kind: AlertKind.primary)]);
+        if (mounted) await _changeTime();
+      } else {
+        await showErrorAlert(context, e, title: 'Not booked');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // The time comes from the URL: a hand-edited or cut link has none.
+    if (DateTime.tryParse(widget.from) == null || DateTime.tryParse(widget.to) == null) {
+      return PassScaffold(title: 'Confirm', back: '/book/courts/${widget.id}', children: [
+        const LargeTitleHeader(kicker: 'Book a session', title: 'Confirm'),
+        const EmptyText('This link has no time in it.'),
+        PassButton('Pick a time', margin: flowButtonMargin, onPressed: () => context.go('/book/courts/${widget.id}')),
+      ]);
+    }
+    return ApiLoader<Map<String, dynamic>>(
+        load: () async => asMap(await _api.get('/api/courts/${widget.id}/')),
+        builder: (context, detail, _) {
+          final club = asMap(detail['club']);
+          final court = asMap(detail['court']);
+          final zone = '${club['timezone']}';
+          final currency = '${club['currency']}';
+          final sports = asMaps(court['sports']);
+          final equipment = asMap(detail['equipment']);
+          final included = asMaps(equipment['included']);
+          final rentable = asMaps(equipment['rentable']);
+          if (_detail == null) {
+            _detail = detail;
+            _sport = sports.isEmpty ? null : sports.first['id'] as int;
+            WidgetsBinding.instance.addPostFrameCallback((_) => _requote());
+          }
+          final start = at(widget.from, zone), end = at(widget.to, zone);
+          return PassScaffold(
+            title: 'Confirm',
+            back: '/book/courts/${widget.id}',
+            bottom: ActionBar(
+              title: _quote == null ? 'Getting the price…' : money('${_quote!['court_amount']}', '${_quote!['currency']}'),
+              subtitle: 'Total',
+              action: 'Book now',
+              enabled: _quote != null,
+              busy: _busy,
+              onPressed: _book,
+            ),
+            children: [
+              const LargeTitleHeader(kicker: 'Book a session', title: 'Confirm'),
+              SummaryCard(rows: [
+                ('Court', '${court['name']}, ${club['name']}'),
+                ('When', '${timeRange(start, end)} ($zone)'),
+                ('Length', '${end.difference(start).inMinutes} min'),
+                if (sports.length == 1) ('Sport', '${sports.first['name']}'),
+              ]),
+              Padding(
+                padding: kGutter,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: PassLink('Change time', padding: const EdgeInsets.symmetric(vertical: PassSpace.ml), onTap: _changeTime),
+                ),
+              ),
               if (sports.length > 1) ...[
                 const CapsHeader('Sport'),
-                PassSegmented<int>(
-                    margin: kGutter,
-                    values: [for (final s in sports) s['id'] as int],
-                    labelOf: (id) => '${sports.firstWhere((s) => s['id'] == id)['name']}',
-                    selected: _sport!,
+                SportTags(
+                    sports: sports,
+                    single: true,
+                    selected: {?_sport},
+                    padding: kGutter,
                     onChanged: (v) {
-                      _sport = v;
-                      _requote(detail);
+                      _sport = v.first;
+                      _requote();
                     }),
               ],
-              const CapsHeader('Rentables'),
-              if (rentable.isEmpty)
-                const EmptyText('Nothing to rent here.')
-              else ...[
+              if (included.isNotEmpty) ...[
+                const CapsHeader('Included'),
+                Padding(
+                  padding: kGutter,
+                  child: Wrap(spacing: PassSpace.xs, runSpacing: PassSpace.xs, children: [
+                    for (final e in included) SmallChip('${e['name']}', fg: context.c.label, bg: context.c.bgCard),
+                  ]),
+                ),
+              ],
+              if (rentable.isNotEmpty) ...[
+                const CapsHeader('Rentables'),
                 GroupedCard(inset: 0, children: [
                   for (final e in rentable)
                     ListRow(
@@ -326,39 +568,31 @@ class _CourtScreenState extends State<CourtScreen> {
                           final q = (_rent[e['id'] as int] ?? 0) - 1;
                           if (q < 0) return;
                           _rent[e['id'] as int] = q;
-                          _requote(detail);
+                          _requote();
                         },
                         onPlus: () {
                           final q = (_rent[e['id'] as int] ?? 0) + 1;
                           if (q > (e['quantity'] as int)) return;
                           _rent[e['id'] as int] = q;
-                          _requote(detail);
+                          _requote();
                         },
                       ),
                     ),
                 ]),
                 const FootnoteText('Rentables are subject to the club’s approval.'),
               ],
-              if (_run != null) ...[
-                CapsHeader('Quote · ${timeRange(at(_run!.startsAt, zone), at(_run!.endsAt, zone))}'),
-                if (_quoteError != null)
-                  NoticeBanner(text: _quoteError!, kind: NoticeKind.tint)
-                else if (_quote == null)
-                  const LoadingView()
-                else
-                  _quoteCard(context, _quote!),
-              ],
-              PassButton(
-                _quote == null ? 'Pick a time' : 'Book · ${money('${_quote!['court_amount']}', '${_quote!['currency']}')}',
-                margin: const EdgeInsets.fromLTRB(PassSpace.gutter, PassSpace.xxl, PassSpace.gutter, 0),
-                enabled: _quote != null,
-                busy: _busy,
-                onPressed: () => _book(detail),
-              ),
+              const CapsHeader('Price'),
+              if (_quoteError != null)
+                NoticeBanner(text: _quoteError!, kind: NoticeKind.tint)
+              else if (_quote == null)
+                const LoadingView()
+              else
+                _quoteCard(context, _quote!),
             ],
           );
         },
       );
+  }
 
   Widget _quoteCard(BuildContext context, Map<String, dynamic> q) {
     final cur = '${q['currency']}';
@@ -372,7 +606,39 @@ class _CourtScreenState extends State<CourtScreen> {
   }
 }
 
-/// ACC-21 public profile, and BOOK-20 training request (FE-6: the player proposes, the coach confirms).
+/// pass_v1's "Booked" hero after BOOK-7.
+class BookedScreen extends StatelessWidget {
+  const BookedScreen({super.key, required this.id});
+  final int id;
+
+  @override
+  Widget build(BuildContext context) => PassScaffold(
+        title: 'Booked',
+        back: '/book',
+        children: [
+          ApiLoader<Map<String, dynamic>>(
+            load: () async => asMap(await _api.get('/api/sessions/$id/')),
+            builder: (context, s, _) {
+              final court = asMap(s['court']);
+              final start = at('${s['starts_at']}');
+              return BookedBody(
+                kicker: 'Booked',
+                headline: '${asMap(s['sport'])['name']}, ${dayLabel(start)} ${hm(start)}.\n'
+                    '${court['name']}, ${asMap(court['club'])['name']}.',
+                body: asMaps(s['rentals']).isEmpty
+                    ? 'The court is yours.'
+                    : 'The court is yours. Your rentables wait for the club’s approval.',
+                sessionId: id,
+                againPath: '/book',
+              );
+            },
+          ),
+        ],
+      );
+}
+
+/// ACC-21 public profile (Airbnb's host page), and BOOK-20 training request (FE-6: the player proposes, the coach
+/// confirms).
 class CoachScreen extends StatefulWidget {
   const CoachScreen({super.key, required this.id});
   final int id;
@@ -413,23 +679,64 @@ class _CoachScreenState extends State<CoachScreen> {
   Widget build(BuildContext context) => ApiLoader<(Map<String, dynamic>, List<Map<String, dynamic>>)>(
         load: () async => (asMap(await _api.get('/api/users/${widget.id}/')), await loadSports()),
         builder: (context, data, _) {
+          final c = context.c;
           final (coach, sports) = data;
           _sport ??= sports.isEmpty ? null : sports.first['id'] as int;
           final clubs = asMaps(coach['clubs']);
           final self = AppState.instance.me?.id == widget.id;
+          final name = '${coach['full_name']}';
+          final rate = coach['coach_rate'] as String?;
+          final cur = '${coach['coach_currency'] ?? 'USD'}';
           return PassScaffold(
-            title: '${coach['full_name']}',
+            title: name,
             back: '/book',
             children: [
-              LargeTitleHeader(kicker: 'Coach', title: '${coach['full_name']}', subtitle: coachRateLabel(coach)),
-              if ('${coach['coach_bio'] ?? ''}'.isNotEmpty) PassCard(child: Text('${coach['coach_bio']}')),
+              Padding(
+                padding: const EdgeInsets.only(top: PassSpace.l),
+                child: Column(children: [
+                  Avatar(_initials(name), size: 96, bg: c.tint, fg: PassColors.white),
+                  const SizedBox(height: PassSpace.ml),
+                  Text(name, style: PassText.title1.copyWith(color: c.label)),
+                  const SizedBox(height: PassSpace.xxs),
+                  Text('Coach', style: PassText.subhead.copyWith(color: c.label2)),
+                ]),
+              ),
+              const SizedBox(height: PassSpace.lg),
+              Padding(
+                padding: kGutter,
+                child: Row(children: [
+                  Expanded(
+                    child: StatTile(
+                        kicker: 'Rate',
+                        note: rate == null ? 'Agreed per session' : '$cur per hour',
+                        child: StatValue(rate == null ? '—' : money(rate, cur).split(' ').first)),
+                  ),
+                  const SizedBox(width: PassSpace.ml),
+                  Expanded(
+                    child: StatTile(
+                        kicker: 'Clubs', note: clubs.length == 1 ? 'club' : 'clubs', child: StatValue('${clubs.length}')),
+                  ),
+                ]),
+              ),
+              if ('${coach['coach_bio'] ?? ''}'.isNotEmpty) ...[
+                CapsHeader('About ${name.split(' ').first}'),
+                PassCard(child: Text('${coach['coach_bio']}', style: PassText.body.copyWith(color: c.label))),
+              ],
               if (clubs.isNotEmpty) ...[
-                const CapsHeader('Clubs'),
-                GroupedCard(inset: 0, children: [for (final cl in clubs) ListRow(label: '${cl['name']}')]),
+                const CapsHeader('Coaches at'),
+                GroupedCard(inset: 0, children: [
+                  for (final cl in clubs)
+                    ListRow(label: '${cl['name']}', trailing: const Chevron(), onTap: () => context.push('/book/clubs/${cl['id']}')),
+                ]),
               ],
               if (!self) ...[
                 const CapsHeader('Request training'),
-                SportChips(sports: sports, selected: _sport, onChanged: (v) => setState(() => _sport = v)),
+                SportTags(
+                    sports: sports,
+                    single: true,
+                    selected: {?_sport},
+                    padding: kGutter,
+                    onChanged: (v) => setState(() => _sport = v.first)),
                 const SizedBox(height: PassSpace.ml),
                 GroupedCard(inset: 0, children: [
                   DateTimeRow(
@@ -444,7 +751,7 @@ class _CoachScreenState extends State<CoachScreen> {
                 const FootnoteText('You propose a time. You can’t see the coach’s free times: the coach confirms '
                     'this time or another one, or declines.'),
                 PassButton('Send request',
-                    margin: const EdgeInsets.fromLTRB(PassSpace.gutter, PassSpace.xxl, PassSpace.gutter, 0),
+                    margin: flowButtonMargin,
                     enabled: _sport != null && _end.isAfter(_start),
                     busy: _busy,
                     onPressed: _request),
