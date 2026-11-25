@@ -73,7 +73,8 @@ class AppShell extends StatelessWidget {
         color: c.bgGrouped,
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _Sidebar(tabs: tabs, path: path),
-          Expanded(child: child),
+          // Own semantics container: a route's modal barrier would otherwise hide the sidebar from screen readers.
+          Expanded(child: Semantics(container: true, child: child)),
         ]),
       );
     }

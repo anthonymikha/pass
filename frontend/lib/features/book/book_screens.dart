@@ -338,8 +338,8 @@ class _CourtScreenState extends State<CourtScreen> {
                 GroupedCard(inset: 0, children: [
                   for (final e in rentable)
                     ListRow(
-                      label: '${e['name']}',
-                      value: '${money('${e['rental_price']}', currency)}${(_rent[e['id']] ?? 0) > 0 ? ' · ×${_rent[e['id']]}' : ''}',
+                      label: '${e['name']} · ${money('${e['rental_price']}', currency)}',
+                      value: (_rent[e['id']] ?? 0) > 0 ? '×${_rent[e['id']]}' : null,
                       trailing: PassStepper(
                         onMinus: () {
                           final q = (_rent[e['id'] as int] ?? 0) - 1;

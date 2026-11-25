@@ -241,7 +241,8 @@ class ListRow extends StatelessWidget {
             Expanded(child: Text(label, style: PassText.body.copyWith(color: labelColor ?? c.label))),
           if (value != null) ...[
             const SizedBox(width: PassSpace.ml),
-            Text(value!, style: PassText.body.copyWith(color: c.label2)),
+            // Flexible: a long value wraps instead of overflowing the row at phone width.
+            Flexible(child: Text(value!, textAlign: TextAlign.right, style: PassText.body.copyWith(color: c.label2))),
           ],
           if (trailing != null) ...[const SizedBox(width: PassSpace.ml), trailing!],
         ]),
